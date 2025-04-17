@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import ReactFlow, {
   Node,
   Edge,
@@ -31,6 +31,7 @@ import {
   undo,
   redo,
   updateBoardName,
+  NodeContent,
   setSelectedNode
 } from '@/store/boardSlice'
 import NodeContextMenu from './NodeContextMenu'
@@ -38,7 +39,22 @@ import NodeEditPanel from './NodeEditPanel'
 import TextNode from './nodes/TextNode'
 import { useRouter } from 'next/navigation'
 
-// Define custom node types
+// Simple debounce utility
+const useDebounce = (fn: Function, delay: number) => {
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  return useCallback((...args: any[]) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    
+    timeoutRef.current = setTimeout(() => {
+      fn(...args);
+    }, delay);
+  }, [fn, delay]);
+};
+
+// Define custom node types OUTSIDE of the component to prevent recreation on each render
 const nodeTypes = {
   textNode: TextNode,
 }
@@ -81,13 +97,28 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   // Import file reference
   const importInputRef = useRef<HTMLInputElement>(null)
   
+  // Debug log to track component lifecycle
+  useEffect(() => {
+    console.log('BoardCanvas mounted with boardId:', boardId);
+    console.log('Initial store nodes:', storeNodes.length);
+    
+    // Cleanup function
+    return () => {
+      console.log('BoardCanvas unmounting');
+    };
+  }, []);
+  
   // Initialize the board from Redux state or load from API
   useEffect(() => {
     const initializeBoard = async () => {
       try {
+        console.log('Initializing board with ID:', boardId);
+        console.log('Current store nodes length:', storeNodes.length);
+        
         // TODO: Replace with actual API call when the backend is ready
         // For now we'll set up a demo board
         if (storeNodes.length === 0) {
+          console.log('Creating initial demo board');
           // If Redux store is empty, set up a new board
           const initialNodes: Node[] = [
             {
@@ -112,6 +143,8 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
             boardName: 'New Brainstorm',
             boardId
           }))
+          
+          console.log('Demo board created with nodes:', initialNodes.length);
         }
       } catch (error) {
         console.error('Failed to initialize board:', error)
@@ -121,11 +154,60 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     initializeBoard()
   }, [boardId, dispatch, storeNodes.length])
   
-  // Sync Redux state with React Flow state
+  // Sync Redux state with React Flow state - only when storeNodes/storeEdges change
   useEffect(() => {
-    setNodes(storeNodes)
-    setEdges(storeEdges)
-  }, [storeNodes, storeEdges, setNodes, setEdges])
+    console.log('Syncing store nodes to ReactFlow, count:', storeNodes.length);
+    
+    // Use a more robust way to check for changes - stringify with a replacer function
+    // to handle potential circular references
+    const nodesEqual = (a: Node[], b: Node[]) => {
+      if (a.length !== b.length) return false;
+      
+      // Compare only essential properties that affect rendering
+      const simplifyNode = (node: Node) => ({
+        id: node.id,
+        type: node.type,
+        position: node.position,
+        data: node.data,
+      });
+      
+      const aSimple = a.map(simplifyNode);
+      const bSimple = b.map(simplifyNode);
+      
+      return JSON.stringify(aSimple) === JSON.stringify(bSimple);
+    };
+    
+    const edgesEqual = (a: Edge[], b: Edge[]) => {
+      if (a.length !== b.length) return false;
+      
+      // Compare only essential properties
+      const simplifyEdge = (edge: Edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        type: edge.type,
+      });
+      
+      const aSimple = a.map(simplifyEdge);
+      const bSimple = b.map(simplifyEdge);
+      
+      return JSON.stringify(aSimple) === JSON.stringify(bSimple);
+    };
+    
+    // Check if we actually need to update
+    const nodesChanged = !nodesEqual(storeNodes, nodes);
+    const edgesChanged = !edgesEqual(storeEdges, edges);
+    
+    if (nodesChanged) {
+      console.log('Nodes changed, updating ReactFlow nodes');
+      setNodes(storeNodes);
+    }
+    
+    if (edgesChanged) {
+      console.log('Edges changed, updating ReactFlow edges');
+      setEdges(storeEdges);
+    }
+  }, [storeNodes, storeEdges, setNodes, setEdges, nodes, edges]);
   
   // Update Redux store when there are pending node updates
   useEffect(() => {
@@ -135,6 +217,15 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     }
   }, [dispatch, pendingNodeUpdate])
   
+  // Create debounced version of node/edge updates to reduce Redux updates
+  const debouncedSetPendingNodeUpdate = useDebounce(() => {
+    setPendingNodeUpdate(true);
+  }, 300); // 300ms debounce
+
+  const debouncedSetPendingEdgeUpdate = useDebounce(() => {
+    setPendingEdgeUpdate(true);
+  }, 300); // 300ms debounce
+
   // Update Redux store when there are pending edge updates
   useEffect(() => {
     if (pendingEdgeUpdate) {
@@ -197,30 +288,34 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   // Handle node changes
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      onNodesChange(changes)
+      // Apply the changes directly to React Flow nodes
+      onNodesChange(changes);
+      
       // Update Redux store only if the changes are complete (not during dragging)
       const shouldUpdateStore = changes.every(change => 
         change.type !== 'position' || (change.type === 'position' && !change.dragging)
-      )
+      );
       
       if (shouldUpdateStore) {
-        // Use a ref to store current nodes instead of setState in render
-        nodesRef.current = nodes;
-        setPendingNodeUpdate(true);
+        // Get the latest nodes
+        nodesRef.current = [...nodes];
+        
+        // Use debounced update to avoid rapid successive updates
+        debouncedSetPendingNodeUpdate();
       }
     },
-    [nodes, onNodesChange]
-  )
+    [nodes, onNodesChange, debouncedSetPendingNodeUpdate]
+  );
   
   // Handle edge changes
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
       onEdgesChange(changes)
       // Use a ref to store current edges instead of setState in render
-      edgesRef.current = edges;
-      setPendingEdgeUpdate(true);
+      edgesRef.current = [...edges];
+      debouncedSetPendingEdgeUpdate();
     },
-    [edges, onEdgesChange]
+    [edges, onEdgesChange, debouncedSetPendingEdgeUpdate]
   )
   
   // Handle connecting two nodes
@@ -238,11 +333,11 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
       setEdges(eds => {
         const newEdges = addEdge(newEdge, eds)
         edgesRef.current = newEdges;
-        setPendingEdgeUpdate(true);
+        debouncedSetPendingEdgeUpdate();
         return newEdges
       })
     },
-    [setEdges]
+    [setEdges, debouncedSetPendingEdgeUpdate]
   )
   
   // Handle edge updates
@@ -251,47 +346,103 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
       setEdges(els => {
         const newEdges = updateEdge(oldEdge, newConnection, els)
         edgesRef.current = newEdges;
-        setPendingEdgeUpdate(true);
+        debouncedSetPendingEdgeUpdate();
         return newEdges
       })
     },
-    [setEdges]
+    [setEdges, debouncedSetPendingEdgeUpdate]
   )
   
   // Create a new node
   const handleCreateNode = useCallback(
     (event: React.MouseEvent) => {
-      if (!reactFlowWrapper.current || !reactFlowInstance) return
+      if (!reactFlowWrapper.current || !reactFlowInstance) {
+        console.error("ReactFlow instance not available for right-click");
+        return;
+      }
       
       // Get the position where the user clicked relative to the flow canvas
-      const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect()
-      const position = reactFlowInstance.project({
+      const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect();
+      const position = reactFlowInstance.screenToFlowPosition({
         x: event.clientX - reactFlowBounds.left,
         y: event.clientY - reactFlowBounds.top,
-      })
+      });
       
-      const newNodeId = `node-${Date.now()}`
+      console.log("Creating node at right-click position:", position);
       
-      dispatch(
-        addNode({
-          id: newNodeId,
-          position,
-          data: {
-            label: 'New Idea',
-            content: {
-              text: '',
-              images: []
-            }
-          },
-          type: 'textNode'
-        })
-      )
+      const newNodeId = `node-${Date.now()}`;
+      
+      // Create the new node object
+      const newNode: Node = {
+        id: newNodeId,
+        type: 'textNode',
+        position,
+        data: {
+          label: 'New Idea',
+          content: {
+            text: '',
+            images: []
+          }
+        }
+      };
+      
+      // Add directly to ReactFlow state first for immediate rendering
+      reactFlowInstance.addNodes(newNode);
+      
+      // Then also dispatch to Redux store to ensure persistence
+      dispatch(addNode(newNode));
       
       // Select the newly created node for editing
-      dispatch(setSelectedNode(newNodeId))
+      setTimeout(() => {
+        dispatch(setSelectedNode(newNodeId));
+      }, 100);
     },
     [dispatch, reactFlowInstance]
-  )
+  );
+  
+  // Add a node via button click (alternative way)
+  const handleAddNodeButton = useCallback(() => {
+    if (!reactFlowInstance) {
+      console.error("ReactFlow instance not available");
+      return;
+    }
+    
+    const viewportCenter = reactFlowInstance.screenToFlowPosition({
+      x: reactFlowWrapper.current?.clientWidth ? reactFlowWrapper.current.clientWidth / 2 : 250,
+      y: reactFlowWrapper.current?.clientHeight ? reactFlowWrapper.current.clientHeight / 2 : 150,
+    });
+    
+    console.log("Creating node at viewport center:", viewportCenter);
+    
+    const newNodeId = `node-${Date.now()}`;
+    
+    // Create the new node
+    const newNode: Node = {
+      id: newNodeId,
+      type: 'textNode',
+      position: viewportCenter,
+      data: {
+        label: 'New Idea',
+        content: {
+          text: '',
+          images: []
+        }
+      }
+    };
+    
+    // Add the node to the Redux store first
+    dispatch(addNode(newNode));
+    
+    // Force a fit view update to ensure the new node is visible
+    setTimeout(() => {
+      if (reactFlowInstance) {
+        reactFlowInstance.fitView({ padding: 0.2 });
+      }
+      
+      // Select the node for editing - ensure this happens AFTER the node is added
+      dispatch(setSelectedNode(newNodeId));
+    }, 100);
+  }, [dispatch, reactFlowInstance, reactFlowWrapper]);
   
   // Handle context menu
   const handleNodeContextMenu = useCallback(
@@ -399,6 +550,18 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     dispatch(updateBoardName(e.target.value))
   }
   
+  // Force create a demo node if the board is still empty after a timeout
+  useEffect(() => {
+    if (storeNodes.length === 0) {
+      const timer = setTimeout(() => {
+        console.log("Board still empty after timeout, forcing demo node creation");
+        handleAddNodeButton();
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [storeNodes.length, handleAddNodeButton]);
+  
   return (
     <div className="h-screen w-full flex flex-col">
       {/* Top toolbar */}
@@ -418,6 +581,13 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
           />
         </div>
         <div className="flex items-center space-x-2">
+          <button
+            onClick={handleAddNodeButton}
+            className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+            title="Add new node"
+          >
+            Add Node
+          </button>
           <button
             onClick={() => dispatch(undo())}
             className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -479,25 +649,89 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
           onPaneClick={handlePaneClick}
           onPaneContextMenu={handleCreateNode}
           onNodeContextMenu={handleNodeContextMenu}
-          onInit={setReactFlowInstance}
+          onInit={(instance) => {
+            console.log("ReactFlow initialized with instance:", instance);
+            setReactFlowInstance(instance);
+            // Only run this once when instance is first initialized
+            if (instance && !reactFlowInstance) {
+              setTimeout(() => {
+                console.log("Forcing node visibility refresh, nodes count:", nodes.length);
+                // Check if nodes need rescuing (have invalid positions)
+                const resetNodes = [...nodes.map(node => ({
+                  ...node,
+                  position: { 
+                    x: node.position?.x || 250, 
+                    y: node.position?.y || 150 
+                  }
+                }))];
+                instance.setNodes(resetNodes);
+                instance.fitView({ padding: 0.2 });
+              }, 500);
+            }
+          }}
           nodeTypes={nodeTypes}
           connectionMode={ConnectionMode.Loose}
-          fitView
-          snapToGrid
+          defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+          minZoom={0.1}
+          maxZoom={2}
+          fitView={true}
+          fitViewOptions={{ padding: 0.2 }}
+          snapToGrid={true}
           snapGrid={[15, 15]}
+          nodesDraggable={true}
+          nodesConnectable={true}
+          elementsSelectable={true}
+          proOptions={{ hideAttribution: true }}
+          style={{ background: '#f8fafc' }}
         >
           <Background color="#aaa" gap={16} />
-          <Controls />
+          <Controls showInteractive={true} />
           <MiniMap 
             nodeStrokeWidth={3}
             zoomable 
             pannable
           />
-          <Panel position="top-right">
-            <div className="p-2 bg-white dark:bg-gray-800 rounded shadow">
-              <p className="text-sm">
-                <strong>Tip:</strong> Right-click on canvas to add a new node
-              </p>
+          <Panel position="top-left">
+            <div className="bg-white dark:bg-gray-800 p-2 rounded shadow text-sm">
+              <strong>Node count:</strong> {nodes.length} nodes
+            </div>
+          </Panel>
+          <Panel position="bottom-right">
+            <button
+              onClick={handleAddNodeButton}
+              className="p-3 rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-all transform hover:scale-105"
+              title="Add new node"
+            >
+              + Add Node
+            </button>
+          </Panel>
+          
+          {/* Debug Panel */}
+          <Panel position="bottom-left">
+            <div className="bg-white dark:bg-gray-800 p-3 rounded shadow text-xs max-w-xs">
+              <div className="font-bold mb-1">Debug Info:</div>
+              <div>Nodes: {nodes.length}</div>
+              <div>Node IDs: {nodes.map(n => n.id).join(', ')}</div>
+              <div>Selected: {selectedNodeId || 'none'}</div>
+              <div>Board ID: {boardId}</div>
+              <button 
+                onClick={() => {
+                  if (reactFlowInstance) {
+                    reactFlowInstance.fitView({ padding: 0.2 });
+                    console.log("Current viewport:", reactFlowInstance.getViewport());
+                    console.log("All nodes:", nodes);
+                  }
+                }}
+                className="mt-1 px-2 py-1 bg-blue-500 text-white rounded text-xs"
+              >
+                Fit View
+              </button>
+              <button 
+                onClick={handleAddNodeButton}
+                className="mt-1 ml-1 px-2 py-1 bg-green-500 text-white rounded text-xs"
+              >
+                Add Node
+              </button>
             </div>
           </Panel>
         </ReactFlow>

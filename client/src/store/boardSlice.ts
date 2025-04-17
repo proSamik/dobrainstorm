@@ -44,6 +44,16 @@ const initialState: BoardState = {
 }
 
 /**
+ * Utility function to clone nodes and edges to avoid reference issues
+ */
+const deepCloneNodesEdges = (nodes: Node[], edges: Edge[]) => {
+  return {
+    nodes: nodes.map(node => ({ ...node, data: { ...node.data } })),
+    edges: edges.map(edge => ({ ...edge }))
+  };
+};
+
+/**
  * Board slice for Redux store
  */
 const boardSlice = createSlice({
@@ -72,10 +82,7 @@ const boardSlice = createSlice({
     // Update nodes (used when nodes are moved, added, etc.)
     updateNodes: (state, action: PayloadAction<Node[]>) => {
       // Save current state to history before updating
-      state.history.past.push({
-        nodes: [...state.nodes],
-        edges: [...state.edges]
-      })
+      state.history.past.push(deepCloneNodesEdges(state.nodes, state.edges))
       state.history.future = []
       
       state.nodes = action.payload
@@ -85,10 +92,7 @@ const boardSlice = createSlice({
     // Update edges (used when connections are made, removed, etc.)
     updateEdges: (state, action: PayloadAction<Edge[]>) => {
       // Save current state to history before updating
-      state.history.past.push({
-        nodes: [...state.nodes],
-        edges: [...state.edges]
-      })
+      state.history.past.push(deepCloneNodesEdges(state.nodes, state.edges))
       state.history.future = []
       
       state.edges = action.payload
@@ -96,29 +100,50 @@ const boardSlice = createSlice({
     },
     
     // Add a new node
-    addNode: (state, action: PayloadAction<{
+    addNode: (state, action: PayloadAction<Node | {
       id: string,
       position: XYPosition,
       data: { label: string, content: NodeContent },
       type?: string
     }>) => {
       // Save current state to history before updating
-      state.history.past.push({
-        nodes: [...state.nodes],
-        edges: [...state.edges]
-      })
+      state.history.past.push(deepCloneNodesEdges(state.nodes, state.edges))
       state.history.future = []
       
-      const newNode: Node = {
-        id: action.payload.id,
-        position: action.payload.position,
-        data: action.payload.data,
-        type: action.payload.type || 'default'
+      let newNode: Node;
+      
+      // Check if we're getting a full Node object or just the components
+      if ('type' in action.payload && typeof action.payload.type === 'string') {
+        // It's already a Node object
+        newNode = {
+          ...action.payload,
+          // Ensure data is cloned to avoid reference issues
+          data: { ...action.payload.data }
+        };
+      } else {
+        // It's the components to create a Node
+        const payload = action.payload as {
+          id: string,
+          position: XYPosition,
+          data: { label: string, content: NodeContent },
+          type?: string
+        };
+        
+        newNode = {
+          id: payload.id,
+          position: payload.position,
+          data: { ...payload.data },
+          type: payload.type || 'textNode'
+        };
       }
       
-      state.nodes.push(newNode)
-      state.selectedNodeId = newNode.id
-      state.isDirty = true
+      // Remove any existing node with the same ID
+      state.nodes = state.nodes.filter(n => n.id !== newNode.id);
+      
+      // Add the new node
+      state.nodes.push(newNode);
+      state.selectedNodeId = newNode.id;
+      state.isDirty = true;
     },
     
     // Update a node's content
@@ -127,17 +152,14 @@ const boardSlice = createSlice({
       content: NodeContent
     }>) => {
       // Save current state to history before updating
-      state.history.past.push({
-        nodes: [...state.nodes],
-        edges: [...state.edges]
-      })
+      state.history.past.push(deepCloneNodesEdges(state.nodes, state.edges))
       state.history.future = []
       
       const node = state.nodes.find(node => node.id === action.payload.id)
       if (node) {
         node.data = {
           ...node.data,
-          content: action.payload.content
+          content: { ...action.payload.content }
         }
       }
       state.isDirty = true
@@ -146,10 +168,7 @@ const boardSlice = createSlice({
     // Remove a node and its connected edges
     removeNode: (state, action: PayloadAction<string>) => {
       // Save current state to history before updating
-      state.history.past.push({
-        nodes: [...state.nodes],
-        edges: [...state.edges]
-      })
+      state.history.past.push(deepCloneNodesEdges(state.nodes, state.edges))
       state.history.future = []
       
       state.nodes = state.nodes.filter(node => node.id !== action.payload)
@@ -189,10 +208,7 @@ const boardSlice = createSlice({
       const newPast = state.history.past.slice(0, state.history.past.length - 1)
       
       state.history.future = [
-        {
-          nodes: [...state.nodes],
-          edges: [...state.edges]
-        },
+        deepCloneNodesEdges(state.nodes, state.edges),
         ...state.history.future
       ]
       
@@ -211,10 +227,7 @@ const boardSlice = createSlice({
       
       state.history.past = [
         ...state.history.past,
-        {
-          nodes: [...state.nodes],
-          edges: [...state.edges]
-        }
+        deepCloneNodesEdges(state.nodes, state.edges)
       ]
       
       state.nodes = next.nodes
@@ -225,10 +238,7 @@ const boardSlice = createSlice({
     
     // Clear the board
     clearBoard: (state) => {
-      state.history.past.push({
-        nodes: [...state.nodes],
-        edges: [...state.edges]
-      })
+      state.history.past.push(deepCloneNodesEdges(state.nodes, state.edges))
       state.history.future = []
       
       state.nodes = []
