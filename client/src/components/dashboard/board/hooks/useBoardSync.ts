@@ -16,10 +16,20 @@ export const useBoardSync = (
   // Track if a node is currently being dragged
   const isDraggingRef = useRef(false);
   
+  // Track the last drag end time to prevent immediate sync after drag
+  const lastDragEndTimeRef = useRef(0);
+  const SYNC_COOLDOWN_MS = 500; // Wait 500ms after drag before allowing sync
+  
   // Check if any node is in dragging state
   useEffect(() => {
     const checkDragging = () => {
       const draggingNode = nodes.find(node => node.dragging === true);
+      
+      if (isDraggingRef.current && !draggingNode) {
+        // Drag just ended - record the time
+        lastDragEndTimeRef.current = Date.now();
+      }
+      
       isDraggingRef.current = !!draggingNode;
     };
     
@@ -32,6 +42,13 @@ export const useBoardSync = (
     // Don't sync if a node is being dragged to avoid interrupting the drag operation
     if (isDraggingRef.current) {
       console.log('Skipping sync while dragging in progress');
+      return;
+    }
+    
+    // Don't sync if we're within the cooldown period after a drag operation
+    const timeSinceLastDrag = Date.now() - lastDragEndTimeRef.current;
+    if (timeSinceLastDrag < SYNC_COOLDOWN_MS) {
+      console.log(`Skipping sync, only ${timeSinceLastDrag}ms since last drag (cooldown: ${SYNC_COOLDOWN_MS}ms)`);
       return;
     }
     
@@ -81,7 +98,21 @@ export const useBoardSync = (
     
     if (nodesChanged) {
       console.log('Nodes changed, updating ReactFlow nodes');
-      setNodes(storeNodes);
+      
+      // IMPORTANT: Preserve manually set positions by copying them from the current nodes
+      const updatedNodes = storeNodes.map(storeNode => {
+        const currentNode = nodes.find(n => n.id === storeNode.id);
+        if (currentNode) {
+          // Keep the current position if it exists
+          return {
+            ...storeNode,
+            position: currentNode.position
+          };
+        }
+        return storeNode;
+      });
+      
+      setNodes(updatedNodes);
     }
     
     if (edgesChanged) {
