@@ -17,7 +17,7 @@ interface TextNodeData {
  */
 const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
   const dispatch = useDispatch()
-  const { getNode, setNodes } = useReactFlow()
+  const { getNode, setNodes, setEdges } = useReactFlow()
   const allNodes = useSelector((state: RootState) => state.board.nodes)
   const allEdges = useSelector((state: RootState) => state.board.edges)
   
@@ -145,11 +145,8 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       }
     }
     
-    // Add the new node to ReactFlow
+    // Add the new node and edge to ReactFlow
     setNodes(nodes => [...nodes, newNode])
-    
-    // Get ReactFlow instance to update edges
-    const { setEdges } = useReactFlow()
     setEdges(edges => [...edges, newEdge])
     
     // Update Redux store
@@ -164,7 +161,7 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
     setTimeout(() => {
       dispatch(setSelectedNode(newNodeId))
     }, 100)
-  }, [id, getNode, setNodes, allNodes, allEdges, dispatch])
+  }, [id, getNode, setNodes, setEdges, allNodes, allEdges, dispatch])
   
   return (
     <div

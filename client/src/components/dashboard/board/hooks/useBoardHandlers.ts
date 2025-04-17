@@ -52,7 +52,7 @@ export const useBoardHandlers = (
    */
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      // Apply changes to ReactFlow's internal state first
+      // First apply changes to ReactFlow's internal state
       onNodesChange(changes);
       
       // Process position changes
@@ -61,22 +61,32 @@ export const useBoardHandlers = (
       );
       
       if (positionChanges.length > 0) {
-        // Update internal reference
-        nodesRef.current = [...nodes];
+        // Update our reference to the current nodes
+        // Important: We need to create a new array to ensure we capture the latest positions
+        nodesRef.current = nodes.map(node => ({...node}));
         
-        // Check if this is a final position update (drag complete)
+        // Log change for debugging
+        positionChanges.forEach(change => {
+          if (change.type === 'position' && change.position) {
+            console.log(`Node ${change.id} position update: `, change.position);
+          }
+        });
+        
+        // Check if this is a final position update (when dragging is complete)
         const hasFinalPositionChange = positionChanges.some(
           change => change.type === 'position' && 'dragging' in change && !change.dragging
         );
         
+        // If dragging has stopped, update redux immediately to ensure persistence
         if (hasFinalPositionChange) {
-          // On final position, update Redux immediately
+          console.log('Final position detected, updating Redux store');
           pendingNodeUpdateRef.current = true;
-          debouncedNodeUpdate();
+          // Use immediate update instead of debounced for the final position
+          updateNodeState([...nodesRef.current]);
         }
       }
     },
-    [nodes, onNodesChange, debouncedNodeUpdate]
+    [nodes, onNodesChange, updateNodeState]
   );
   
   /**

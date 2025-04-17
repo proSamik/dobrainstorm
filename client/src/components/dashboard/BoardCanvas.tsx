@@ -11,6 +11,7 @@ import ReactFlow, {
   Node,
   Edge,
   useReactFlow,
+  NodeTypes,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 
@@ -36,10 +37,10 @@ import { DebugPanel } from './board/components/DebugPanel'
 import { FloatingAddButton } from './board/components/FloatingAddButton'
 import { NodeCountDisplay } from './board/components/NodeCountDisplay'
 
-// Define custom node types
-const nodeTypes = {
+// Define custom node types outside of the component to prevent recreation
+const nodeTypes: NodeTypes = {
   textNode: TextNode,
-}
+};
 
 interface BoardCanvasProps {
   boardId: string
@@ -52,9 +53,6 @@ interface BoardCanvasProps {
 const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   // Access Redux store
   const { storeNodes, storeEdges, selectedNodeId } = useBoardStore();
-  
-  // Memoize node types to prevent recreation
-  const memoizedNodeTypes = useMemo(() => nodeTypes, []);
   
   // ReactFlow state
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -177,7 +175,7 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
               instance.fitView({ padding: 0.2 });
             }, 500);
           }}
-          nodeTypes={memoizedNodeTypes}
+          nodeTypes={nodeTypes}
           connectionMode={ConnectionMode.Loose}
           defaultViewport={{ x: 0, y: 0, zoom: 1 }}
           minZoom={0.1}
@@ -191,10 +189,17 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
           nodesConnectable={true}
           elementsSelectable={true}
           noDragClassName="no-drag"
-          onNodeDragStart={() => {
+          onNodeDragStart={(e, node) => {
+            console.log("Node drag start:", node.id);
             document.body.style.cursor = 'grabbing';
           }}
-          onNodeDragStop={() => {
+          onNodeDrag={(e, node) => {
+            // Update the node position in real-time during dragging
+            console.log("Node dragging:", node.id, node.position);
+            // This ensures smooth dragging visual feedback
+          }}
+          onNodeDragStop={(e, node) => {
+            console.log("Node drag stop:", node.id, node.position);
             document.body.style.cursor = 'default';
           }}
           deleteKeyCode={null}
