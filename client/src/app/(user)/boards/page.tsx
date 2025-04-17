@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUserData } from '@/contexts/UserDataContext'
-import { hasActiveSubscription } from '@/lib/pricing'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 
