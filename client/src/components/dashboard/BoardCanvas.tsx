@@ -14,6 +14,8 @@ import ReactFlow, {
   NodeTypes,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
+import { useDispatch } from 'react-redux'
+import { updateNodes } from '@/store/boardSlice'
 
 // Import node types
 import TextNode from './nodes/TextNode'
@@ -53,10 +55,11 @@ interface BoardCanvasProps {
 const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   // Access Redux store
   const { storeNodes, storeEdges, selectedNodeId } = useBoardStore();
+  const dispatch = useDispatch();
   
   // ReactFlow state
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [nodes, setNodes, reactFlowNodesChange] = useNodesState([]);
+  const [edges, setEdges, reactFlowEdgesChange] = useEdgesState([]);
   
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
@@ -86,12 +89,12 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   
   // Board event handlers
   const { 
-    handleNodesChange, 
-    handleEdgesChange, 
-    handleConnect, 
-    handleEdgeUpdate,
-    handleNodeClick
-  } = useBoardHandlers(nodes, edges, onNodesChange, onEdgesChange, setEdges);
+    onNodesChange, 
+    onEdgesChange, 
+    onConnect, 
+    onEdgeUpdate,
+    onNodeClick
+  } = useBoardHandlers();
   
   // Force create a demo node if the board is still empty after a timeout
   useEffect(() => {
@@ -161,14 +164,14 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
         <ReactFlow
           nodes={nodes}
           edges={edges}
-          onNodesChange={handleNodesChange}
-          onEdgesChange={handleEdgesChange}
-          onConnect={handleConnect}
-          onEdgeUpdate={handleEdgeUpdate}
+          onNodesChange={reactFlowNodesChange}
+          onEdgesChange={reactFlowEdgesChange}
+          onConnect={onConnect}
+          onEdgeUpdate={onEdgeUpdate}
           onPaneClick={handlePaneClick}
           onPaneContextMenu={createNodeAtMousePosition}
           onNodeContextMenu={handleNodeContextMenu}
-          onNodeClick={handleNodeClick}
+          onNodeClick={onNodeClick}
           onInit={(instance) => {
             console.log("ReactFlow initialized");
             setTimeout(() => {
@@ -202,6 +205,22 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
           onNodeDragStop={(e, node) => {
             console.log("Node drag stop:", node.id, node.position);
             document.body.style.cursor = 'default';
+            
+            // AGGRESSIVE: Apply direct update to both React Flow and Redux store
+            // 1. First update the React Flow state
+            setNodes(nodes => nodes.map(n => 
+              n.id === node.id 
+                ? { ...n, position: { ...node.position }, dragging: false }
+                : n
+            ));
+            
+            // 2. Force update the Redux store directly
+            setTimeout(() => {
+              const updatedNode = { ...node, position: { ...node.position }, dragging: false };
+              const updatedNodes = nodes.map(n => n.id === node.id ? updatedNode : n);
+              dispatch(updateNodes(updatedNodes));
+              console.log("Forcefully updated node position in Redux store:", node.id, node.position);
+            }, 10);
           }}
           deleteKeyCode={null}
           multiSelectionKeyCode={null}
