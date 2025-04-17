@@ -63,34 +63,43 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
       images: [...images]
     }
     
-    // First dispatch content update
-    dispatch(updateNodeContent({
-      id: nodeId,
-      content: updatedContent
-    }))
+    let updatedNode = { ...selectedNode };
+    let nodeChanged = false;
     
-    // If label changed, update that too
-    if (label.trim() !== selectedNode.data.label) {
-      const updatedNodes = nodes.map(node => {
-        if (node.id === nodeId) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              label: label.trim()
-            }
-          }
-        }
-        return node
-      })
-      
-      dispatch(updateNodes(updatedNodes))
+    // Update node content if changed
+    if (text !== selectedNode.data.content?.text || 
+        JSON.stringify(images) !== JSON.stringify(selectedNode.data.content?.images)) {
+      updatedNode.data = {
+        ...updatedNode.data,
+        content: updatedContent
+      };
+      nodeChanged = true;
     }
     
-    setIsDirty(false)
+    // Update node label if changed
+    if (label.trim() !== selectedNode.data.label) {
+      updatedNode.data = {
+        ...updatedNode.data,
+        label: label.trim()
+      };
+      nodeChanged = true;
+    }
+    
+    // Only update if something actually changed
+    if (nodeChanged) {
+      // Update the node in Redux
+      const updatedNodes = nodes.map(node => 
+        node.id === nodeId ? updatedNode : node
+      );
+      
+      dispatch(updateNodes(updatedNodes));
+      console.log('Node updated:', updatedNode);
+    }
+    
+    setIsDirty(false);
     
     // Close the panel after saving
-    handleClose()
+    handleClose();
   }
   
   // Update node content when text changes
