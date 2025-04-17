@@ -622,6 +622,13 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     }
   }, [storeNodes.length, handleAddNodeButton]);
   
+  // Handle node click to ensure edit panel opens
+  const handleNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
+    console.log("Node clicked:", node.id);
+    // Set the selected node in the Redux store
+    dispatch(setSelectedNode(node.id));
+  }, [dispatch]);
+  
   return (
     <div className="h-screen w-full flex flex-col">
       {/* Top toolbar */}
@@ -709,6 +716,7 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
           onPaneClick={handlePaneClick}
           onPaneContextMenu={handleCreateNode}
           onNodeContextMenu={handleNodeContextMenu}
+          onNodeClick={handleNodeClick}
           onInit={(instance) => {
             console.log("ReactFlow initialized with instance:", instance);
             setReactFlowInstance(instance);

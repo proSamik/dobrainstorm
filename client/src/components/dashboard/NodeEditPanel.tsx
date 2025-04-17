@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState } from '@/store'
-import { updateNodeContent, setSelectedNode, NodeContent } from '@/store/boardSlice'
+import { updateNodeContent, setSelectedNode, NodeContent, updateNodes } from '@/store/boardSlice'
 
 interface NodeEditPanelProps {
   nodeId: string
@@ -23,6 +23,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
   // Initialize state with node content
   const [text, setText] = useState<string>('')
   const [images, setImages] = useState<string[]>([])
+  const [label, setLabel] = useState<string>('')
   const [isDirty, setIsDirty] = useState(false)
   
   // Update local state when the selected node changes
@@ -30,6 +31,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     if (selectedNode) {
       setText(selectedNode.data.content?.text || '')
       setImages(selectedNode.data.content?.images || [])
+      setLabel(selectedNode.data.label || '')
       setIsDirty(false)
     }
   }, [selectedNode])
@@ -53,16 +55,37 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
   
   // Save the node content
   const handleSave = () => {
+    if (!selectedNode) return
+    
     // Update the node content in Redux
     const updatedContent: NodeContent = {
       text,
       images: [...images]
     }
     
+    // First dispatch content update
     dispatch(updateNodeContent({
       id: nodeId,
       content: updatedContent
     }))
+    
+    // If label changed, update that too
+    if (label.trim() !== selectedNode.data.label) {
+      const updatedNodes = nodes.map(node => {
+        if (node.id === nodeId) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              label: label.trim()
+            }
+          }
+        }
+        return node
+      })
+      
+      dispatch(updateNodes(updatedNodes))
+    }
     
     setIsDirty(false)
     
@@ -74,6 +97,13 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newText = e.target.value
     setText(newText)
+    setIsDirty(true)
+  }
+  
+  // Update node label when label changes
+  const handleLabelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newLabel = e.target.value
+    setLabel(newLabel)
     setIsDirty(true)
   }
   
@@ -114,20 +144,18 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
       </div>
       
       <div className="space-y-4">
-        {/* Node label (title) */}
+        {/* Node label (title) - now editable */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Label
           </label>
           <input
             type="text"
-            value={selectedNode.data.label}
-            disabled
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            value={label}
+            onChange={handleLabelChange}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            placeholder="Enter node label..."
           />
-          <p className="text-xs text-gray-500 mt-1">
-            This is the node label (not editable)
-          </p>
         </div>
         
         {/* Node content (text) */}

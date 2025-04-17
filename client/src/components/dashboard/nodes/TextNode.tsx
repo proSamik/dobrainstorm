@@ -1,10 +1,11 @@
 'use client'
 
 import { memo, useState, useCallback } from 'react'
-import { Handle, NodeProps, Position, useReactFlow } from 'reactflow'
-import { useDispatch } from 'react-redux'
-import { setSelectedNode, updateNodeContent } from '@/store/boardSlice'
+import { Handle, NodeProps, Position, useReactFlow, MarkerType, Edge } from 'reactflow'
+import { useDispatch, useSelector } from 'react-redux'
+import { setSelectedNode, updateNodes, updateEdges } from '@/store/boardSlice'
 import { NodeContent } from '@/store/boardSlice'
+import { RootState } from '@/store'
 
 interface TextNodeData {
   label: string
@@ -12,11 +13,13 @@ interface TextNodeData {
 }
 
 /**
- * Optimized TextNode component with editable label and + button connections
+ * Enhanced TextNode component with editable label
  */
 const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
   const dispatch = useDispatch()
-  const { getNode, addNodes, addEdges } = useReactFlow()
+  const { getNode, setNodes } = useReactFlow()
+  const allNodes = useSelector((state: RootState) => state.board.nodes)
+  const allEdges = useSelector((state: RootState) => state.board.edges)
   
   // State for editing label
   const [isEditingLabel, setIsEditingLabel] = useState(false)
@@ -27,12 +30,18 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
   }
   
   // Handle node selection
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent) => {
+    // Don't trigger selection when clicking on label input
+    if (isEditingLabel) {
+      e.stopPropagation()
+      return
+    }
     dispatch(setSelectedNode(id))
   }
   
   // Handle label edit
-  const handleLabelEdit = () => {
+  const handleLabelDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent selection change
     setEditedLabel(data.label)
     setIsEditingLabel(true)
   }
@@ -40,21 +49,28 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
   // Save label after editing
   const handleLabelSave = () => {
     if (editedLabel.trim() !== data.label) {
-      // Update the node data in Redux store
-      const updatedNode = getNode(id);
-      if (updatedNode) {
-        dispatch(updateNodeContent({
-          id,
-          content: data.content // Keep the content the same
-        }));
-        
-        // We need to properly update the label outside of content
-        // This will likely need a dedicated action in your Redux store
-        // For now, log that we would update the label
-        console.log(`Updated node ${id} label to: ${editedLabel}`);
-      }
+      // Get all nodes from the store
+      const updatedNodes = allNodes.map(node => {
+        if (node.id === id) {
+          // Update the node label
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              label: editedLabel.trim()
+            }
+          }
+        }
+        return node
+      })
+      
+      // Update nodes in Redux
+      dispatch(updateNodes(updatedNodes))
+      
+      // Also update in ReactFlow
+      setNodes(updatedNodes)
     }
-    setIsEditingLabel(false);
+    setIsEditingLabel(false)
   }
   
   // Handle Enter key to save label
@@ -64,9 +80,14 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
     }
   }
   
+  // Handle outside click to save
+  const handleLabelBlur = () => {
+    handleLabelSave()
+  }
+  
   // Create a new connected node when clicking the "+" button
   const createConnectedNode = useCallback((position: Position) => (event: React.MouseEvent) => {
-    event.stopPropagation()
+    event.stopPropagation() // Prevent node selection
     
     // Get the current node position
     const parentNode = getNode(id)
@@ -111,23 +132,39 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       draggable: true
     }
     
-    // Create an edge connecting to the new node
-    const newEdge = {
+    // Create edge for the connection
+    const newEdge: Edge = {
       id: `edge-${Date.now()}`,
       source: id,
       target: newNodeId,
-      type: 'smoothstep'
+      sourceHandle: null,
+      targetHandle: null,
+      type: 'smoothstep',
+      markerEnd: {
+        type: MarkerType.ArrowClosed
+      }
     }
     
-    // Add the node and edge
-    addNodes(newNode)
-    addEdges(newEdge)
+    // Add the new node to ReactFlow
+    setNodes(nodes => [...nodes, newNode])
+    
+    // Get ReactFlow instance to update edges
+    const { setEdges } = useReactFlow()
+    setEdges(edges => [...edges, newEdge])
+    
+    // Update Redux store
+    const updatedNodes = [...allNodes, newNode]
+    dispatch(updateNodes(updatedNodes))
+    
+    // Also update the edges in Redux store
+    const updatedEdges = [...allEdges, newEdge]
+    dispatch(updateEdges(updatedEdges))
     
     // Select the new node
     setTimeout(() => {
       dispatch(setSelectedNode(newNodeId))
     }, 100)
-  }, [id, getNode, addNodes, addEdges, dispatch])
+  }, [id, getNode, setNodes, allNodes, allEdges, dispatch])
   
   return (
     <div
@@ -152,22 +189,28 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
             type="text"
             value={editedLabel}
             onChange={(e) => setEditedLabel(e.target.value)}
-            onBlur={handleLabelSave}
+            onBlur={handleLabelBlur}
             onKeyDown={handleLabelKeyDown}
             autoFocus
-            className="flex-1 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1"
+            className="flex-1 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 no-drag"
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          <span onDoubleClick={handleLabelEdit}>{data.label}</span>
+          <span 
+            onDoubleClick={handleLabelDoubleClick}
+            className="cursor-text"
+            title="Double-click to edit label"
+          >
+            {data.label}
+          </span>
         )}
       </div>
       
       <div className="text-sm mt-1">
-        {data.content?.text || <span className="text-gray-400 italic">Click to edit</span>}
+        {data.content?.text || <span className="text-gray-400 italic">Click to edit content</span>}
       </div>
       
-      {/* Connection handles with + buttons */}
+      {/* Connection buttons with "+" icons */}
       <div 
         className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 no-drag"
         onClick={createConnectedNode(Position.Top)}
