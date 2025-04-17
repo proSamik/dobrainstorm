@@ -1,6 +1,9 @@
 import { useCallback } from 'react';
 import { Node, Edge } from 'reactflow';
+import { useDispatch } from 'react-redux';
 import { useBoardStore } from './useBoardStore';
+import { authService } from '@/services/auth';
+import { markAsSaved } from '@/store/boardSlice';
 
 /**
  * Hook for file operations such as saving, exporting and importing board data
@@ -9,31 +12,72 @@ export const useFileOperations = (boardId: string) => {
   const { 
     storeNodes, 
     storeEdges, 
-    boardName, 
-    saveBoard, 
+    boardName,
+    isDirty,
     initializeBoard 
   } = useBoardStore();
+  const dispatch = useDispatch();
 
   /**
-   * Save the board state
+   * Check if there are unsaved changes and prompt the user
+   * Returns true if it's safe to proceed, false otherwise
    */
-  const handleSave = useCallback(() => {
+  const checkUnsavedChanges = useCallback(() => {
+    if (!isDirty) return true;
+    
+    return window.confirm('You have unsaved changes. Are you sure you want to proceed without saving?');
+  }, [isDirty]);
+
+  /**
+   * Save the board state to both localStorage and server
+   */
+  const handleSave = useCallback(async () => {
     // Generate the JSON representation of the board
     const boardData = {
-      id: boardId,
       name: boardName,
       nodes: storeNodes,
       edges: storeEdges,
       lastSaved: new Date().toISOString()
     };
+
+    let localSaved = false;
+    let serverSaved = false;
+
+    // Step 1: Save to localStorage for offline/backup functionality
+    try {
+      localStorage.setItem(`board-${boardId}`, JSON.stringify({
+        id: boardId,
+        ...boardData
+      }));
+      console.log('Board saved to localStorage');
+      localSaved = true;
+    } catch (error) {
+      console.error('Error saving to localStorage:', error);
+    }
     
-    // TODO: Send to server API
-    console.log('Saving board data:', boardData);
+    // Step 2: Send to server API using authService
+    try {
+      // Use the correct endpoint and send board ID as URL parameter
+      const response = await authService.post(`/api/boards/update?id=${boardId}`, boardData);
+      
+      if (!response || !response.data) {
+        throw new Error('Invalid response from server');
+      }
+      
+      console.log('Server save result:', response.data);
+      serverSaved = true;
+    } catch (error) {
+      console.error('Error saving to server:', error);
+    }
     
-    // In a real application, this would be an API call to save the data
-    // For now, just mark the board as saved in Redux
-    saveBoard();
-  }, [boardId, boardName, saveBoard, storeEdges, storeNodes]);
+    // Step 3: Mark as saved in Redux store if either local or server save succeeded
+    if (localSaved || serverSaved) {
+      dispatch(markAsSaved());
+      return true;
+    }
+    
+    return false;
+  }, [boardId, boardName, dispatch, storeEdges, storeNodes]);
 
   /**
    * Export the board data as JSON file
@@ -69,6 +113,15 @@ export const useFileOperations = (boardId: string) => {
     const file = event.target.files?.[0];
     if (!file) return;
     
+    // Check for unsaved changes before importing
+    if (!checkUnsavedChanges()) {
+      // Reset file input to allow reimporting the same file
+      if (event.target) {
+        event.target.value = '';
+      }
+      return;
+    }
+    
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
@@ -81,11 +134,18 @@ export const useFileOperations = (boardId: string) => {
             boardId
           });
           console.log('Board data imported successfully');
+          
+          // Save the imported data to localStorage and server
+          setTimeout(() => {
+            handleSave();
+          }, 100);
         } else {
           console.error('Invalid board data format');
+          alert('Invalid board data format. File must contain nodes and edges arrays.');
         }
       } catch (error) {
         console.error('Error parsing imported JSON:', error);
+        alert('Error parsing imported JSON. Please make sure the file is valid JSON.');
       }
       
       // Reset file input to allow reimporting the same file
@@ -94,11 +154,12 @@ export const useFileOperations = (boardId: string) => {
       }
     };
     reader.readAsText(file);
-  }, [boardId, boardName, initializeBoard]);
+  }, [boardId, boardName, checkUnsavedChanges, handleSave, initializeBoard]);
 
   return {
     handleSave,
     handleExport,
-    handleImportFile
+    handleImportFile,
+    checkUnsavedChanges
   };
 }; 
