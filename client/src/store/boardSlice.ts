@@ -48,7 +48,15 @@ const initialState: BoardState = {
  */
 const deepCloneNodesEdges = (nodes: Node[], edges: Edge[]) => {
   return {
-    nodes: nodes.map(node => ({ ...node, data: { ...node.data } })),
+    nodes: nodes.map(node => ({ 
+      ...node, 
+      // Ensure position is deeply cloned
+      position: { ...node.position },
+      // Ensure data is deeply cloned
+      data: { ...node.data },
+      // Ensure draggable property is set
+      draggable: true
+    })),
     edges: edges.map(edge => ({ ...edge }))
   };
 };
@@ -85,7 +93,12 @@ const boardSlice = createSlice({
       state.history.past.push(deepCloneNodesEdges(state.nodes, state.edges))
       state.history.future = []
       
-      state.nodes = action.payload
+      // Ensure all nodes have the draggable property set to true
+      state.nodes = action.payload.map(node => ({
+        ...node,
+        draggable: node.draggable !== false // Set to true if not explicitly false
+      }));
+      
       state.isDirty = true
     },
     
@@ -104,7 +117,8 @@ const boardSlice = createSlice({
       id: string,
       position: XYPosition,
       data: { label: string, content: NodeContent },
-      type?: string
+      type?: string,
+      draggable?: boolean
     }>) => {
       // Save current state to history before updating
       state.history.past.push(deepCloneNodesEdges(state.nodes, state.edges))
@@ -118,7 +132,9 @@ const boardSlice = createSlice({
         newNode = {
           ...action.payload,
           // Ensure data is cloned to avoid reference issues
-          data: { ...action.payload.data }
+          data: { ...action.payload.data },
+          // Ensure node is draggable
+          draggable: action.payload.draggable !== false // Default to true if not specified
         };
       } else {
         // It's the components to create a Node
@@ -126,14 +142,16 @@ const boardSlice = createSlice({
           id: string,
           position: XYPosition,
           data: { label: string, content: NodeContent },
-          type?: string
+          type?: string,
+          draggable?: boolean
         };
         
         newNode = {
           id: payload.id,
           position: payload.position,
           data: { ...payload.data },
-          type: payload.type || 'textNode'
+          type: payload.type || 'textNode',
+          draggable: payload.draggable !== false // Default to true if not specified
         };
       }
       
