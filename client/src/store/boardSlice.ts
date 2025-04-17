@@ -98,19 +98,47 @@ const boardSlice = createSlice({
         state.history.future = [];
       }
       
-      // Preserve dragging state during updates
-      state.nodes = action.payload.map(updatedNode => {
-        // Ensure all required properties are preserved
-        return {
-          ...updatedNode,
-          // Ensure position is properly set
-          position: { ...updatedNode.position },
-          // Ensure draggable property is set to true unless explicitly false
-          draggable: updatedNode.draggable !== false,
-          // Ensure data is preserved
-          data: { ...updatedNode.data }
+      // Prevent NaN values and ensure safe position updates
+      action.payload.forEach(updatedNode => {
+        // Find the node in the current state
+        const existingNodeIndex = state.nodes.findIndex(n => n.id === updatedNode.id);
+        
+        // Ensure position values are valid numbers
+        const safePosition = {
+          x: Number.isFinite(updatedNode.position?.x) ? updatedNode.position.x : 0,
+          y: Number.isFinite(updatedNode.position?.y) ? updatedNode.position.y : 0
         };
+        
+        if (existingNodeIndex !== -1) {
+          // Update the existing node while preserving important properties
+          const existingNode = state.nodes[existingNodeIndex];
+          state.nodes[existingNodeIndex] = {
+            ...existingNode,
+            ...updatedNode,
+            // Use safe position values
+            position: safePosition,
+            // Ensure draggable property is set correctly
+            draggable: updatedNode.draggable !== false,
+            // Preserve data while updating with new values
+            data: {
+              ...existingNode.data,
+              ...(updatedNode.data || {})
+            }
+          };
+        } else {
+          // Add new node with safe values
+          state.nodes.push({
+            ...updatedNode,
+            position: safePosition,
+            draggable: updatedNode.draggable !== false,
+            data: { ...(updatedNode.data || {}) }
+          });
+        }
       });
+      
+      // Remove nodes that are no longer in the updated list
+      const updatedNodeIds = action.payload.map(node => node.id);
+      state.nodes = state.nodes.filter(node => updatedNodeIds.includes(node.id));
       
       state.isDirty = true;
     },
