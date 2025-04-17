@@ -293,45 +293,46 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   // Handle node changes
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      console.log("Node changes:", changes);
-      
-      // IMPORTANT: First apply changes directly to ReactFlow's internal state
-      // This is critical for dragging to work correctly
+      // Apply changes directly to ReactFlow's internal state first (this is crucial)
       onNodesChange(changes);
       
-      // Create a copy of the current nodes to directly update with position changes
-      const updatedNodes = [...nodes];
-      
-      // Process position changes
-      changes.forEach(change => {
-        if (change.type === 'position' && 'position' in change && !change.dragging) {
-          // This is a final position update after dragging stops
-          console.log(`Node ${change.id} final position update:`, change.position);
-          
-          // Find this node in our list and update its position
-          const nodeIndex = updatedNodes.findIndex(n => n.id === change.id);
-          if (nodeIndex >= 0 && change.position) {
-            updatedNodes[nodeIndex] = {
-              ...updatedNodes[nodeIndex],
-              position: change.position
-            };
-          }
-        }
-      });
-      
-      // Only update the Redux store when there are complete position changes (not during dragging)
-      const hasFinalPositionChange = changes.some(
-        change => change.type === 'position' && 'position' in change && !change.dragging
+      // Process position changes for immediate visual updates
+      const positionChanges = changes.filter(
+        change => change.type === 'position' && 'position' in change
       );
       
-      if (hasFinalPositionChange) {
-        // Only update the Redux store after dragging is complete
-        console.log("Saving final node positions to Redux store");
-        nodesRef.current = updatedNodes;
-        debouncedSetPendingNodeUpdate();
+      // For position changes during dragging, update immediately for smooth movement
+      if (positionChanges.length > 0) {
+        // Get the latest nodes with updated positions
+        const updatedNodes = [...nodes];
+        
+        // Update each node that has a position change
+        positionChanges.forEach(change => {
+          if (change.type === 'position' && 'position' in change && change.id) {
+            const nodeIndex = updatedNodes.findIndex(n => n.id === change.id);
+            if (nodeIndex >= 0 && change.position) {
+              // Update the node's position directly
+              updatedNodes[nodeIndex] = {
+                ...updatedNodes[nodeIndex],
+                position: change.position
+              };
+            }
+          }
+        });
+        
+        // Only store completed drags (not during dragging) to reduce Redux updates
+        const hasFinalPositionChange = positionChanges.some(
+          change => change.type === 'position' && 'dragging' in change && !change.dragging
+        );
+        
+        if (hasFinalPositionChange) {
+          // Use immediate update for the final position
+          nodesRef.current = updatedNodes;
+          setPendingNodeUpdate(true); // Use direct update instead of debounced
+        }
       }
     },
-    [nodes, onNodesChange, debouncedSetPendingNodeUpdate]
+    [nodes, onNodesChange]
   );
   
   // Handle edge changes
@@ -749,24 +750,23 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
           elementsSelectable={true}
           noDragClassName="no-drag"
           onNodeDragStart={(event, node) => {
-            console.log("Node drag started:", node.id, node.position);
-            // Add class to body to disable text selection while dragging
+            console.log("Drag start:", node.id);
+            document.body.style.cursor = 'grabbing';
             document.body.classList.add('node-drag-active');
           }}
           onNodeDrag={(event, node) => {
-            console.log("Node dragging:", node.id, node.position);
-            // Using requestAnimationFrame for smoother updates
-            requestAnimationFrame(() => {
-              // We could update visual elements during drag here if needed
-            });
+            // Direct DOM manipulation for smoother updates
+            const nodeElement = document.querySelector(`[data-id="${node.id}"]`);
+            if (nodeElement) {
+              nodeElement.classList.add('dragging');
+            }
           }}
           onNodeDragStop={(event, node) => {
-            console.log("Node drag stopped:", node.id, "Final position:", node.position);
-            
-            // Remove class from body
+            console.log("Drag stop:", node.id, node.position);
+            document.body.style.cursor = 'default';
             document.body.classList.remove('node-drag-active');
             
-            // Manual position update to ensure the node positions are saved
+            // Update the node position directly in the Redux store
             dispatch(updateNodes(
               nodes.map(n => 
                 n.id === node.id 
@@ -775,11 +775,14 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
               )
             ));
           }}
-          deleteKeyCode={null} // Disable the delete key to prevent accidental deletion
-          multiSelectionKeyCode={null} // Disable multi-selection to simplify interaction
-          panOnScroll={false} // Disable pan on scroll for more stable behavior
-          panOnDrag={true} // Keep pan on drag enabled
-          selectionOnDrag={false} // Disable selection on drag for simpler interaction
+          deleteKeyCode={null}
+          multiSelectionKeyCode={null}
+          panOnScroll={false}
+          panOnDrag={true}
+          selectionOnDrag={false}
+          zoomOnScroll={false}
+          zoomOnPinch={true}
+          preventScrolling={true}
           proOptions={{ hideAttribution: true }}
           style={{ background: '#f8fafc' }}
         >

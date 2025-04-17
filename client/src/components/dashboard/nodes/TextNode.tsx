@@ -32,9 +32,10 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
         userSelect: 'none',  // Prevents text selection during drag
       }}
       onClick={() => dispatch(setSelectedNode(id))}
+      data-id={id}
     >
       {/* Drag handle - making it very clear this is draggable */}
-      <div className="font-bold mb-1 text-sm border-b pb-1 flex items-center cursor-move">
+      <div className="font-bold mb-1 text-sm border-b pb-1 flex items-center drag-handle">
         <div className="mr-2 text-gray-500">
           ≡≡ {/* Clearer drag handle icon */}
         </div>
