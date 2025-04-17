@@ -73,6 +73,10 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null)
+  const [pendingNodeUpdate, setPendingNodeUpdate] = useState(false)
+  const [pendingEdgeUpdate, setPendingEdgeUpdate] = useState(false)
+  const nodesRef = useRef<Node[]>([])
+  const edgesRef = useRef<Edge[]>([])
   
   // Initialize the board from Redux state or load from API
   useEffect(() => {
@@ -119,6 +123,22 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     setNodes(storeNodes)
     setEdges(storeEdges)
   }, [storeNodes, storeEdges, setNodes, setEdges])
+  
+  // Update Redux store when there are pending node updates
+  useEffect(() => {
+    if (pendingNodeUpdate) {
+      dispatch(updateNodes([...nodesRef.current]))
+      setPendingNodeUpdate(false)
+    }
+  }, [dispatch, pendingNodeUpdate])
+  
+  // Update Redux store when there are pending edge updates
+  useEffect(() => {
+    if (pendingEdgeUpdate) {
+      dispatch(updateEdges([...edgesRef.current]))
+      setPendingEdgeUpdate(false)
+    }
+  }, [dispatch, pendingEdgeUpdate])
   
   // Save the board when user navigates away or closes the window
   useEffect(() => {
@@ -181,26 +201,23 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
       )
       
       if (shouldUpdateStore) {
-        // We need to get the current nodes state after the changes
-        setNodes(currentNodes => {
-          dispatch(updateNodes([...currentNodes]))
-          return currentNodes
-        })
+        // Use a ref to store current nodes instead of setState in render
+        nodesRef.current = nodes;
+        setPendingNodeUpdate(true);
       }
     },
-    [dispatch, onNodesChange, setNodes]
+    [nodes, onNodesChange]
   )
   
   // Handle edge changes
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
       onEdgesChange(changes)
-      setEdges(currentEdges => {
-        dispatch(updateEdges([...currentEdges]))
-        return currentEdges
-      })
+      // Use a ref to store current edges instead of setState in render
+      edgesRef.current = edges;
+      setPendingEdgeUpdate(true);
     },
-    [dispatch, onEdgesChange, setEdges]
+    [edges, onEdgesChange]
   )
   
   // Handle connecting two nodes
@@ -217,11 +234,12 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
       
       setEdges(eds => {
         const newEdges = addEdge(newEdge, eds)
-        dispatch(updateEdges(newEdges))
+        edgesRef.current = newEdges;
+        setPendingEdgeUpdate(true);
         return newEdges
       })
     },
-    [dispatch, setEdges]
+    [setEdges]
   )
   
   // Handle edge updates
@@ -229,11 +247,12 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     (oldEdge: Edge, newConnection: Connection) => {
       setEdges(els => {
         const newEdges = updateEdge(oldEdge, newConnection, els)
-        dispatch(updateEdges(newEdges))
+        edgesRef.current = newEdges;
+        setPendingEdgeUpdate(true);
         return newEdges
       })
     },
-    [dispatch, setEdges]
+    [setEdges]
   )
   
   // Create a new node
