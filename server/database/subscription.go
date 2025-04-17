@@ -1,12 +1,12 @@
 package database
 
 import (
-	"saas-server/models"
-	"sync"
-	"strconv"
-	"time"
 	"database/sql"
 	"log"
+	"saas-server/models"
+	"strconv"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -87,7 +87,6 @@ func (db *DB) GetSubscriptionByUserID(userID string) (*models.Subscription, erro
 	return &subscription, nil
 }
 
-
 // UpdateUserSubscription updates a user's subscription in the database
 func (db *DB) UpdateUserSubscription(userID string, subscriptionID int, status string, productID int, variantID int, renewalDate *time.Time, endDate *time.Time) error {
 	parsedID, err := uuid.Parse(userID)
@@ -126,7 +125,6 @@ func (db *DB) UpdateUserSubscription(userID string, subscriptionID int, status s
 
 	return nil
 }
-
 
 // GetUserSubscriptionStatus retrieves only the subscription-related fields
 func (db *DB) GetUserSubscriptionStatus(id string) (*models.UserSubscriptionStatus, error) {
@@ -179,4 +177,24 @@ func (db *DB) InvalidateUserCache(userID string) {
 	cacheMutex.Lock()
 	delete(subscriptionCache, userID)
 	cacheMutex.Unlock()
+}
+
+// CheckActiveSubscription checks if a user has an active paid subscription
+func (db *DB) CheckActiveSubscription(userID string) (bool, error) {
+	query := `
+		SELECT EXISTS (
+			SELECT 1
+			FROM subscriptions
+			WHERE user_id = $1
+			AND status = 'active'
+		) as has_subscription
+	`
+
+	var hasSubscription bool
+	err := db.QueryRow(query, userID).Scan(&hasSubscription)
+	if err != nil {
+		return false, err
+	}
+
+	return hasSubscription, nil
 }
