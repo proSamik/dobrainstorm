@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Node, Edge } from 'reactflow';
 
 /**
@@ -13,8 +13,27 @@ export const useBoardSync = (
   setNodes: (nodes: Node[]) => void,
   setEdges: (edges: Edge[]) => void
 ) => {
+  // Track if a node is currently being dragged
+  const isDraggingRef = useRef(false);
+  
+  // Check if any node is in dragging state
+  useEffect(() => {
+    const checkDragging = () => {
+      const draggingNode = nodes.find(node => node.dragging === true);
+      isDraggingRef.current = !!draggingNode;
+    };
+    
+    checkDragging();
+  }, [nodes]);
+  
   useEffect(() => {
     console.log('Syncing store nodes to ReactFlow, count:', storeNodes.length);
+    
+    // Don't sync if a node is being dragged to avoid interrupting the drag operation
+    if (isDraggingRef.current) {
+      console.log('Skipping sync while dragging in progress');
+      return;
+    }
     
     /**
      * Compare nodes for equality checking only essential properties

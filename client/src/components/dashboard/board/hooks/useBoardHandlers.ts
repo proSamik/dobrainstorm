@@ -49,10 +49,11 @@ export const useBoardHandlers = (
   
   /**
    * Handle node changes (position, selection, etc.)
+   * This is the primary function that handles node movement
    */
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      // First apply changes to ReactFlow's internal state
+      // CRITICAL: Apply changes directly to ReactFlow's state first for visual updates
       onNodesChange(changes);
       
       // Process position changes
@@ -61,14 +62,16 @@ export const useBoardHandlers = (
       );
       
       if (positionChanges.length > 0) {
-        // Update our reference to the current nodes
-        // Important: We need to create a new array to ensure we capture the latest positions
-        nodesRef.current = nodes.map(node => ({...node}));
+        // Update node reference - important for tracking current state
+        nodesRef.current = nodes;
         
-        // Log change for debugging
+        // Log changes for debugging
         positionChanges.forEach(change => {
           if (change.type === 'position' && change.position) {
-            console.log(`Node ${change.id} position update: `, change.position);
+            // Only log final positions to reduce console spam
+            if ('dragging' in change && !change.dragging) {
+              console.log(`Node ${change.id} final position:`, change.position);
+            }
           }
         });
         
@@ -77,12 +80,11 @@ export const useBoardHandlers = (
           change => change.type === 'position' && 'dragging' in change && !change.dragging
         );
         
-        // If dragging has stopped, update redux immediately to ensure persistence
+        // If dragging has stopped, update Redux immediately to ensure persistence
         if (hasFinalPositionChange) {
           console.log('Final position detected, updating Redux store');
-          pendingNodeUpdateRef.current = true;
-          // Use immediate update instead of debounced for the final position
-          updateNodeState([...nodesRef.current]);
+          // Immediately update Redux with final position
+          updateNodeState(nodes);
         }
       }
     },

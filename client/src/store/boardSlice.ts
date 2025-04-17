@@ -89,17 +89,30 @@ const boardSlice = createSlice({
     
     // Update nodes (used when nodes are moved, added, etc.)
     updateNodes: (state, action: PayloadAction<Node[]>) => {
-      // Save current state to history before updating
-      state.history.past.push(deepCloneNodesEdges(state.nodes, state.edges))
-      state.history.future = []
+      // Skip adding to history for minor position updates during dragging
+      const isDragging = action.payload.some(node => node.dragging);
       
-      // Ensure all nodes have the draggable property set to true
-      state.nodes = action.payload.map(node => ({
-        ...node,
-        draggable: node.draggable !== false // Set to true if not explicitly false
-      }));
+      if (!isDragging) {
+        // Only save to history if we're not in a dragging operation
+        state.history.past.push(deepCloneNodesEdges(state.nodes, state.edges));
+        state.history.future = [];
+      }
       
-      state.isDirty = true
+      // Preserve dragging state during updates
+      state.nodes = action.payload.map(updatedNode => {
+        // Ensure all required properties are preserved
+        return {
+          ...updatedNode,
+          // Ensure position is properly set
+          position: { ...updatedNode.position },
+          // Ensure draggable property is set to true unless explicitly false
+          draggable: updatedNode.draggable !== false,
+          // Ensure data is preserved
+          data: { ...updatedNode.data }
+        };
+      });
+      
+      state.isDirty = true;
     },
     
     // Update edges (used when connections are made, removed, etc.)

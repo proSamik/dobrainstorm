@@ -194,9 +194,10 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
             document.body.style.cursor = 'grabbing';
           }}
           onNodeDrag={(e, node) => {
-            // Update the node position in real-time during dragging
-            console.log("Node dragging:", node.id, node.position);
-            // This ensures smooth dragging visual feedback
+            // Update node position in real-time during dragging for smooth visual feedback
+            // The position changes are automatically applied to the visual state by ReactFlow
+            // We don't need to manually update the position here, but logging helps with debugging
+            // console.log("Node dragging:", node.id, node.position);
           }}
           onNodeDragStop={(e, node) => {
             console.log("Node drag stop:", node.id, node.position);
