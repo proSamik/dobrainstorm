@@ -462,3 +462,28 @@ body {
 .syntax-highlighted .property {
   color: #9cdcfe; /* light blue */
 }
+
+/* Add these optimizations for React Flow dragging */
+.node-drag-active {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+.node-drag-active * {
+  pointer-events: none !important;
+}
+
+/* Add hardware acceleration for React Flow nodes */
+.react-flow__node {
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+}
+
+/* Improve drag handle visibility */
+.drag-handle {
+  cursor: grab;
+}
+
+.node-drag-active .drag-handle {
+  cursor: grabbing;
+}

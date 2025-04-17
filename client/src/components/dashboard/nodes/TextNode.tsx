@@ -12,7 +12,7 @@ interface TextNodeData {
 }
 
 /**
- * Simplified TextNode component to ensure proper draggability
+ * Ultra-optimized TextNode component for smooth dragging
  */
 const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
   const dispatch = useDispatch()
@@ -26,11 +26,18 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       className={`px-4 py-3 rounded-lg shadow-md ${
         selected ? 'bg-blue-50 border-2 border-blue-500' : 'bg-white border border-gray-200'
       }`}
-      style={{ minWidth: 150 }}
+      style={{ 
+        minWidth: 150,
+        touchAction: 'none', // Prevents touch actions from interfering with dragging
+        userSelect: 'none',  // Prevents text selection during drag
+      }}
       onClick={() => dispatch(setSelectedNode(id))}
     >
+      {/* Drag handle - making it very clear this is draggable */}
       <div className="font-bold mb-1 text-sm border-b pb-1 flex items-center cursor-move">
-        <span className="mr-2 text-gray-400 select-none">⋮⋮</span>
+        <div className="mr-2 text-gray-500">
+          ≡≡ {/* Clearer drag handle icon */}
+        </div>
         <span>{data.label}</span>
       </div>
       

@@ -55,6 +55,7 @@ const useDebounce = (fn: Function, delay: number) => {
 };
 
 // Define custom node types OUTSIDE of the component to prevent recreation on each render
+// Use useMemo to ensure this doesn't change across renders
 const nodeTypes = {
   textNode: TextNode,
 }
@@ -77,6 +78,9 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     isDirty,
     selectedNodeId
   } = useSelector((state: RootState) => state.board)
+  
+  // Memoize node types to prevent recreation
+  const memoizedNodeTypes = useMemo(() => nodeTypes, []);
   
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
@@ -730,14 +734,14 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
               }, 500);
             }
           }}
-          nodeTypes={nodeTypes}
+          nodeTypes={memoizedNodeTypes}
           connectionMode={ConnectionMode.Loose}
           defaultViewport={{ x: 0, y: 0, zoom: 1 }}
           minZoom={0.1}
           maxZoom={2}
           fitView={true}
           fitViewOptions={{ padding: 0.2 }}
-          snapToGrid={true}
+          snapToGrid={false}
           snapGrid={[15, 15]}
           nodesDraggable={true}
           draggable={true}
@@ -746,12 +750,21 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
           noDragClassName="no-drag"
           onNodeDragStart={(event, node) => {
             console.log("Node drag started:", node.id, node.position);
+            // Add class to body to disable text selection while dragging
+            document.body.classList.add('node-drag-active');
           }}
           onNodeDrag={(event, node) => {
             console.log("Node dragging:", node.id, node.position);
+            // Using requestAnimationFrame for smoother updates
+            requestAnimationFrame(() => {
+              // We could update visual elements during drag here if needed
+            });
           }}
           onNodeDragStop={(event, node) => {
             console.log("Node drag stopped:", node.id, "Final position:", node.position);
+            
+            // Remove class from body
+            document.body.classList.remove('node-drag-active');
             
             // Manual position update to ensure the node positions are saved
             dispatch(updateNodes(
@@ -762,6 +775,11 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
               )
             ));
           }}
+          deleteKeyCode={null} // Disable the delete key to prevent accidental deletion
+          multiSelectionKeyCode={null} // Disable multi-selection to simplify interaction
+          panOnScroll={false} // Disable pan on scroll for more stable behavior
+          panOnDrag={true} // Keep pan on drag enabled
+          selectionOnDrag={false} // Disable selection on drag for simpler interaction
           proOptions={{ hideAttribution: true }}
           style={{ background: '#f8fafc' }}
         >
