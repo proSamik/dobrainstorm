@@ -14,9 +14,9 @@ import ReactFlow, {
   NodeChange,
   EdgeChange,
   Connection,
-  updateEdge,
   MarkerType,
   Panel,
+  useReactFlow,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { useDispatch, useSelector } from 'react-redux'
@@ -88,7 +88,8 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   } | null>(null)
   
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
-  const [reactFlowInstance, setReactFlowInstance] = useState<any>(null)
+  const reactFlow = useReactFlow()
+  const [reactFlowInstance, setReactFlowInstance] = useState<ReturnType<typeof useReactFlow> | null>(null)
   const [pendingNodeUpdate, setPendingNodeUpdate] = useState(false)
   const [pendingEdgeUpdate, setPendingEdgeUpdate] = useState(false)
   const nodesRef = useRef<Node[]>([])
@@ -288,19 +289,41 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   // Handle node changes
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      // Apply the changes directly to React Flow nodes
+      console.log("Node changes:", changes);
+      
+      // IMPORTANT: First apply changes directly to ReactFlow's internal state
+      // This is critical for dragging to work correctly
       onNodesChange(changes);
       
-      // Update Redux store only if the changes are complete (not during dragging)
-      const shouldUpdateStore = changes.every(change => 
-        change.type !== 'position' || (change.type === 'position' && !change.dragging)
+      // Create a copy of the current nodes to directly update with position changes
+      const updatedNodes = [...nodes];
+      
+      // Process position changes
+      changes.forEach(change => {
+        if (change.type === 'position' && 'position' in change && !change.dragging) {
+          // This is a final position update after dragging stops
+          console.log(`Node ${change.id} final position update:`, change.position);
+          
+          // Find this node in our list and update its position
+          const nodeIndex = updatedNodes.findIndex(n => n.id === change.id);
+          if (nodeIndex >= 0 && change.position) {
+            updatedNodes[nodeIndex] = {
+              ...updatedNodes[nodeIndex],
+              position: change.position
+            };
+          }
+        }
+      });
+      
+      // Only update the Redux store when there are complete position changes (not during dragging)
+      const hasFinalPositionChange = changes.some(
+        change => change.type === 'position' && 'position' in change && !change.dragging
       );
       
-      if (shouldUpdateStore) {
-        // Get the latest nodes
-        nodesRef.current = [...nodes];
-        
-        // Use debounced update to avoid rapid successive updates
+      if (hasFinalPositionChange) {
+        // Only update the Redux store after dragging is complete
+        console.log("Saving final node positions to Redux store");
+        nodesRef.current = updatedNodes;
         debouncedSetPendingNodeUpdate();
       }
     },
@@ -318,6 +341,33 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     [edges, onEdgesChange, debouncedSetPendingEdgeUpdate]
   )
   
+  // Handle edge updates (replace deprecated updateEdge with modern approach)
+  const handleEdgeUpdate = useCallback(
+    (oldEdge: Edge, newConnection: Connection) => {
+      setEdges(els => {
+        // Remove the old edge
+        const newEdges = els.filter(e => e.id !== oldEdge.id);
+        
+        // Create the new edge with the same id to preserve any custom data
+        const updatedEdge: Edge = {
+          ...oldEdge,
+          source: newConnection.source || oldEdge.source,
+          target: newConnection.target || oldEdge.target,
+          sourceHandle: newConnection.sourceHandle,
+          targetHandle: newConnection.targetHandle
+        };
+        
+        // Add the updated edge
+        newEdges.push(updatedEdge);
+        
+        edgesRef.current = newEdges;
+        debouncedSetPendingEdgeUpdate();
+        return newEdges;
+      });
+    },
+    [setEdges, debouncedSetPendingEdgeUpdate]
+  );
+  
   // Handle connecting two nodes
   const handleConnect = useCallback(
     (connection: Connection) => {
@@ -325,33 +375,27 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
       const newEdge = {
         ...connection,
         id: `edge-${Date.now()}`,
+        // Use arrow marker for parent-child relationship visual
         markerEnd: {
           type: MarkerType.ArrowClosed,
         },
+        // Add some styling for the parent-child relationship
+        style: { strokeWidth: 2 },
+        // Add data to represent parent-child relationship
+        data: { 
+          relationship: 'parent-child' 
+        }
       }
       
       setEdges(eds => {
-        const newEdges = addEdge(newEdge, eds)
+        const newEdges = addEdge(newEdge, eds);
         edgesRef.current = newEdges;
         debouncedSetPendingEdgeUpdate();
-        return newEdges
-      })
+        return newEdges;
+      });
     },
     [setEdges, debouncedSetPendingEdgeUpdate]
-  )
-  
-  // Handle edge updates
-  const handleEdgeUpdate = useCallback(
-    (oldEdge: Edge, newConnection: Connection) => {
-      setEdges(els => {
-        const newEdges = updateEdge(oldEdge, newConnection, els)
-        edgesRef.current = newEdges;
-        debouncedSetPendingEdgeUpdate();
-        return newEdges
-      })
-    },
-    [setEdges, debouncedSetPendingEdgeUpdate]
-  )
+  );
   
   // Create a new node
   const handleCreateNode = useCallback(
@@ -383,8 +427,11 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
             text: '',
             images: []
           }
-        }
+        },
+        draggable: true,
       };
+      
+      console.log("Adding new node with draggable:", newNode.draggable);
       
       // Add directly to ReactFlow state first for immediate rendering
       reactFlowInstance.addNodes(newNode);
@@ -407,27 +454,35 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
       return;
     }
     
+    // Get current viewport center
     const viewportCenter = reactFlowInstance.screenToFlowPosition({
       x: reactFlowWrapper.current?.clientWidth ? reactFlowWrapper.current.clientWidth / 2 : 250,
       y: reactFlowWrapper.current?.clientHeight ? reactFlowWrapper.current.clientHeight / 2 : 150,
     });
     
+    // Add a small offset based on the number of existing nodes to prevent overlapping
+    const offset = nodes.length * 20;
+    
     console.log("Creating node at viewport center:", viewportCenter);
     
     const newNodeId = `node-${Date.now()}`;
     
-    // Create the new node
+    // Create the new node with offset to prevent overlapping
     const newNode: Node = {
       id: newNodeId,
       type: 'textNode',
-      position: viewportCenter,
+      position: {
+        x: viewportCenter.x + offset,
+        y: viewportCenter.y + offset
+      },
       data: {
         label: 'New Idea',
         content: {
           text: '',
           images: []
         }
-      }
+      },
+      draggable: true // Explicitly set node to be draggable
     };
     
     // Add the node to the Redux store first
@@ -442,7 +497,7 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
       // Select the node for editing - ensure this happens AFTER the node is added
       dispatch(setSelectedNode(newNodeId));
     }, 100);
-  }, [dispatch, reactFlowInstance, reactFlowWrapper]);
+  }, [dispatch, reactFlowInstance, reactFlowWrapper, nodes.length]);
   
   // Handle context menu
   const handleNodeContextMenu = useCallback(
@@ -662,8 +717,14 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
                   position: { 
                     x: node.position?.x || 250, 
                     y: node.position?.y || 150 
-                  }
+                  },
+                  // Ensure nodes are draggable
+                  draggable: true
                 }))];
+                
+                console.log("Setting nodes with draggable property:", 
+                  resetNodes.map(n => `${n.id}: ${n.draggable}`).join(', '));
+                
                 instance.setNodes(resetNodes);
                 instance.fitView({ padding: 0.2 });
               }, 500);
@@ -679,8 +740,28 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
           snapToGrid={true}
           snapGrid={[15, 15]}
           nodesDraggable={true}
+          draggable={true}
           nodesConnectable={true}
           elementsSelectable={true}
+          noDragClassName="no-drag"
+          onNodeDragStart={(event, node) => {
+            console.log("Node drag started:", node.id, node.position);
+          }}
+          onNodeDrag={(event, node) => {
+            console.log("Node dragging:", node.id, node.position);
+          }}
+          onNodeDragStop={(event, node) => {
+            console.log("Node drag stopped:", node.id, "Final position:", node.position);
+            
+            // Manual position update to ensure the node positions are saved
+            dispatch(updateNodes(
+              nodes.map(n => 
+                n.id === node.id 
+                  ? { ...n, position: { ...node.position } } 
+                  : n
+              )
+            ));
+          }}
           proOptions={{ hideAttribution: true }}
           style={{ background: '#f8fafc' }}
         >
