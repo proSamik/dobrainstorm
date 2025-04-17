@@ -109,6 +109,37 @@ func main() {
 	mux.Handle("/api/user/subscription", authMiddleware.RequireAuth(http.HandlerFunc(userDataHandler.GetUserSubscription)))
 	mux.Handle("/api/user/subscription/billing", authMiddleware.RequireAuth(http.HandlerFunc(userDataHandler.GetBillingPortal)))
 
+	// Board API routes (protected with auth, subscription check, and rate limiting)
+	boardHandler := handlers.NewBoardHandler(db)
+	subscriptionMiddleware := middleware.NewSubscriptionMiddleware(db)
+
+	// Regular rate limiter for board API (e.g., 60 requests per minute)
+	boardRateLimiter := middleware.NewRateLimiter(1*time.Minute, 60)
+
+	// Strict rate limiter for write operations (e.g., 30 requests per minute)
+	boardWriteRateLimiter := middleware.NewRateLimiter(1*time.Minute, 30)
+
+	// Routes with subscription requirement
+	mux.Handle("/api/boards/list", authMiddleware.RequireAuth(
+		boardRateLimiter.Limit(http.HandlerFunc(boardHandler.ListBoards))))
+
+	mux.Handle("/api/boards/get", authMiddleware.RequireAuth(
+		boardRateLimiter.Limit(http.HandlerFunc(boardHandler.GetBoard))))
+
+	// Restore the original route with full middleware chain
+	mux.Handle("/api/boards/create", authMiddleware.RequireAuth(
+		subscriptionMiddleware.HasActiveSubscription(
+			boardWriteRateLimiter.Limit(http.HandlerFunc(boardHandler.CreateBoard)))))
+
+	// Update route with the same updated middleware
+	mux.Handle("/api/boards/update", authMiddleware.RequireAuth(
+		subscriptionMiddleware.HasActiveSubscription(
+			boardWriteRateLimiter.Limit(http.HandlerFunc(boardHandler.UpdateBoard)))))
+
+	mux.Handle("/api/boards/delete", authMiddleware.RequireAuth(
+		subscriptionMiddleware.HasActiveSubscription(
+			boardWriteRateLimiter.Limit(http.HandlerFunc(boardHandler.DeleteBoard)))))
+
 	// Analytics routes (public)
 	mux.HandleFunc("/api/analytics/pageview", analyticsHandler.TrackPageView)
 
@@ -127,7 +158,7 @@ func main() {
 	mux.Handle("/admin/send-email", adminMiddleware.RequireAdmin(http.HandlerFunc(emailHandler.AdminSendEmailHandler)))
 
 	// Rate limiter for public endpoints (e.g., 5 requests per minute)
-	publicRateLimiter := middleware.NewRateLimiter(1 * time.Minute, 5)
+	publicRateLimiter := middleware.NewRateLimiter(1*time.Minute, 5)
 
 	// Contact form route - public, rate-limited only (no CSRF)
 	contactHandler := handlers.NewContactHandler()
