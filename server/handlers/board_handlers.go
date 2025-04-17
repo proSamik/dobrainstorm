@@ -316,8 +316,8 @@ func (h *BoardHandler) DeleteBoard(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[BoardHandler] DeleteBoard - Method: %s, Path: %s, Query: %s",
 		r.Method, r.URL.Path, r.URL.RawQuery)
 
-	// Only accept DELETE requests
-	if r.Method != http.MethodDelete {
+	// Accept POST and DELETE requests
+	if r.Method != http.MethodDelete && r.Method != http.MethodPost {
 		log.Printf("[BoardHandler] Method not allowed: %s", r.Method)
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -326,7 +326,7 @@ func (h *BoardHandler) DeleteBoard(w http.ResponseWriter, r *http.Request) {
 	// Log all context keys for debugging
 	log.Printf("[BoardHandler] Context Values:")
 	log.Printf("[BoardHandler] Context userID (typed key): %v", r.Context().Value(middleware.UserIDKey))
-	log.Printf("[BoardHandler] Context userID (string key): %v", r.Context().Value("userID"))
+	log.Printf("[BoardHandler] Context userID (string key): %v", r.Context().Value(middleware.UserIDContextKey))
 
 	// Get user ID from context using the middleware helper
 	userID := middleware.GetUserID(r.Context())
