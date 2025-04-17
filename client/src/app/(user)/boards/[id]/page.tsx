@@ -3,6 +3,7 @@
 import { useParams } from 'next/navigation'
 import BoardCanvas from '@/components/dashboard/BoardCanvas'
 import { Provider } from 'react-redux'
+import { ReactFlowProvider } from 'reactflow'
 import { store } from '@/store'
 
 
@@ -16,9 +17,11 @@ export default function BoardPage() {
 
   return (
     <div className="h-screen w-full p-0 m-0 overflow-hidden">
-      <Provider store={store}>
-        <BoardCanvas boardId={boardId} />
-      </Provider>
+      <ReactFlowProvider>
+        <Provider store={store}>
+          <BoardCanvas boardId={boardId} />
+        </Provider>
+      </ReactFlowProvider>
     </div>
   )
 } 
