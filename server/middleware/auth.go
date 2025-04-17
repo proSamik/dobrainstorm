@@ -18,6 +18,9 @@ type contextKey string
 // UserIDKey is the context key for storing the user ID
 const UserIDKey contextKey = "userID"
 
+// Export UserIDKey for external access by handlers
+var ExportedUserIDKey = UserIDKey
+
 // UserIDContextKey is the exported string version of UserIDKey for external use
 const UserIDContextKey = "userID"
 
@@ -112,10 +115,23 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		// Add user ID to context using the typed key only
+		// Add user ID to context using both the typed key and the string key for maximum compatibility
 		ctx := context.WithValue(r.Context(), UserIDKey, userID)
+		ctx = context.WithValue(ctx, UserIDContextKey, userID)
+		// Also add with direct string key for maximum compatibility with older code
+		ctx = context.WithValue(ctx, "userID", userID)
 
 		log.Printf("[Auth Middleware] Token validated successfully for user: %v", userID)
+		log.Printf("[Auth Middleware] Setting userID in context using typed key '%v', string key '%s', and direct string key 'userID'",
+			UserIDKey, UserIDContextKey)
+
+		// Verify the user ID was set correctly in the context
+		typedUserID := ctx.Value(UserIDKey)
+		stringUserID := ctx.Value(UserIDContextKey)
+		directStringUserID := ctx.Value("userID")
+		log.Printf("[Auth Middleware] Verification - Retrieved from context: typed key=%v, string key=%v, direct string key=%v",
+			typedUserID, stringUserID, directStringUserID)
+
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -125,11 +141,16 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 func GetUserID(ctx context.Context) string {
 	// Try getting the value using the typed key first
 	if userID, ok := ctx.Value(UserIDKey).(string); ok {
+		log.Printf("[Middleware] GetUserID: Found user ID using typed key: %s", userID)
 		return userID
 	}
+
 	// Fall back to string key if typed key fails
 	if userID, ok := ctx.Value(UserIDContextKey).(string); ok {
+		log.Printf("[Middleware] GetUserID: Found user ID using string key: %s", userID)
 		return userID
 	}
+
+	log.Printf("[Middleware] GetUserID: No user ID found in context")
 	return ""
 }
