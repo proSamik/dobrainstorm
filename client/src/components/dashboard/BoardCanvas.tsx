@@ -54,7 +54,7 @@ interface BoardCanvasProps {
  */
 const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   // Access Redux store
-  const { storeNodes, storeEdges, selectedNodeId } = useBoardStore();
+  const { storeNodes, storeEdges, selectedNodeId, isDirty } = useBoardStore();
   const dispatch = useDispatch();
   
   // ReactFlow state
@@ -111,10 +111,18 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   // Save the board when user navigates away or closes the window
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      handleSave();
-      e.preventDefault();
-      e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
-      return e.returnValue;
+      // Check if there are unsaved changes
+      if (isDirty) {
+        // Standard way to show confirmation dialog
+        const confirmationMessage = 'You have unsaved changes. Are you sure you want to leave?';
+        e.preventDefault();
+        e.returnValue = confirmationMessage;
+        
+        // Attempt to save before leaving
+        handleSave();
+        
+        return confirmationMessage;
+      }
     };
     
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -122,7 +130,7 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [handleSave]);
+  }, [handleSave, isDirty]);
   
   // Handle node context menu
   const handleNodeContextMenu = useCallback(
