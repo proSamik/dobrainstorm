@@ -3,32 +3,31 @@ import {
   Connection, 
   Edge, 
   EdgeChange, 
-  MarkerType, 
   Node, 
   NodeChange, 
-  OnEdgesChange, 
-  OnNodesChange, 
-  addEdge 
+  OnConnectEnd,
+  OnConnectStart,
+  XYPosition,
+  useReactFlow,
+  applyNodeChanges,
+  applyEdgeChanges,
+  addEdge
 } from 'reactflow';
-import { useBoardStore } from './useBoardStore';
+import { useDispatch } from 'react-redux';
 import { useDebounce } from '@/hooks/useDebounce';
+import { 
+  setSelectedNode,
+  updateEdges,
+  updateNodes
+} from '../../../../store/boardSlice';
 
 /**
  * Custom hook for ReactFlow event handlers
  * Manages nodes and edges changes, connections, and updates
  */
-export const useBoardHandlers = (
-  nodes: Node[],
-  edges: Edge[],
-  onNodesChange: OnNodesChange,
-  onEdgesChange: OnEdgesChange,
-  setEdges: React.Dispatch<React.SetStateAction<Edge[]>>
-) => {
-  const { updateNodeState, updateEdgeState, selectNode } = useBoardStore();
-  
-  // Keep reference of current nodes and edges
-  const nodesRef = useRef<Node[]>([]);
-  const edgesRef = useRef<Edge[]>([]);
+export const useBoardHandlers = () => {
+  const dispatch = useDispatch();
+  const { setNodes, setEdges } = useReactFlow();
   
   // Track pending updates
   const pendingNodeUpdateRef = useRef(false);
@@ -37,13 +36,11 @@ export const useBoardHandlers = (
   // Create debounced functions for performance
   const debouncedNodeUpdate = useDebounce(() => {
     if (!pendingNodeUpdateRef.current) return;
-    updateNodeState([...nodesRef.current]);
     pendingNodeUpdateRef.current = false;
   }, 300);
   
   const debouncedEdgeUpdate = useDebounce(() => {
     if (!pendingEdgeUpdateRef.current) return;
-    updateEdgeState([...edgesRef.current]);
     pendingEdgeUpdateRef.current = false;
   }, 300);
   
@@ -51,129 +48,81 @@ export const useBoardHandlers = (
    * Handle node changes (position, selection, etc.)
    * This is the primary function that handles node movement
    */
-  const handleNodesChange = useCallback(
+  const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      // CRITICAL: Apply changes directly to ReactFlow's state first for visual updates
-      onNodesChange(changes);
+      // IMPORTANT: Let ReactFlow handle the state update directly
+      // This fixes the infinite recursion issue by delegating to ReactFlow's internal mechanism
       
-      // Process position changes
+      // Process position changes (for tracking)
       const positionChanges = changes.filter(
         change => change.type === 'position' && 'position' in change
       );
       
+      // Check for final position changes (when drag is complete)
       if (positionChanges.length > 0) {
-        // Update node reference - important for tracking current state
-        nodesRef.current = nodes;
-        
-        // Log changes for debugging
-        positionChanges.forEach(change => {
-          if (change.type === 'position' && change.position) {
-            // Only log final positions to reduce console spam
-            if ('dragging' in change && !change.dragging) {
-              console.log(`Node ${change.id} final position:`, change.position);
-            }
-          }
-        });
-        
-        // Check if this is a final position update (when dragging is complete)
-        const hasFinalPositionChange = positionChanges.some(
+        const finalPositionChanges = positionChanges.filter(
           change => change.type === 'position' && 'dragging' in change && !change.dragging
         );
         
-        // If dragging has stopped, update Redux immediately to ensure persistence
-        if (hasFinalPositionChange) {
-          console.log('Final position detected, updating Redux store');
-          // Immediately update Redux with final position
-          updateNodeState(nodes);
+        // Track that dragging has stopped - this will be used in BoardCanvas's onNodeDragStop
+        if (finalPositionChanges.length > 0) {
+          console.log("Final position detected in changes");
         }
       }
     },
-    [nodes, onNodesChange, updateNodeState]
+    [dispatch]
   );
   
   /**
-   * Handle edge changes (adding, removing)
+   * Handle edge changes (selection, removal, etc)
    */
-  const handleEdgesChange = useCallback(
+  const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
-      onEdgesChange(changes);
-      edgesRef.current = [...edges];
-      pendingEdgeUpdateRef.current = true;
-      debouncedEdgeUpdate();
+      // Let ReactFlow handle the changes directly to avoid recursion
     },
-    [edges, onEdgesChange, debouncedEdgeUpdate]
+    []
   );
   
   /**
-   * Handle connecting two nodes
+   * Handle new edge connections between nodes
    */
-  const handleConnect = useCallback(
+  const onConnect = useCallback(
     (connection: Connection) => {
-      // Create a new edge with a unique ID and styling
-      const newEdge = {
-        ...connection,
-        id: `edge-${Date.now()}`,
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-        },
-        style: { strokeWidth: 2 },
-        data: { 
-          relationship: 'parent-child' 
-        }
-      };
-      
-      setEdges((eds: Edge[]) => {
-        const newEdges = addEdge(newEdge, eds);
-        edgesRef.current = newEdges;
-        pendingEdgeUpdateRef.current = true;
-        debouncedEdgeUpdate();
-        return newEdges;
-      });
+      // Validate connection has required source and target
+      if (!connection.source || !connection.target) {
+        console.warn('Invalid connection attempt: missing source or target', connection);
+        return;
+      }
+
+      // Let ReactFlow handle connecting the edges
+      console.log('Edge created between:', connection.source, connection.target);
     },
-    [setEdges, debouncedEdgeUpdate]
+    []
   );
   
   /**
    * Handle updating an existing edge
    */
-  const handleEdgeUpdate = useCallback(
+  const onEdgeUpdate = useCallback(
     (oldEdge: Edge, newConnection: Connection) => {
-      setEdges((els: Edge[]) => {
-        // Remove the old edge
-        const newEdges = els.filter((e: Edge) => e.id !== oldEdge.id);
-        
-        // Create updated edge with the same id
-        const updatedEdge: Edge = {
-          ...oldEdge,
-          source: newConnection.source || oldEdge.source,
-          target: newConnection.target || oldEdge.target,
-          sourceHandle: newConnection.sourceHandle,
-          targetHandle: newConnection.targetHandle
-        };
-        
-        newEdges.push(updatedEdge);
-        edgesRef.current = newEdges;
-        pendingEdgeUpdateRef.current = true;
-        debouncedEdgeUpdate();
-        return newEdges;
-      });
+      // Let ReactFlow handle the edge update
     },
-    [setEdges, debouncedEdgeUpdate]
+    []
   );
   
   /**
    * Handle node click to select it
    */
-  const handleNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
+  const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     console.log("Node clicked:", node.id);
-    selectNode(node.id);
-  }, [selectNode]);
+    dispatch(setSelectedNode(node.id));
+  }, [dispatch]);
   
   return {
-    handleNodesChange,
-    handleEdgesChange,
-    handleConnect,
-    handleEdgeUpdate,
-    handleNodeClick
+    onNodesChange,
+    onEdgesChange,
+    onConnect,
+    onEdgeUpdate,
+    onNodeClick
   };
 };
