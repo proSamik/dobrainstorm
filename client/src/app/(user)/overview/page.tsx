@@ -14,17 +14,21 @@ import { ErrorView } from '@/components/user/overview/ErrorView'
 export default function UserOverview() {
   const { userData, loading, error, forceRefreshUserData } = useUserData()
   const [mounted, setMounted] = useState(false)
+  const [initialRefreshDone, setInitialRefreshDone] = useState(false)
 
-  // Used to prevent hydration mismatch
+  // Used to prevent hydration mismatch and force a refresh of subscription data
   useEffect(() => {
     setMounted(true)
-  }, [])
+    
+    // Force refresh user data when component mounts to ensure fresh subscription data
+    if (!initialRefreshDone) {
+      forceRefreshUserData().then(() => {
+        setInitialRefreshDone(true)
+      })
+    }
+  }, [forceRefreshUserData, initialRefreshDone])
 
-  if (!mounted) {
-    return null
-  }
-
-  if (loading) {
+  if (!mounted || loading) {
     return <LoadingView />
   }
 
@@ -35,6 +39,14 @@ export default function UserOverview() {
   // Check for the 'none' status that represents no subscription
   if (userData?.subscription?.status === 'none') {
     return <PricingView userData={userData} />
+  }
+  
+  // Check direct status first - if status is 'active', show the subscription view
+  // This ensures even if hasActiveSubscription has issues, we fallback to the direct status check
+  if (userData?.subscription?.status?.toLowerCase() === 'active') {
+    if (userData) {
+      return <ActiveSubscriptionView userData={userData} />
+    }
   }
   
   // Create a safe version of userData for hasActiveSubscription function
@@ -48,15 +60,7 @@ export default function UserOverview() {
   
   const isSubscribed = hasActiveSubscription(subscriptionData);
   
-  // Force override for active subscriptions if server data indicates an active subscription
-  // but our logic is not detecting it correctly
-  if (userData?.subscription?.status?.toLowerCase() === 'active' && !isSubscribed) {
-    // Make sure userData is not null before passing to ActiveSubscriptionView
-    if (userData) {
-      return <ActiveSubscriptionView userData={userData} />
-    }
-  }
-
+  // The original override logic is redundant now, since we're doing the direct check first
   // When the user doesn't have an active subscription, show pricing
   if (!isSubscribed) {
     return <PricingView userData={userData} />

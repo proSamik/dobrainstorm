@@ -112,17 +112,27 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
         return null;
       }
       
+      // Extract and validate the status field from API response
+      let status = 'none';
+      if (subscriptionData.status) {
+        // Use the exact status string from the API
+        status = subscriptionData.status;
+        console.log('[UserData] Got subscription status from API:', status);
+      }
+      
       // Add timestamp to track data freshness
       const newUserData = {
         subscription: {
-          status: subscriptionData.status || 'none',  // Use 'none' instead of null
+          status: status,
           productId: subscriptionData.product_id || null,
           variantId: subscriptionData.variant_id || null
         },
         timestamp: Date.now()
       };
+      
       return newUserData;
-    } catch {
+    } catch (error) {
+      console.error('[UserData] Error fetching user data:', error);
       return null;
     }
   }, [isAuthenticated, auth]);
@@ -188,9 +198,13 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
         }
 
         // Normal case - API returned subscription data
+        // Ensure status is properly handled - always use the API's exact status string 
+        // instead of transforming or normalizing it here
+        const status = subscriptionData.status || 'none';
+        
         const newUserData: UserData = {
           subscription: {
-            status: subscriptionData.status || 'none',
+            status: status,
             productId: subscriptionData.product_id || null,
             variantId: subscriptionData.variant_id || null
           },
@@ -252,6 +266,12 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
       const userId = auth.id;
       document.cookie = `userData_${userId}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; secure; samesite=strict`;
       document.cookie = 'userData=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; secure; samesite=strict';
+      
+      // Clear userData state to avoid stale data being shown
+      setUserData(null);
+      
+      // Wait a short time to ensure caches are cleared and UI is updated
+      await new Promise(resolve => setTimeout(resolve, 100));
       
       // Directly fetch new data from API
       const freshData = await fetchDirectFromAPI();

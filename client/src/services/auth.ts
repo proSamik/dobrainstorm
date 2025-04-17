@@ -311,9 +311,24 @@ export const authService = {
       key,
       async () => {
         console.log('[Auth] Verifying user subscription status...');
-        const response = await api.get<VerifyUserResponse>('/user/verify-user');
-        console.log('[Auth] User verification response:', response.data);
-        return response.data;
+        try {
+          const response = await api.get<VerifyUserResponse>('/user/verify-user');
+          console.log('[Auth] User verification response:', response.data);
+          
+          // Add additional logging for subscription status
+          if (response.data) {
+            console.log('[Auth] Subscription status:', response.data.status);
+            console.log('[Auth] Product ID:', response.data.product_id);
+            console.log('[Auth] Variant ID:', response.data.variant_id);
+          } else {
+            console.log('[Auth] No subscription data in response');
+          }
+          
+          return response.data;
+        } catch (error) {
+          console.error('[Auth] Error verifying user:', error);
+          throw error;
+        }
       }
     );
   },
