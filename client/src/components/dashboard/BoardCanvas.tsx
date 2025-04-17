@@ -31,7 +31,7 @@ import {
   undo,
   redo,
   updateBoardName,
-  NodeContent
+  setSelectedNode
 } from '@/store/boardSlice'
 import NodeContextMenu from './NodeContextMenu'
 import NodeEditPanel from './NodeEditPanel'
@@ -77,6 +77,9 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   const [pendingEdgeUpdate, setPendingEdgeUpdate] = useState(false)
   const nodesRef = useRef<Node[]>([])
   const edgesRef = useRef<Edge[]>([])
+  
+  // Import file reference
+  const importInputRef = useRef<HTMLInputElement>(null)
   
   // Initialize the board from Redux state or load from API
   useEffect(() => {
@@ -283,6 +286,9 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
           type: 'textNode'
         })
       )
+      
+      // Select the newly created node for editing
+      dispatch(setSelectedNode(newNodeId))
     },
     [dispatch, reactFlowInstance]
   )
@@ -324,6 +330,70 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     dispatch(markAsSaved())
   }, [boardId, boardName, dispatch, storeEdges, storeNodes])
   
+  // Export the board data as JSON
+  const handleExport = useCallback(() => {
+    const boardData = {
+      id: boardId,
+      name: boardName,
+      nodes: storeNodes,
+      edges: storeEdges,
+      exportedAt: new Date().toISOString()
+    }
+    
+    // Create a JSON file
+    const dataStr = JSON.stringify(boardData, null, 2)
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr)
+    
+    // Create a download link and trigger it
+    const exportFileName = `${boardName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.json`
+    
+    const downloadLink = document.createElement('a')
+    downloadLink.setAttribute('href', dataUri)
+    downloadLink.setAttribute('download', exportFileName)
+    document.body.appendChild(downloadLink)
+    downloadLink.click()
+    document.body.removeChild(downloadLink)
+  }, [boardId, boardName, storeNodes, storeEdges])
+  
+  // Trigger the file input when import button is clicked
+  const handleImportClick = useCallback(() => {
+    if (importInputRef.current) {
+      importInputRef.current.click()
+    }
+  }, [])
+  
+  // Handle the file selection for import
+  const handleImportFile = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const jsonData = JSON.parse(e.target?.result as string)
+        if (jsonData.nodes && jsonData.edges) {
+          dispatch(setBoard({
+            nodes: jsonData.nodes,
+            edges: jsonData.edges,
+            boardName: jsonData.name || boardName,
+            boardId
+          }))
+          console.log('Board data imported successfully')
+        } else {
+          console.error('Invalid board data format')
+        }
+      } catch (error) {
+        console.error('Error parsing imported JSON:', error)
+      }
+      
+      // Reset file input to allow reimporting the same file
+      if (importInputRef.current) {
+        importInputRef.current.value = ''
+      }
+    }
+    reader.readAsText(file)
+  }, [boardId, boardName, dispatch])
+  
   // Update board name
   const handleBoardNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     dispatch(updateBoardName(e.target.value))
@@ -335,7 +405,7 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
       <div className="flex items-center justify-between px-4 py-2 bg-white dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700 z-10">
         <div className="flex items-center space-x-2">
           <button
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push('/boards')}
             className="px-3 py-1 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-700"
           >
             ← Back
@@ -362,6 +432,27 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
           >
             Redo
           </button>
+          <button
+            onClick={handleExport}
+            className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+            title="Export as JSON"
+          >
+            Export
+          </button>
+          <button
+            onClick={handleImportClick}
+            className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+            title="Import from JSON"
+          >
+            Import
+          </button>
+          <input 
+            type="file" 
+            ref={importInputRef} 
+            onChange={handleImportFile} 
+            accept=".json" 
+            className="hidden" 
+          />
           <button
             onClick={handleSave}
             className={`px-4 py-2 rounded font-medium ${

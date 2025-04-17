@@ -98,6 +98,14 @@ const Navigation = () => {
                   Overview
                 </Link>
               )}
+              {auth && (
+                <Link
+                  href="/boards"
+                  className="text-sm font-medium text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
+                >
+                  Boards
+                </Link>
+              )}
             </div>
           </div>
 
@@ -212,6 +220,15 @@ const Navigation = () => {
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   Overview
+                </Link>
+              )}
+              {auth && (
+                <Link
+                  href="/boards"
+                  className="block py-2 text-base font-medium text-light-muted dark:text-dark-muted hover:text-light-foreground dark:hover:text-dark-foreground"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Boards
                 </Link>
               )}
             </div>

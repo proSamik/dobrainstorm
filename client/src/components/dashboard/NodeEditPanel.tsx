@@ -23,28 +23,39 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
   // Initialize state with node content
   const [text, setText] = useState<string>('')
   const [images, setImages] = useState<string[]>([])
+  const [isDirty, setIsDirty] = useState(false)
   
   // Update local state when the selected node changes
   useEffect(() => {
     if (selectedNode) {
       setText(selectedNode.data.content?.text || '')
       setImages(selectedNode.data.content?.images || [])
+      setIsDirty(false)
     }
   }, [selectedNode])
+  
+  // Handle ESC key to close panel
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleClose()
+      }
+    }
+    
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
   
   // Close the edit panel
   const handleClose = () => {
     dispatch(setSelectedNode(null))
   }
   
-  // Update node content when text changes
-  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newText = e.target.value
-    setText(newText)
-    
+  // Save the node content
+  const handleSave = () => {
     // Update the node content in Redux
     const updatedContent: NodeContent = {
-      text: newText,
+      text,
       images: [...images]
     }
     
@@ -52,6 +63,18 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
       id: nodeId,
       content: updatedContent
     }))
+    
+    setIsDirty(false)
+    
+    // Close the panel after saving
+    handleClose()
+  }
+  
+  // Update node content when text changes
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newText = e.target.value
+    setText(newText)
+    setIsDirty(true)
   }
   
   // Add an image to the node
@@ -62,34 +85,14 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     
     const updatedImages = [...images, placeholderImage]
     setImages(updatedImages)
-    
-    // Update the node content in Redux
-    const updatedContent: NodeContent = {
-      text,
-      images: updatedImages
-    }
-    
-    dispatch(updateNodeContent({
-      id: nodeId,
-      content: updatedContent
-    }))
+    setIsDirty(true)
   }
   
   // Remove an image from the node
   const handleRemoveImage = (index: number) => {
     const updatedImages = images.filter((_, i) => i !== index)
     setImages(updatedImages)
-    
-    // Update the node content in Redux
-    const updatedContent: NodeContent = {
-      text,
-      images: updatedImages
-    }
-    
-    dispatch(updateNodeContent({
-      id: nodeId,
-      content: updatedContent
-    }))
+    setIsDirty(true)
   }
   
   // If no node is selected, don't render anything
@@ -104,6 +107,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
         <button
           onClick={handleClose}
           className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+          title="Close (ESC)"
         >
           &times;
         </button>
@@ -177,6 +181,27 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
               ))}
             </div>
           )}
+        </div>
+        
+        {/* Action buttons */}
+        <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <button
+            onClick={handleClose}
+            className="px-3 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!isDirty}
+            className={`px-3 py-2 text-sm rounded ${
+              isDirty 
+              ? 'bg-blue-600 text-white hover:bg-blue-700' 
+              : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+            }`}
+          >
+            Save
+          </button>
         </div>
       </div>
     </div>

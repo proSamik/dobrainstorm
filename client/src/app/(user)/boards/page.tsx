@@ -8,10 +8,10 @@ import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 
 /**
- * Dashboard page component that displays user boards and allows creation of new boards
+ * Boards page component that displays user boards and allows creation of new boards
  * Only accessible to subscribed users
  */
-export default function Dashboard() {
+export default function Boards() {
   const router = useRouter()
   const { userData, loading } = useUserData()
   const [boards, setBoards] = useState<any[]>([])
@@ -23,36 +23,6 @@ export default function Dashboard() {
   useEffect(() => {
     setMounted(true)
   }, [])
-
-  // Check subscription status - logging instead of redirecting for debugging
-  useEffect(() => {
-    if (!mounted || loading) return
-
-    if (userData) {
-      const subscriptionData = {
-        subscription: {
-          status: userData.subscription?.status === null ? undefined : userData.subscription?.status,
-          variantId: userData.subscription?.variantId === null ? undefined : userData.subscription?.variantId
-        }
-      }
-      
-      const isSubscribed = hasActiveSubscription(subscriptionData)
-      const isActive = userData.subscription?.status?.toLowerCase() === 'active'
-      
-      console.log('Dashboard subscription check:', { 
-        userData, 
-        subscriptionData,
-        isSubscribed, 
-        isActive,
-        subscriptionStatus: userData.subscription?.status
-      });
-      
-      // Temporarily disabled redirect for debugging
-      // if (!isSubscribed && !isActive) {
-      //   router.replace('/overview')
-      // }
-    }
-  }, [userData, loading, router, mounted])
 
   // Fetch user boards
   useEffect(() => {
@@ -92,7 +62,7 @@ export default function Dashboard() {
       
       setBoards([newBoard, ...boards])
       setNewBoardName('')
-      router.push(`/dashboard/board/${newBoardId}`)
+      router.push(`/boards/${newBoardId}`)
     } catch (error) {
       console.error('Error creating board:', error)
     } finally {
@@ -136,7 +106,7 @@ export default function Dashboard() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {boards.map((board) => (
-            <Link href={`/dashboard/board/${board.id}`} key={board.id}>
+            <Link href={`/boards/${board.id}`} key={board.id}>
               <Card className="p-6 hover:shadow-lg transition-shadow duration-200 cursor-pointer">
                 <h3 className="text-xl font-semibold mb-2">{board.name}</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
