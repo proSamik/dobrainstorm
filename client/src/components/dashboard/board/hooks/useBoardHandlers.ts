@@ -109,14 +109,9 @@ export const useBoardHandlers = () => {
         target: connection.target!,
         sourceHandle: connection.sourceHandle,
         targetHandle: connection.targetHandle,
-        type: 'bezier',
+        type: 'default',
         animated: false,
-        style: { strokeWidth: 2 },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          width: 15,
-          height: 15
-        }
+        style: { strokeWidth: 2 }
       };
 
       // Add the edge to the ReactFlow state

@@ -162,14 +162,9 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       target: newNodeId, // Default target (will be overridden for some positions)
       sourceHandle: null,
       targetHandle: null,
-      type: 'bezier',
+      type: 'default',
       animated: false,
-      style: { strokeWidth: 2 },
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        width: 15,
-        height: 15
-      }
+      style: { strokeWidth: 2 }
     }
 
     // Set source and target based on the position
