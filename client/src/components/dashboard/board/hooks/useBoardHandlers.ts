@@ -13,7 +13,6 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { 
   setSelectedNode,
   updateEdges,
-  updateNodes
 } from '../../../../store/boardSlice';
 
 /**
