@@ -22,14 +22,15 @@ const Navigation = () => {
 
   const handleLogout = async () => {
     try {
+      // Call contextLogout first to clear React state immediately
+      contextLogout()
+      // Let authService handle the API call, error handling, and redirection
       await authService.logout()
-      contextLogout()
-      router.push('/')
-    } catch (error) {
-      console.error('[Navigation] Logout failed:', error)
-      // Still clear local state even if API call fails
-      contextLogout()
-      router.push('/')
+      // No need for router.push here as authService will redirect
+    } catch (error: any) {
+      console.error('[Navigation] Catastrophic error during logout:', error)
+      // Force redirect as last resort
+      window.location.href = '/'
     }
   }
 
