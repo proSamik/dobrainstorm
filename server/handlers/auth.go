@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -621,17 +622,29 @@ func (h *AuthHandler) VerifyUser(w http.ResponseWriter, r *http.Request) {
 		}
 		statusChan <- status
 
-		// Update cache in background
-		cacheMutex.Lock()
-		subscriptionCache[userID] = status
-		cacheMutex.Unlock()
-
-		// Set up cache expiry
-		time.AfterFunc(cacheExpiry, func() {
+		// Only cache status if it's active
+		if status != nil && status.Status != nil && strings.ToLower(*status.Status) == "active" {
+			// Update cache in background
 			cacheMutex.Lock()
-			delete(subscriptionCache, userID)
+			subscriptionCache[userID] = status
 			cacheMutex.Unlock()
-		})
+
+			// Set up cache expiry
+			time.AfterFunc(cacheExpiry, func() {
+				cacheMutex.Lock()
+				delete(subscriptionCache, userID)
+				cacheMutex.Unlock()
+			})
+
+			log.Printf("[Auth] Cached active subscription for user: %s", userID)
+		} else {
+			statusValue := "nil"
+			if status != nil && status.Status != nil {
+				statusValue = *status.Status
+			}
+			log.Printf("[Auth] Not caching non-active subscription for user: %s (status: %s)",
+				userID, statusValue)
+		}
 	}()
 
 	// Wait for result with timeout
