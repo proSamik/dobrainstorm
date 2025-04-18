@@ -262,7 +262,13 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
         {/* Connect icon */}
         <div 
           className={`ml-auto w-5 h-5 rounded-full ${isConnectingMode ? 'bg-green-500' : 'bg-gray-500'} flex items-center justify-center text-white cursor-pointer hover:bg-green-600 no-drag`}
-          onClick={toggleConnectionMode}
+          onClick={(e) => {
+            e.stopPropagation()
+            e.preventDefault()
+            // Prevent the event from reaching the + buttons
+            e.nativeEvent.stopImmediatePropagation()
+            toggleConnectionMode(e)
+          }}
           title={isConnectingMode ? "Exit connection mode" : "Enter connection mode (click to connect to other nodes)"}
         >
           <span className="text-xs">⟋⟍</span>
@@ -280,7 +286,12 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       {/* Connection buttons with "+" icons */}
       <div 
         className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 no-drag"
-        onClick={createConnectedNode(Position.Top)}
+        onClick={(e) => {
+          // Only create node if not in connecting mode
+          if (!isConnectingMode) {
+            createConnectedNode(Position.Top)(e)
+          }
+        }}
       >
         +
         <Handle
@@ -301,7 +312,12 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       
       <div 
         className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute right-0 top-1/2 transform translate-x-1/2 -translate-y-1/2 no-drag"
-        onClick={createConnectedNode(Position.Right)}
+        onClick={(e) => {
+          // Only create node if not in connecting mode
+          if (!isConnectingMode) {
+            createConnectedNode(Position.Right)(e)
+          }
+        }}
       >
         +
         <Handle
@@ -322,7 +338,12 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       
       <div 
         className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2 no-drag"
-        onClick={createConnectedNode(Position.Bottom)}
+        onClick={(e) => {
+          // Only create node if not in connecting mode
+          if (!isConnectingMode) {
+            createConnectedNode(Position.Bottom)(e)
+          }
+        }}
       >
         +
         <Handle
@@ -343,7 +364,12 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       
       <div 
         className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute left-0 top-1/2 transform -translate-x-1/2 -translate-y-1/2 no-drag"
-        onClick={createConnectedNode(Position.Left)}
+        onClick={(e) => {
+          // Only create node if not in connecting mode
+          if (!isConnectingMode) {
+            createConnectedNode(Position.Left)(e)
+          }
+        }}
       >
         +
         <Handle
