@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState } from '@/store'
-import { updateNodeContent, setSelectedNode, NodeContent, updateNodes } from '@/store/boardSlice'
+import { updateNodeContent, setSelectedNode, setEditingNode, NodeContent, updateNodes } from '@/store/boardSlice'
 
 interface NodeEditPanelProps {
   nodeId: string
@@ -50,7 +50,8 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
   
   // Close the edit panel
   const handleClose = () => {
-    dispatch(setSelectedNode(null))
+    // Keep the node selected but close the edit panel
+    dispatch(setEditingNode(null))
   }
   
   // Save the node content
@@ -99,7 +100,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     setIsDirty(false);
     
     // Close the panel after saving
-    handleClose();
+    dispatch(setEditingNode(null))
   }
   
   // Update node content when text changes
