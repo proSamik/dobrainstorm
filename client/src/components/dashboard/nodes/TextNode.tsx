@@ -271,13 +271,23 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
         </div>
       </div>
       
-      <div 
-        className="text-sm mt-1 cursor-text"
-        onDoubleClick={handleContentDoubleClick}
-        title="Double-click to edit content"
-      >
-        {data.content?.text || <span className="text-gray-400 italic">Double-click to edit content</span>}
-      </div>
+      {/* Content area */}
+      {data.content?.text ? (
+        <div 
+          className="text-sm mt-1 cursor-text prose dark:prose-invert max-w-none px-1"
+          onDoubleClick={handleContentDoubleClick}
+          title="Double-click to edit content"
+          dangerouslySetInnerHTML={{ __html: data.content.text }}
+        />
+      ) : (
+        <div 
+          className="text-sm mt-1 cursor-text prose dark:prose-invert max-w-none px-1"
+          onDoubleClick={handleContentDoubleClick}
+          title="Double-click to edit content"
+        >
+          <span className="text-gray-400 italic">Double-click to edit content</span>
+        </div>
+      )}
       
       {/* Connection buttons with "+" icons */}
       <div 
