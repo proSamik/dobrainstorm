@@ -285,7 +285,7 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       
       {/* Connection buttons with "+" icons */}
       <div 
-        className={`w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 no-drag ${isConnectingMode ? 'hidden' : ''}`}
+        className={`w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 no-drag ${isConnectingMode ? 'hidden' : ''}`}
         onClick={(e) => {
           if (!isConnectingMode) {
             createConnectedNode(Position.Top)(e)
@@ -299,26 +299,27 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
         id={Position.Top}
         type="target"
         position={Position.Top}
-        className={`${isConnectingMode ? 'w-12 h-12 bg-blue-200 border-2 border-blue-500' : 'w-6 h-6 bg-gray-200 border border-gray-400'}`}
+        className={`${isConnectingMode ? 'w-4 h-4 bg-blue-200 border-2 border-blue-500' : 'w-0 h-0 opacity-0'}`}
         style={{ 
           top: 0, 
           left: '50%', 
           transform: 'translate(-50%, -50%)', 
           zIndex: 1000,
-          cursor: isConnectingMode ? 'crosshair' : 'pointer',
+          cursor: isConnectingMode ? 'crosshair' : 'default',
           touchAction: 'none',
           borderRadius: '50%',
-          transition: 'all 0.2s ease'
+          transition: 'all 0.2s ease',
+          pointerEvents: isConnectingMode ? 'auto' : 'none'
         }}
         onMouseDown={(e) => {
           e.stopPropagation();
           e.preventDefault();
         }}
-        isConnectable={true}
+        isConnectable={isConnectingMode}
       />
       
       <div 
-        className={`w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute right-0 top-1/2 transform translate-x-1/2 -translate-y-1/2 no-drag ${isConnectingMode ? 'hidden' : ''}`}
+        className={`w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute right-0 top-1/2 transform translate-x-1/2 -translate-y-1/2 no-drag ${isConnectingMode ? 'hidden' : ''}`}
         onClick={(e) => {
           if (!isConnectingMode) {
             createConnectedNode(Position.Right)(e)
@@ -332,26 +333,27 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
         id={Position.Right}
         type="source"
         position={Position.Right}
-        className={`${isConnectingMode ? 'w-12 h-12 bg-blue-200 border-2 border-blue-500' : 'w-6 h-6 bg-gray-200 border border-gray-400'}`}
+        className={`${isConnectingMode ? 'w-4 h-4 bg-blue-200 border-2 border-blue-500' : 'w-0 h-0 opacity-0'}`}
         style={{ 
           right: 0, 
           top: '50%', 
           transform: 'translate(50%, -50%)', 
           zIndex: 1000,
-          cursor: isConnectingMode ? 'crosshair' : 'pointer',
+          cursor: isConnectingMode ? 'crosshair' : 'default',
           touchAction: 'none',
           borderRadius: '50%',
-          transition: 'all 0.2s ease'
+          transition: 'all 0.2s ease',
+          pointerEvents: isConnectingMode ? 'auto' : 'none'
         }}
         onMouseDown={(e) => {
           e.stopPropagation();
           e.preventDefault();
         }}
-        isConnectable={true}
+        isConnectable={isConnectingMode}
       />
       
       <div 
-        className={`w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2 no-drag ${isConnectingMode ? 'hidden' : ''}`}
+        className={`w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2 no-drag ${isConnectingMode ? 'hidden' : ''}`}
         onClick={(e) => {
           if (!isConnectingMode) {
             createConnectedNode(Position.Bottom)(e)
@@ -365,26 +367,27 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
         id={Position.Bottom}
         type="source"
         position={Position.Bottom}
-        className={`${isConnectingMode ? 'w-12 h-12 bg-blue-200 border-2 border-blue-500' : 'w-6 h-6 bg-gray-200 border border-gray-400'}`}
+        className={`${isConnectingMode ? 'w-24 h-24 bg-blue-200 border-2 border-blue-500' : 'w-0 h-0 opacity-0'}`}
         style={{ 
           bottom: 0, 
           left: '50%', 
           transform: 'translate(-50%, 50%)', 
           zIndex: 1000,
-          cursor: isConnectingMode ? 'crosshair' : 'pointer',
+          cursor: isConnectingMode ? 'crosshair' : 'default',
           touchAction: 'none',
           borderRadius: '50%',
-          transition: 'all 0.2s ease'
+          transition: 'all 0.2s ease',
+          pointerEvents: isConnectingMode ? 'auto' : 'none'
         }}
         onMouseDown={(e) => {
           e.stopPropagation();
           e.preventDefault();
         }}
-        isConnectable={true}
+        isConnectable={isConnectingMode}
       />
       
       <div 
-        className={`w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute left-0 top-1/2 transform -translate-x-1/2 -translate-y-1/2 no-drag ${isConnectingMode ? 'hidden' : ''}`}
+        className={`w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute left-0 top-1/2 transform -translate-x-1/2 -translate-y-1/2 no-drag ${isConnectingMode ? 'hidden' : ''}`}
         onClick={(e) => {
           if (!isConnectingMode) {
             createConnectedNode(Position.Left)(e)
@@ -398,22 +401,23 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
         id={Position.Left}
         type="target"
         position={Position.Left}
-        className={`${isConnectingMode ? 'w-12 h-12 bg-blue-200 border-2 border-blue-500' : 'w-6 h-6 bg-gray-200 border border-gray-400'}`}
+        className={`${isConnectingMode ? 'w-4 h-4 bg-blue-200 border-2 border-blue-500' : 'w-0 h-0 opacity-0'}`}
         style={{ 
           left: 0, 
           top: '50%', 
           transform: 'translate(-50%, -50%)', 
           zIndex: 1000,
-          cursor: isConnectingMode ? 'crosshair' : 'pointer',
+          cursor: isConnectingMode ? 'crosshair' : 'default',
           touchAction: 'none',
           borderRadius: '50%',
-          transition: 'all 0.2s ease'
+          transition: 'all 0.2s ease',
+          pointerEvents: isConnectingMode ? 'auto' : 'none'
         }}
         onMouseDown={(e) => {
           e.stopPropagation();
           e.preventDefault();
         }}
-        isConnectable={true}
+        isConnectable={isConnectingMode}
       />
     </div>
   )
