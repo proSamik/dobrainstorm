@@ -20,6 +20,7 @@ interface BoardState {
     future: { nodes: Node[], edges: Edge[] }[]
   }
   selectedNodeId: string | null
+  editingNodeId: string | null
   boardName: string
   boardId: string | null
   isDirty: boolean
@@ -37,6 +38,7 @@ const initialState: BoardState = {
     future: []
   },
   selectedNodeId: null,
+  editingNodeId: null,
   boardName: 'Untitled Board',
   boardId: null,
   isDirty: false,
@@ -247,6 +249,11 @@ const boardSlice = createSlice({
       state.selectedNodeId = action.payload
     },
     
+    // Set the node being edited
+    setEditingNode: (state, action: PayloadAction<string | null>) => {
+      state.editingNodeId = action.payload
+    },
+    
     // Update board name
     updateBoardName: (state, action: PayloadAction<string>) => {
       state.boardName = action.payload
@@ -316,6 +323,7 @@ export const {
   updateNodeContent,
   removeNode,
   setSelectedNode,
+  setEditingNode,
   updateBoardName,
   markAsSaved,
   undo,
