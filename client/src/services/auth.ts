@@ -65,6 +65,28 @@ api.interceptors.response.use(
 
     console.log('[Auth] API Error intercepted:', { status: error.response?.status, url: originalRequest.url });
 
+    // For logout endpoint with 401, don't retry - just let it fail normally
+    if (originalRequest.url === '/auth/logout' && error.response?.status === 401) {
+      console.log('[Auth] Logout received 401 - expected if already logged out');
+      return Promise.reject(error);
+    }
+
+    // For refresh token endpoint with 401, force clear auth context if needed
+    if (originalRequest.url === '/auth/refresh' && error.response?.status === 401) {
+      console.log('[Auth] Refresh token failed with 401 - forcing auth context cleanup');
+      // Force-clear all auth cookies to ensure clean state
+      clearAllAuthCookies();
+      
+      // Force redirect to home page to ensure clean state
+      // Use a small delay to allow the current request to complete
+      setTimeout(() => {
+        console.log('[Auth] Redirecting to home page after auth failure');
+        window.location.href = '/';
+      }, 100);
+      
+      return Promise.reject(error);
+    }
+
     // Check if error is due to unauthorized access (401) and request hasn't been retried
     if (error.response?.status !== 401 || originalRequest._retry) {
       console.log('[Auth] Request failed - not an auth issue or already retried');
@@ -173,6 +195,22 @@ const createDedupedRequest = () => {
   };
 };
 
+// Utility function to clear all auth cookies
+const clearAllAuthCookies = () => {
+  const clearCookie = (name: string, paths: string[] = ['/']) => {
+    paths.forEach(path => {
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=${path};`;
+    });
+  };
+  
+  clearCookie('auth');
+  clearCookie('access_token');
+  clearCookie('refresh_token', ['/', '/auth', '/auth/refresh']);
+  clearCookie('csrf_token');
+  
+  console.log('[Auth] Cookies after cleanup:', document.cookie);
+};
+
 const requestDeduper = createDedupedRequest();
 
 export const authService = {
@@ -235,8 +273,27 @@ export const authService = {
       key,
       async () => {
         console.log('[Auth] Sending logout request...');
-        await api.post('/auth/logout');
-        console.log('[Auth] Logout successful');
+        try {
+          await api.post('/auth/logout');
+          console.log('[Auth] Logout successful');
+        } catch (error: any) {
+          // If it's a 401 error, consider it a "successful" logout from client perspective
+          if (error.response && error.response.status === 401) {
+            console.log('[Auth] Server returned 401 during logout - this is expected if already logged out');
+            // Don't throw the error - treat as successful client logout
+          } else {
+            console.error('[Auth] Logout request failed:', error);
+          }
+        } finally {
+          // Always clear cookies and redirect regardless of server response
+          clearAllAuthCookies();
+          
+          // Force redirect to home page after a small delay
+          setTimeout(() => {
+            console.log('[Auth] Redirecting to home page after logout');
+            window.location.href = '/';
+          }, 100);
+        }
       }
     );
   },
