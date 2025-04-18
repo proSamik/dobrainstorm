@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useState, useCallback } from 'react'
-import { Handle, NodeProps, Position, useReactFlow, MarkerType, Edge } from 'reactflow'
+import { Handle, NodeProps, Position, useReactFlow, MarkerType, Edge, Connection } from 'reactflow'
 import { useDispatch, useSelector } from 'react-redux'
 import { setSelectedNode, updateNodes, updateEdges } from '@/store/boardSlice'
 import { NodeContent } from '@/store/boardSlice'
@@ -17,13 +17,16 @@ interface TextNodeData {
  */
 const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
   const dispatch = useDispatch()
-  const { getNode, setNodes, setEdges } = useReactFlow()
+  const { getNode, setNodes, setEdges, getEdges } = useReactFlow()
   const allNodes = useSelector((state: RootState) => state.board.nodes)
   const allEdges = useSelector((state: RootState) => state.board.edges)
   
   // State for editing label
   const [isEditingLabel, setIsEditingLabel] = useState(false)
   const [editedLabel, setEditedLabel] = useState(data?.label || '')
+  
+  // State for connecting mode
+  const [isConnectingMode, setIsConnectingMode] = useState(false)
   
   if (!data) {
     return <div>Invalid node data</div>
@@ -85,6 +88,12 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
     handleLabelSave()
   }
   
+  // Toggle connection mode
+  const toggleConnectionMode = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setIsConnectingMode(!isConnectingMode)
+  }
+  
   // Create a new connected node when clicking the "+" button
   const createConnectedNode = useCallback((position: Position) => (event: React.MouseEvent) => {
     event.stopPropagation() // Prevent node selection
@@ -132,18 +141,52 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       draggable: true
     }
     
-    // Create edge for the connection
+    // Create edge for the connection with proper source/target based on position
     const newEdge: Edge = {
       id: `edge-${Date.now()}`,
-      source: id,
-      target: newNodeId,
+      source: id, // Default source (will be overridden for some positions)
+      target: newNodeId, // Default target (will be overridden for some positions)
       sourceHandle: null,
       targetHandle: null,
-      type: 'smoothstep',
+      type: 'bezier',
+      animated: false,
+      style: { strokeWidth: 2 },
       markerEnd: {
-        type: MarkerType.ArrowClosed
+        type: MarkerType.ArrowClosed,
+        width: 15,
+        height: 15
       }
     }
+
+    // Set source and target based on the position
+    switch (position) {
+      case Position.Top:
+        newEdge.source = newNodeId
+        newEdge.target = id
+        newEdge.sourceHandle = Position.Bottom
+        newEdge.targetHandle = Position.Top
+        break
+      case Position.Right:
+        newEdge.source = id
+        newEdge.target = newNodeId
+        newEdge.sourceHandle = Position.Right
+        newEdge.targetHandle = Position.Left
+        break
+      case Position.Bottom:
+        newEdge.source = id
+        newEdge.target = newNodeId
+        newEdge.sourceHandle = Position.Bottom
+        newEdge.targetHandle = Position.Top
+        break
+      case Position.Left:
+        newEdge.source = newNodeId
+        newEdge.target = id
+        newEdge.sourceHandle = Position.Right
+        newEdge.targetHandle = Position.Left
+        break
+    }
+    
+    console.log("Creating edge:", newEdge)
     
     // Add the new node and edge to ReactFlow
     setNodes(nodes => [...nodes, newNode])
@@ -201,6 +244,15 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
             {data.label}
           </span>
         )}
+        
+        {/* Connect icon */}
+        <div 
+          className={`ml-auto w-5 h-5 rounded-full ${isConnectingMode ? 'bg-green-500' : 'bg-gray-500'} flex items-center justify-center text-white cursor-pointer hover:bg-green-600 no-drag`}
+          onClick={toggleConnectionMode}
+          title={isConnectingMode ? "Exit connection mode" : "Enter connection mode (click to connect to other nodes)"}
+        >
+          <span className="text-xs">⟋⟍</span>
+        </div>
       </div>
       
       <div className="text-sm mt-1">
@@ -214,10 +266,18 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       >
         +
         <Handle
+          id={Position.Top}
           type="target"
           position={Position.Top}
-          className="opacity-0 w-full h-full"
-          style={{ top: 0, left: 0 }}
+          className="w-10 h-10 bg-transparent border-0"
+          style={{ 
+            top: 0, 
+            left: '50%', 
+            transform: 'translate(-50%, -50%)', 
+            zIndex: 1000,
+            opacity: isConnectingMode ? 0.5 : 0 
+          }}
+          isConnectable={true}
         />
       </div>
       
@@ -227,10 +287,18 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       >
         +
         <Handle
+          id={Position.Right}
           type="source"
           position={Position.Right}
-          className="opacity-0 w-full h-full"
-          style={{ right: 0, top: 0 }}
+          className="w-10 h-10 bg-transparent border-0"
+          style={{ 
+            right: 0, 
+            top: '50%', 
+            transform: 'translate(50%, -50%)', 
+            zIndex: 1000,
+            opacity: isConnectingMode ? 0.5 : 0 
+          }}
+          isConnectable={true}
         />
       </div>
       
@@ -240,10 +308,18 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       >
         +
         <Handle
+          id={Position.Bottom}
           type="source"
           position={Position.Bottom}
-          className="opacity-0 w-full h-full"
-          style={{ bottom: 0, left: 0 }}
+          className="w-10 h-10 bg-transparent border-0"
+          style={{ 
+            bottom: 0, 
+            left: '50%', 
+            transform: 'translate(-50%, 50%)', 
+            zIndex: 1000,
+            opacity: isConnectingMode ? 0.5 : 0 
+          }}
+          isConnectable={true}
         />
       </div>
       
@@ -253,10 +329,18 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       >
         +
         <Handle
+          id={Position.Left}
           type="target"
           position={Position.Left}
-          className="opacity-0 w-full h-full"
-          style={{ left: 0, top: 0 }}
+          className="w-10 h-10 bg-transparent border-0"
+          style={{ 
+            left: 0, 
+            top: '50%', 
+            transform: 'translate(-50%, -50%)', 
+            zIndex: 1000,
+            opacity: isConnectingMode ? 0.5 : 0 
+          }}
+          isConnectable={true}
         />
       </div>
     </div>
