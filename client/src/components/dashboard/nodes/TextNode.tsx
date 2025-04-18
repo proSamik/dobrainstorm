@@ -3,7 +3,7 @@
 import { memo, useState, useCallback } from 'react'
 import { Handle, NodeProps, Position, useReactFlow, MarkerType, Edge, Connection } from 'reactflow'
 import { useDispatch, useSelector } from 'react-redux'
-import { setSelectedNode, updateNodes, updateEdges } from '@/store/boardSlice'
+import { setSelectedNode, updateNodes, updateEdges, setEditingNode } from '@/store/boardSlice'
 import { NodeContent } from '@/store/boardSlice'
 import { RootState } from '@/store'
 
@@ -39,6 +39,9 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       e.stopPropagation()
       return
     }
+    
+    // Simply select the node, but don't open the edit panel
+    // The edit panel will only open on double-click
     dispatch(setSelectedNode(id))
   }
   
@@ -47,6 +50,17 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
     e.stopPropagation() // Prevent selection change
     setEditedLabel(data.label)
     setIsEditingLabel(true)
+  }
+  
+  // Handle content double-click to open edit panel
+  const handleContentDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent other events
+    
+    // First select the node
+    dispatch(setSelectedNode(id))
+    
+    // Then set it as the node being edited
+    dispatch(setEditingNode(id))
   }
   
   // Save label after editing
@@ -255,8 +269,12 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
         </div>
       </div>
       
-      <div className="text-sm mt-1">
-        {data.content?.text || <span className="text-gray-400 italic">Click to edit content</span>}
+      <div 
+        className="text-sm mt-1 cursor-text"
+        onDoubleClick={handleContentDoubleClick}
+        title="Double-click to edit content"
+      >
+        {data.content?.text || <span className="text-gray-400 italic">Double-click to edit content</span>}
       </div>
       
       {/* Connection buttons with "+" icons */}
@@ -347,4 +365,4 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
   )
 }
 
-export default memo(TextNode) 
+export default memo(TextNode)
