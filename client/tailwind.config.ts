@@ -41,9 +41,34 @@ const config: Config = {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'gradient-conic': 'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
       },
+      typography: (theme: any) => ({
+        DEFAULT: {
+          css: {
+            color: theme('colors.gray.900'),
+            maxWidth: 'none',
+            hr: { borderColor: theme('colors.gray.200') },
+            'strong, b': { color: theme('colors.gray.900') },
+            'ol > li::before': { color: theme('colors.gray.500') },
+            'ul > li::before': { backgroundColor: theme('colors.gray.500') },
+            'h1, h2, h3, h4': { color: theme('colors.gray.900') },
+          },
+        },
+        dark: {
+          css: {
+            color: theme('colors.gray.300'),
+            'strong, b': { color: theme('colors.gray.300') },
+            'ol > li::before': { color: theme('colors.gray.400') },
+            'ul > li::before': { backgroundColor: theme('colors.gray.400') },
+            'h1, h2, h3, h4': { color: theme('colors.gray.100') },
+          },
+        },
+      }),
     },
   },
-  plugins: [require('@tailwindcss/forms')],
+  plugins: [
+    require('@tailwindcss/forms'),
+    require('@tailwindcss/typography'),
+  ],
 }
 
 export default config;
