@@ -119,20 +119,21 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
     // Calculate position for the new node
     let offsetX = 0
     let offsetY = 0
-    const distance = 200
+    const distanceHorizontal = 300
+    const distanceVertical = 200
     
     switch (position) {
       case Position.Top:
-        offsetY = -distance
+        offsetY = -distanceVertical
         break
       case Position.Right:
-        offsetX = distance
+        offsetX = distanceHorizontal
         break
       case Position.Bottom:
-        offsetY = distance
+        offsetY = distanceVertical
         break
       case Position.Left:
-        offsetX = -distance
+        offsetX = -distanceHorizontal
         break
     }
     
