@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState } from '@/store'
-import { updateNodeContent, setSelectedNode, setEditingNode, NodeContent, updateNodes } from '@/store/boardSlice'
+import { setEditingNode, NodeContent, updateNodes } from '@/store/boardSlice'
+import RichTextEditor from './RichTextEditor'
 
 interface NodeEditPanelProps {
   nodeId: string
@@ -12,10 +13,12 @@ interface NodeEditPanelProps {
 /**
  * Panel for editing node content (text and images)
  * Appears when a node is selected
+ * Features rich text editing and responsive sizing
  */
 const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
   const dispatch = useDispatch()
   const nodes = useSelector((state: RootState) => state.board.nodes)
+  const panelRef = useRef<HTMLDivElement>(null)
   
   // Find the selected node
   const selectedNode = nodes.find(node => node.id === nodeId)
@@ -25,6 +28,8 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
   const [images, setImages] = useState<string[]>([])
   const [label, setLabel] = useState<string>('')
   const [isDirty, setIsDirty] = useState(false)
+  const [panelWidth, setPanelWidth] = useState(320) // Default width
+  const [isDragging, setIsDragging] = useState(false)
   
   // Update local state when the selected node changes
   useEffect(() => {
@@ -47,6 +52,32 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
+
+  // Handle panel resizing
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging && panelRef.current) {
+        const newWidth = window.innerWidth - e.clientX
+        // Set min and max width constraints
+        const constrainedWidth = Math.min(Math.max(newWidth, 280), 800)
+        setPanelWidth(constrainedWidth)
+      }
+    }
+
+    const handleMouseUp = () => {
+      setIsDragging(false)
+    }
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isDragging])
   
   // Close the edit panel
   const handleClose = () => {
@@ -61,7 +92,8 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     // Update the node content in Redux
     const updatedContent: NodeContent = {
       text,
-      images: [...images]
+      images: [...images],
+      isHtml: true // Always set isHtml to true since we're using rich text
     }
     
     let updatedNode = { ...selectedNode };
@@ -104,9 +136,8 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
   }
   
   // Update node content when text changes
-  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newText = e.target.value
-    setText(newText)
+  const handleTextChange = (newHtml: string) => {
+    setText(newHtml)
     setIsDirty(true)
   }
   
@@ -141,21 +172,24 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
   }
   
   return (
-    <div className="absolute right-0 top-0 bottom-0 w-80 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 shadow-lg z-10 p-4 overflow-y-auto">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold">Edit Node</h3>
-        <button
-          onClick={handleClose}
-          className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-          title="Close (ESC)"
-        >
-          &times;
-        </button>
-      </div>
+    <div 
+      ref={panelRef}
+      className="absolute right-0 top-0 bottom-0 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 shadow-lg z-10 flex flex-col"
+      style={{ width: panelWidth }}
+    >
+      {/* Resize handle */}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-blue-500 transition-colors"
+        onMouseDown={() => setIsDragging(true)}
+      />
       
-      <div className="space-y-4">
-        {/* Node label (title) - now editable */}
-        <div>
+      <div className="flex-none p-4">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold">Edit Node</h3>
+        </div>
+        
+        {/* Node label (title) */}
+        <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Label
           </label>
@@ -167,19 +201,22 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
             placeholder="Enter node label..."
           />
         </div>
-        
-        {/* Node content (text) */}
-        <div>
+      </div>
+      
+      {/* Scrollable content area */}
+      <div className="flex-1 overflow-y-auto p-4 pt-0">
+        {/* Rich text editor */}
+        <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Content
           </label>
-          <textarea
-            value={text}
-            onChange={handleTextChange}
-            rows={5}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 resize-none"
-            placeholder="Enter text for this node..."
-          />
+          <div className="border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden">
+            <RichTextEditor
+              content={text}
+              onChange={handleTextChange}
+              placeholder="Enter text for this node..."
+            />
+          </div>
         </div>
         
         {/* Images */}
@@ -207,11 +244,11 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
                   <img
                     src={image}
                     alt={`Image ${index + 1}`}
-                    className="w-full h-auto rounded border border-gray-200 dark:border-gray-700"
+                    className="w-full h-auto rounded border border-gray-300 dark:border-gray-600"
                   />
                   <button
                     onClick={() => handleRemoveImage(index)}
-                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     &times;
                   </button>
@@ -220,27 +257,27 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
             </div>
           )}
         </div>
-        
-        {/* Action buttons */}
-        <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <button
-            onClick={handleClose}
-            className="px-3 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!isDirty}
-            className={`px-3 py-2 text-sm rounded ${
-              isDirty 
-              ? 'bg-blue-600 text-white hover:bg-blue-700' 
-              : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-            }`}
-          >
-            Save
-          </button>
-        </div>
+
+        <div className="flex items-center gap-2">
+            <button
+              onClick={handleSave}
+              className={`px-3 py-1 rounded text-sm font-medium ${
+                isDirty
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-300'
+              }`}
+              disabled={!isDirty}
+            >
+              {isDirty ? 'Save' : 'Saved'}
+            </button>
+            <button
+              onClick={handleClose}
+              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+              title="Close (ESC)"
+            >
+              &times;
+            </button>
+          </div>
       </div>
     </div>
   )
