@@ -11,7 +11,8 @@ import {
   useReactFlow,
   applyNodeChanges,
   applyEdgeChanges,
-  addEdge
+  addEdge,
+  MarkerType
 } from 'reactflow';
 import { useDispatch } from 'react-redux';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -27,7 +28,7 @@ import {
  */
 export const useBoardHandlers = () => {
   const dispatch = useDispatch();
-  const { setNodes, setEdges } = useReactFlow();
+  const { setNodes, setEdges, getEdges } = useReactFlow();
   
   // Track pending updates
   const pendingNodeUpdateRef = useRef(false);
@@ -79,8 +80,22 @@ export const useBoardHandlers = () => {
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
       // Let ReactFlow handle the changes directly to avoid recursion
+      // Check for edge removals and update the Redux store
+      const removals = changes.filter(change => change.type === 'remove');
+      if (removals.length > 0) {
+        // Get the current edges from ReactFlow
+        const currentEdges = getEdges();
+        // Filter out removed edges
+        const remainingEdges = currentEdges.filter(
+          edge => !removals.some(removal => removal.id === edge.id)
+        );
+        
+        // Update Redux store with remaining edges
+        dispatch(updateEdges(remainingEdges));
+        console.log(`${removals.length} edges removed`);
+      }
     },
-    []
+    [dispatch, getEdges]
   );
   
   /**
@@ -94,10 +109,32 @@ export const useBoardHandlers = () => {
         return;
       }
 
-      // Let ReactFlow handle connecting the edges
+      // Create a new edge with the connection data
+      const newEdge: Edge = {
+        id: `edge-${Date.now()}`,
+        source: connection.source!,
+        target: connection.target!,
+        sourceHandle: connection.sourceHandle,
+        targetHandle: connection.targetHandle,
+        type: 'bezier',
+        animated: false,
+        style: { strokeWidth: 2 },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 15,
+          height: 15
+        }
+      };
+
+      // Add the edge to the ReactFlow state
+      setEdges(edges => [...edges, newEdge]);
+      
+      // Also update the Redux store
+      const currentEdges = getEdges();
+      dispatch(updateEdges([...currentEdges, newEdge]));
       console.log('Edge created between:', connection.source, connection.target);
     },
-    []
+    [dispatch, setEdges, getEdges]
   );
   
   /**
@@ -106,8 +143,38 @@ export const useBoardHandlers = () => {
   const onEdgeUpdate = useCallback(
     (oldEdge: Edge, newConnection: Connection) => {
       // Let ReactFlow handle the edge update
+      if (!newConnection.source || !newConnection.target) {
+        console.warn('Invalid edge update: missing source or target', newConnection);
+        return;
+      }
+      
+      // Create updated edge
+      const updatedEdge: Edge = {
+        id: oldEdge.id,
+        source: newConnection.source!,
+        target: newConnection.target!,
+        sourceHandle: newConnection.sourceHandle,
+        targetHandle: newConnection.targetHandle,
+        type: oldEdge.type,
+        style: oldEdge.style,
+        markerEnd: oldEdge.markerEnd
+      };
+      
+      // Update edges in ReactFlow
+      setEdges(edges => 
+        edges.map(edge => (edge.id === oldEdge.id ? updatedEdge : edge))
+      );
+      
+      // Update Redux store
+      const currentEdges = getEdges();
+      const updatedEdges = currentEdges.map(edge => 
+        edge.id === oldEdge.id ? updatedEdge : edge
+      );
+      dispatch(updateEdges(updatedEdges));
+      
+      console.log('Edge updated:', oldEdge.id);
     },
-    []
+    [dispatch, setEdges, getEdges]
   );
   
   /**
