@@ -285,108 +285,136 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       
       {/* Connection buttons with "+" icons */}
       <div 
-        className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 no-drag"
+        className={`w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 no-drag ${isConnectingMode ? 'hidden' : ''}`}
         onClick={(e) => {
-          // Only create node if not in connecting mode
           if (!isConnectingMode) {
             createConnectedNode(Position.Top)(e)
           }
         }}
       >
         +
-        <Handle
-          id={Position.Top}
-          type="target"
-          position={Position.Top}
-          className="w-10 h-10 bg-transparent border-0"
-          style={{ 
-            top: 0, 
-            left: '50%', 
-            transform: 'translate(-50%, -50%)', 
-            zIndex: 1000,
-            opacity: isConnectingMode ? 0.5 : 0 
-          }}
-          isConnectable={true}
-        />
       </div>
+      {/* Top Handle */}
+      <Handle
+        id={Position.Top}
+        type="target"
+        position={Position.Top}
+        className={`${isConnectingMode ? 'w-12 h-12 bg-blue-200 border-2 border-blue-500' : 'w-6 h-6 bg-gray-200 border border-gray-400'}`}
+        style={{ 
+          top: 0, 
+          left: '50%', 
+          transform: 'translate(-50%, -50%)', 
+          zIndex: 1000,
+          cursor: isConnectingMode ? 'crosshair' : 'pointer',
+          touchAction: 'none',
+          borderRadius: '50%',
+          transition: 'all 0.2s ease'
+        }}
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+        }}
+        isConnectable={true}
+      />
       
       <div 
-        className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute right-0 top-1/2 transform translate-x-1/2 -translate-y-1/2 no-drag"
+        className={`w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute right-0 top-1/2 transform translate-x-1/2 -translate-y-1/2 no-drag ${isConnectingMode ? 'hidden' : ''}`}
         onClick={(e) => {
-          // Only create node if not in connecting mode
           if (!isConnectingMode) {
             createConnectedNode(Position.Right)(e)
           }
         }}
       >
         +
-        <Handle
-          id={Position.Right}
-          type="source"
-          position={Position.Right}
-          className="w-10 h-10 bg-transparent border-0"
-          style={{ 
-            right: 0, 
-            top: '50%', 
-            transform: 'translate(50%, -50%)', 
-            zIndex: 1000,
-            opacity: isConnectingMode ? 0.5 : 0 
-          }}
-          isConnectable={true}
-        />
       </div>
+      {/* Right Handle */}
+      <Handle
+        id={Position.Right}
+        type="source"
+        position={Position.Right}
+        className={`${isConnectingMode ? 'w-12 h-12 bg-blue-200 border-2 border-blue-500' : 'w-6 h-6 bg-gray-200 border border-gray-400'}`}
+        style={{ 
+          right: 0, 
+          top: '50%', 
+          transform: 'translate(50%, -50%)', 
+          zIndex: 1000,
+          cursor: isConnectingMode ? 'crosshair' : 'pointer',
+          touchAction: 'none',
+          borderRadius: '50%',
+          transition: 'all 0.2s ease'
+        }}
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+        }}
+        isConnectable={true}
+      />
       
       <div 
-        className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2 no-drag"
+        className={`w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2 no-drag ${isConnectingMode ? 'hidden' : ''}`}
         onClick={(e) => {
-          // Only create node if not in connecting mode
           if (!isConnectingMode) {
             createConnectedNode(Position.Bottom)(e)
           }
         }}
       >
         +
-        <Handle
-          id={Position.Bottom}
-          type="source"
-          position={Position.Bottom}
-          className="w-10 h-10 bg-transparent border-0"
-          style={{ 
-            bottom: 0, 
-            left: '50%', 
-            transform: 'translate(-50%, 50%)', 
-            zIndex: 1000,
-            opacity: isConnectingMode ? 0.5 : 0 
-          }}
-          isConnectable={true}
-        />
       </div>
+      {/* Bottom Handle */}
+      <Handle
+        id={Position.Bottom}
+        type="source"
+        position={Position.Bottom}
+        className={`${isConnectingMode ? 'w-12 h-12 bg-blue-200 border-2 border-blue-500' : 'w-6 h-6 bg-gray-200 border border-gray-400'}`}
+        style={{ 
+          bottom: 0, 
+          left: '50%', 
+          transform: 'translate(-50%, 50%)', 
+          zIndex: 1000,
+          cursor: isConnectingMode ? 'crosshair' : 'pointer',
+          touchAction: 'none',
+          borderRadius: '50%',
+          transition: 'all 0.2s ease'
+        }}
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+        }}
+        isConnectable={true}
+      />
       
       <div 
-        className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute left-0 top-1/2 transform -translate-x-1/2 -translate-y-1/2 no-drag"
+        className={`w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute left-0 top-1/2 transform -translate-x-1/2 -translate-y-1/2 no-drag ${isConnectingMode ? 'hidden' : ''}`}
         onClick={(e) => {
-          // Only create node if not in connecting mode
           if (!isConnectingMode) {
             createConnectedNode(Position.Left)(e)
           }
         }}
       >
         +
-        <Handle
-          id={Position.Left}
-          type="target"
-          position={Position.Left}
-          className="w-10 h-10 bg-transparent border-0"
-          style={{ 
-            left: 0, 
-            top: '50%', 
-            transform: 'translate(-50%, -50%)', 
-            zIndex: 1000,
-            opacity: isConnectingMode ? 0.5 : 0 
-          }}
-          isConnectable={true}
-        />
       </div>
+      {/* Left Handle */}
+      <Handle
+        id={Position.Left}
+        type="target"
+        position={Position.Left}
+        className={`${isConnectingMode ? 'w-12 h-12 bg-blue-200 border-2 border-blue-500' : 'w-6 h-6 bg-gray-200 border border-gray-400'}`}
+        style={{ 
+          left: 0, 
+          top: '50%', 
+          transform: 'translate(-50%, -50%)', 
+          zIndex: 1000,
+          cursor: isConnectingMode ? 'crosshair' : 'pointer',
+          touchAction: 'none',
+          borderRadius: '50%',
+          transition: 'all 0.2s ease'
+        }}
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+        }}
+        isConnectable={true}
+      />
     </div>
   )
 }
