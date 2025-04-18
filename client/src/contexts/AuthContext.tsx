@@ -23,6 +23,18 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [auth, setAuth] = useState<AuthState | null>(null)
 
+  // Function to validate auth state
+  const validateAuth = (authData: any): authData is AuthState => {
+    return (
+      authData &&
+      typeof authData === 'object' &&
+      typeof authData.id === 'string' &&
+      typeof authData.name === 'string' &&
+      typeof authData.email === 'string' &&
+      typeof authData.emailVerified === 'boolean'
+    )
+  }
+
   // Initialize auth state from cookie
   useEffect(() => {
     const getCookie = (name: string) => {
@@ -39,7 +51,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (authCookie) {
       try {
         const parsedAuth = JSON.parse(authCookie)
-        setAuth(parsedAuth)
+        // Validate the parsed auth data before setting state
+        if (validateAuth(parsedAuth)) {
+          setAuth(parsedAuth)
+        } else {
+          console.error('Invalid auth data in cookie:', parsedAuth)
+          document.cookie = 'auth=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
+        }
       } catch (error) {
         console.error('Error parsing auth cookie:', error)
         document.cookie = 'auth=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
@@ -59,7 +77,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     setAuth(null)
-    document.cookie = 'auth=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
+    
+    // Helper function to clear a cookie with all possible path and domain combinations
+    const clearCookie = (name: string, paths: string[] = ['/']) => {
+      const domains = ['', window.location.hostname, `.${window.location.hostname}`]
+      
+      paths.forEach(path => {
+        domains.forEach(domain => {
+          // With secure & samesite
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=${path}${domain ? `; domain=${domain}` : ''}; secure; samesite=strict;`
+          // Without secure & samesite for local development
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=${path}${domain ? `; domain=${domain}` : ''};`
+        })
+      })
+    }
+    
+    // Clear all auth-related cookies with all possible paths
+    clearCookie('auth')
+    clearCookie('access_token')
+    clearCookie('refresh_token', ['/', '/auth', '/auth/refresh'])
+    clearCookie('csrf_token')
+    
+    // For debugging - log cookies after clearing attempt
+    console.log('[Auth] Cookies after logout attempt:', document.cookie)
   }
 
   const updateAuth = (newAuth: AuthState) => {
