@@ -55,7 +55,7 @@ interface BoardCanvasProps {
  */
 const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   // Access Redux store
-  const { storeNodes, storeEdges, selectedNodeId, isDirty } = useBoardStore();
+  const { storeNodes, storeEdges, selectedNodeId, editingNodeId, isDirty } = useBoardStore();
   const dispatch = useDispatch();
   
   // ReactFlow state
@@ -322,9 +322,9 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
         )
       )}
       
-      {/* Node edit panel */}
-      {selectedNodeId && (
-        <NodeEditPanel nodeId={selectedNodeId} />
+      {/* Node edit panel - only show when a node is explicitly being edited */}
+      {editingNodeId && (
+        <NodeEditPanel nodeId={editingNodeId} />
       )}
     </div>
   )
