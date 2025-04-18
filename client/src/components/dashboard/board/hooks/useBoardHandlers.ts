@@ -182,6 +182,8 @@ export const useBoardHandlers = () => {
    */
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     console.log("Node clicked:", node.id);
+    // Only select the node, but don't open the edit panel
+    // The edit panel will only open when handleContentDoubleClick in TextNode is called
     dispatch(setSelectedNode(node.id));
   }, [dispatch]);
   
