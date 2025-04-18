@@ -303,7 +303,7 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
         style={{ 
           top: 0, 
           left: '50%', 
-          transform: 'translate(-50%, -50%)', 
+          transform: 'translate(-50%, -50%) scale(3)',
           zIndex: 1000,
           cursor: isConnectingMode ? 'crosshair' : 'default',
           touchAction: 'none',
@@ -337,7 +337,7 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
         style={{ 
           right: 0, 
           top: '50%', 
-          transform: 'translate(50%, -50%)', 
+          transform: 'translate(50%, -50%) scale(3)', 
           zIndex: 1000,
           cursor: isConnectingMode ? 'crosshair' : 'default',
           touchAction: 'none',
@@ -371,7 +371,7 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
         style={{ 
           bottom: 0, 
           left: '50%', 
-          transform: 'translate(-50%, 50%)', 
+          transform: 'translate(-50%, 50%) scale(3)', 
           zIndex: 1000,
           cursor: isConnectingMode ? 'crosshair' : 'default',
           touchAction: 'none',
@@ -405,7 +405,7 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
         style={{ 
           left: 0, 
           top: '50%', 
-          transform: 'translate(-50%, -50%)', 
+          transform: 'translate(-50%, 50%) scale(3)', 
           zIndex: 1000,
           cursor: isConnectingMode ? 'crosshair' : 'default',
           touchAction: 'none',
