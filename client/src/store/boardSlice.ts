@@ -5,8 +5,9 @@ import { Node, Edge, XYPosition } from 'reactflow'
  * Interface for node content
  */
 export interface NodeContent {
-  text: string
+  text: string // Now contains HTML content
   images: string[]
+  isHtml?: boolean // Flag to indicate if text contains HTML
 }
 
 /**
