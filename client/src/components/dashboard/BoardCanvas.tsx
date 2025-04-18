@@ -12,10 +12,11 @@ import ReactFlow, {
   Edge,
   useReactFlow,
   NodeTypes,
+  EdgeMouseHandler
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { useDispatch } from 'react-redux'
-import { updateNodes } from '@/store/boardSlice'
+import { updateNodes, updateEdges } from '@/store/boardSlice'
 
 // Import node types
 import TextNode from './nodes/TextNode'
@@ -66,6 +67,7 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     id: string
     x: number
     y: number
+    isEdge?: boolean
   } | null>(null);
   
   // DOM references
@@ -145,6 +147,20 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     []
   );
   
+  // Handle edge context menu
+  const handleEdgeContextMenu: EdgeMouseHandler = useCallback(
+    (event, edge) => {
+      event.preventDefault();
+      setContextMenu({
+        id: edge.id,
+        x: event.clientX,
+        y: event.clientY,
+        isEdge: true
+      });
+    },
+    []
+  );
+  
   // Close context menu when clicked outside
   const handlePaneClick = useCallback(() => {
     setContextMenu(null);
@@ -180,6 +196,7 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
           onPaneContextMenu={createNodeAtMousePosition}
           onNodeContextMenu={handleNodeContextMenu}
           onNodeClick={onNodeClick}
+          onEdgeContextMenu={handleEdgeContextMenu}
           onInit={(instance) => {
             console.log("ReactFlow initialized");
             setTimeout(() => {
@@ -187,7 +204,7 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
             }, 500);
           }}
           nodeTypes={nodeTypes}
-          connectionMode={ConnectionMode.Loose}
+          connectionMode={ConnectionMode.Strict}
           defaultViewport={{ x: 0, y: 0, zoom: 1 }}
           minZoom={0.1}
           maxZoom={2}
@@ -230,8 +247,8 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
               console.log("Forcefully updated node position in Redux store:", node.id, node.position);
             }, 10);
           }}
-          deleteKeyCode={null}
-          multiSelectionKeyCode={null}
+          deleteKeyCode={['Delete', 'Backspace']}
+          multiSelectionKeyCode={['Control', 'Meta']}
           panOnScroll={false}
           panOnDrag={true}
           selectionOnDrag={false}
@@ -266,12 +283,43 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
       
       {/* Context menu */}
       {contextMenu && (
-        <NodeContextMenu
-          nodeId={contextMenu.id}
-          x={contextMenu.x}
-          y={contextMenu.y}
-          onClose={() => setContextMenu(null)}
-        />
+        contextMenu.isEdge ? (
+          <div
+            className="fixed bg-white shadow-lg rounded-md py-2 px-0 min-w-40 z-50"
+            style={{
+              left: contextMenu.x,
+              top: contextMenu.y,
+            }}
+          >
+            <button
+              className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center text-red-600"
+              onClick={() => {
+                // Delete the edge
+                const currentEdges = reactFlowInstance.getEdges();
+                const updatedEdges = currentEdges.filter(edge => edge.id !== contextMenu.id);
+                
+                // Update in ReactFlow
+                setEdges(updatedEdges);
+                
+                // Update in Redux
+                dispatch(updateEdges(updatedEdges));
+                
+                // Close context menu
+                setContextMenu(null);
+              }}
+            >
+              <span className="mr-2">🗑️</span>
+              Delete Connection
+            </button>
+          </div>
+        ) : (
+          <NodeContextMenu
+            nodeId={contextMenu.id}
+            x={contextMenu.x}
+            y={contextMenu.y}
+            onClose={() => setContextMenu(null)}
+          />
+        )
       )}
       
       {/* Node edit panel */}
