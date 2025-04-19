@@ -1,59 +1,30 @@
-import { useEffect, useState, useCallback } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { RootState } from '../../../store';
-import { setBoard } from '../../../store/boardSlice';
-import { Node, Edge } from 'reactflow';
+import { useState, useEffect } from 'react';
+import { useBoardStore } from '../board/hooks/useBoardStore';
 
 /**
  * Hook to handle board initialization by fetching data from the server
  */
 export const useBoardInitialization = (boardId: string) => {
-  const dispatch = useDispatch();
-  const { 
-    nodes: storeNodes, 
-    boardId: currentBoardId 
-  } = useSelector((state: RootState) => state.board);
-  
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  const initializeBoard = useCallback(({ 
-    boardId, 
-    boardName, 
-    nodes, 
-    edges 
-  }: {
-    boardId: string;
-    boardName: string;
-    nodes: Node[];
-    edges: Edge[];
-  }) => {
-    dispatch(setBoard({
-      boardId,
-      boardName,
-      nodes,
-      edges
-    }));
-  }, [dispatch]);
-  
+  const { boardId: currentBoardId, storeNodes, initializeBoard } = useBoardStore();
+
   useEffect(() => {
-    // Only fetch if boardId is provided and board is not already loaded
-    if (!boardId || (currentBoardId === boardId && storeNodes.length > 0)) {
-      return;
-    }
-    
     const fetchBoard = async () => {
-      setIsLoading(true);
-      setError(null);
-      
       try {
-        // First check localStorage for faster loading and offline support
-        const localData = localStorage.getItem(`board-${boardId}`);
-        
+        // Check if we already have this board loaded
+        if (currentBoardId === boardId && storeNodes.length > 0) {
+          setIsLoading(false);
+          return;
+        }
+
+        // Try to load from localStorage first
+        const localStorageKey = `board-${boardId}`;
+        const localData = localStorage.getItem(localStorageKey);
+
         if (localData) {
           try {
             const parsedData = JSON.parse(localData);
-            console.log('Board loaded from localStorage:', boardId);
             
             initializeBoard({
               boardId: parsedData.id,
@@ -64,8 +35,9 @@ export const useBoardInitialization = (boardId: string) => {
             
             setIsLoading(false);
             return;
-          } catch (e) {
-            console.warn('Failed to parse localStorage data, fetching from server');
+          } catch (parseError) {
+            console.warn('Failed to parse localStorage data:', parseError);
+            console.warn('Fetching from server instead');
           }
         }
         
@@ -89,9 +61,9 @@ export const useBoardInitialization = (boardId: string) => {
         localStorage.setItem(`board-${boardId}`, JSON.stringify(data));
         
         console.log('Board loaded from server:', boardId);
-      } catch (err) {
-        console.error('Error loading board:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load board');
+      } catch (fetchError) {
+        console.error('Error loading board:', fetchError);
+        setError(fetchError instanceof Error ? fetchError.message : 'Failed to load board');
         
         // If both localStorage and server fail, create an empty board
         if (storeNodes.length === 0) {
