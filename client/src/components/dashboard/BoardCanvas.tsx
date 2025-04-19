@@ -195,7 +195,7 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   }, [nodes, dispatch, setNodes]);
   
   return (
-    <div className="h-screen w-full flex flex-col">
+    <div className="h-[90vh] w-full flex flex-col">
       {/* Top toolbar */}
       <BoardTools
         onAddNode={createNode}
@@ -264,15 +264,13 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
           {/* Node count display */}
           <NodeCountDisplay count={nodes.length} />
           
-          {/* Floating add button */}
-          <FloatingAddButton onClick={createNode} />
-          
           {/* Debug panel */}
           <DebugPanel 
             nodes={nodes} 
             onFitView={handleFitView} 
             onAddNode={createNode} 
           />
+          
         </ReactFlow>
       </div>
       
