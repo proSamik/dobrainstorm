@@ -71,12 +71,10 @@ export default function BoardPage() {
   }
 
   return (
-    <div className="h-screen w-full p-0 m-0 overflow-hidden">
       <ReactFlowProvider>
         <Provider store={store}>
           <BoardCanvas boardId={boardId} />
         </Provider>
       </ReactFlowProvider>
-    </div>
   )
 } 
