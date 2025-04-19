@@ -35,7 +35,6 @@ import NodeEditPanel from './NodeEditPanel'
 import NodeContextMenu from './NodeContextMenu'
 import { BoardTools } from './board/components/BoardTools'
 import { DebugPanel } from './board/components/DebugPanel'
-import { FloatingAddButton } from './board/components/FloatingAddButton'
 import { NodeCountDisplay } from './board/components/NodeCountDisplay'
 
 // Define base node types outside component
