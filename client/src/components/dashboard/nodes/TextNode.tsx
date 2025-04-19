@@ -28,12 +28,6 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
   // State for connecting mode
   const [isConnectingMode, setIsConnectingMode] = useState(false)
   
-  // Handle invalid data case
-  if (!data) {
-    console.error('TextNode: Invalid node data')
-    return <div>Invalid node data</div>
-  }
-  
   // Handle node selection
   const handleClick = useCallback((e: React.MouseEvent) => {
     // Don't trigger selection when clicking on label input
@@ -43,16 +37,15 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
     }
     
     // Simply select the node, but don't open the edit panel
-    // The edit panel will only open on double-click
     dispatch(setSelectedNode(id))
   }, [dispatch, id, isEditingLabel])
   
   // Handle label edit
   const handleLabelDoubleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation() // Prevent selection change
-    setEditedLabel(data.label)
+    setEditedLabel(data?.label || '')
     setIsEditingLabel(true)
-  }, [data.label])
+  }, [data?.label])
   
   // Handle content double-click to open edit panel
   const handleContentDoubleClick = useCallback((e: React.MouseEvent) => {
@@ -158,11 +151,11 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       draggable: true
     }
     
-    // Create edge for the connection with proper source/target based on position
+    // Create edge for the connection
     const newEdge: Edge = {
       id: `edge-${Date.now()}`,
-      source: id, // Default source (will be overridden for some positions)
-      target: newNodeId, // Default target (will be overridden for some positions)
+      source: id,
+      target: newNodeId,
       sourceHandle: null,
       targetHandle: null,
       type: 'default',
@@ -198,9 +191,7 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
         break
     }
     
-    console.log("Creating edge:", newEdge)
-    
-    // Add the new node and edge to ReactFlow
+    // Add the new node and edge
     setNodes(nodes => [...nodes, newNode])
     setEdges(edges => [...edges, newEdge])
     
@@ -208,7 +199,6 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
     const updatedNodes = [...allNodes, newNode]
     dispatch(updateNodes(updatedNodes))
     
-    // Also update the edges in Redux store
     const updatedEdges = [...allEdges, newEdge]
     dispatch(updateEdges(updatedEdges))
     
@@ -217,6 +207,12 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       dispatch(setSelectedNode(newNodeId))
     }, 100)
   }, [id, getNode, setNodes, setEdges, allNodes, allEdges, dispatch])
+  
+  // Handle invalid data case - after all hooks are defined
+  if (!data) {
+    console.error('TextNode: Invalid node data')
+    return <div>Invalid node data</div>
+  }
   
   return (
     <div
