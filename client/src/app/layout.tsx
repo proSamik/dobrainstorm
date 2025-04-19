@@ -8,6 +8,7 @@ import Navigation from '@/components/Navigation'
 import PageView from '@/components/PageView'
 import JsonLd from '@/components/seo/JsonLd'
 import PrismInit from '@/components/PrismInit'
+import Head from 'next/head'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -73,6 +74,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <Head>
+        {/* Lemon Squeezy Affiliate Configuration */}
+        <script dangerouslySetInnerHTML={{ __html: 'window.lemonSqueezyAffiliateConfig = { store: "mapyouridea" };' }} />
+        <script src="https://lmsqueezy.com/affiliate.js" defer></script>
+      </Head>
       <body suppressHydrationWarning className={`${inter.className} bg-light-background dark:bg-dark-background text-light-foreground dark:text-dark-foreground`}>
         {/* Add organization structured data to all pages */}
         <JsonLd data={organizationData} />
