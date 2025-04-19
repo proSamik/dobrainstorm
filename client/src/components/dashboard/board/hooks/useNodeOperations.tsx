@@ -29,16 +29,19 @@ export const useNodeOperations = (
       };
     } else if (reactFlowInstance) {
       // Calculate position based on viewport center
-      const { x, y, zoom } = reactFlowInstance.getViewport();
+      const viewport = reactFlowInstance.getViewport();
       const center = reactFlowInstance.screenToFlowPosition({
         x: window.innerWidth / 2,
         y: window.innerHeight / 2,
       });
       
+      // Apply viewport zoom to offset for better positioning
+      const zoomOffset = viewport.zoom > 1 ? 100 / viewport.zoom : 100;
+      
       // Ensure we have valid numbers
       nodePosition = { 
-        x: Number.isFinite(center.x) ? center.x : 0,
-        y: Number.isFinite(center.y) ? center.y : 0
+        x: Number.isFinite(center.x) ? center.x + zoomOffset : 0,
+        y: Number.isFinite(center.y) ? center.y + zoomOffset : 0
       };
     } else {
       // Fallback if ReactFlow isn't initialized
