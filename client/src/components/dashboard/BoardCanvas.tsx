@@ -10,7 +10,6 @@ import ReactFlow, {
   useEdgesState,
   Node,
   useReactFlow,
-  NodeTypes,
   EdgeMouseHandler
 } from 'reactflow'
 import 'reactflow/dist/style.css'
