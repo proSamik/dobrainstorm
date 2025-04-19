@@ -7,13 +7,24 @@ import { useEffect, useState } from 'react'
 import { hasActiveSubscription, PRICING_PLANS } from '@/lib/pricing'
 import { PriceCard } from '@/components/landing/PriceCard'
 
+interface UserSubscription {
+  status: string | null;
+  productId: number | null;
+  variantId: number | null;
+}
+
+interface UserData {
+  subscription: UserSubscription;
+  timestamp?: number;
+}
+
 /**
  * BlurredContentView component that shows a blurred version of the content
  * with embedded pricing cards for immediate subscription
  */
 function BlurredContentView({ children, userData }: { 
   children: React.ReactNode; 
-  userData: any; 
+  userData: UserData; 
 }) {
   return (
     <div className="flex flex-col min-h-screen bg-light-background dark:bg-dark-background mt-10">
