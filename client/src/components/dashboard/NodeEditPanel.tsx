@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState } from '@/store'
 import { setEditingNode, NodeContent, updateNodes } from '@/store/boardSlice'
-import RichTextEditor from './RichTextEditor'
+import { RichTextEditor } from './RichTextEditor'
+import Image from 'next/image'
 
 interface NodeEditPanelProps {
   nodeId: string
@@ -41,17 +42,24 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     }
   }, [selectedNode])
   
-  // Handle ESC key to close panel
+  // Close the panel
+  const handleClose = useCallback(() => {
+    dispatch(setEditingNode(null))
+  }, [dispatch])
+  
+  // Handle keyboard shortcuts and clicks outside
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         handleClose()
       }
     }
-    
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [handleClose])
 
   // Handle panel resizing
   useEffect(() => {
@@ -79,12 +87,6 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     }
   }, [isDragging])
   
-  // Close the edit panel
-  const handleClose = () => {
-    // Keep the node selected but close the edit panel
-    dispatch(setEditingNode(null))
-  }
-  
   // Save the node content
   const handleSave = () => {
     if (!selectedNode) return
@@ -96,7 +98,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
       isHtml: true // Always set isHtml to true since we're using rich text
     }
     
-    let updatedNode = { ...selectedNode };
+    const updatedNode = { ...selectedNode };
     let nodeChanged = false;
     
     // Update node content if changed
@@ -241,11 +243,14 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
             <div className="grid grid-cols-2 gap-2">
               {images.map((image, index) => (
                 <div key={index} className="relative group">
-                  <img
-                    src={image}
-                    alt={`Image ${index + 1}`}
-                    className="w-full h-auto rounded border border-gray-300 dark:border-gray-600"
-                  />
+                  <div className="relative w-full h-32">
+                    <Image
+                      src={image}
+                      alt={`Image ${index + 1}`}
+                      fill
+                      className="object-cover rounded border border-gray-300 dark:border-gray-600"
+                    />
+                  </div>
                   <button
                     onClick={() => handleRemoveImage(index)}
                     className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
