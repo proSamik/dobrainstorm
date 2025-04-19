@@ -148,11 +148,12 @@ export const useBoardInitialization = (boardId: string) => {
           } else {
             throw new Error('Invalid board data received from server');
           }
-        } catch (serverError: any) {
-          console.error('Error fetching board from server:', serverError);
+        } catch (serverError: unknown) {
+          const error = serverError as Error & { response?: { status: number } };
+          console.error('Error fetching board from server:', error);
           
           // Handle authentication errors
-          if (serverError.response && serverError.response.status === 401) {
+          if (error.response && error.response.status === 401) {
             setError('Your session has expired. Please log in again.');
             // Redirect to login after a short delay
             setTimeout(() => {
@@ -162,7 +163,7 @@ export const useBoardInitialization = (boardId: string) => {
           }
           
           // Handle access denied
-          if (serverError.response && serverError.response.status === 403) {
+          if (error.response && error.response.status === 403) {
             setError('You do not have access to this board.');
             setTimeout(() => {
               router.push('/boards');
