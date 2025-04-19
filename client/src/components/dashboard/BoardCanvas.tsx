@@ -9,7 +9,6 @@ import ReactFlow, {
   useNodesState,
   useEdgesState,
   Node,
-  Edge,
   useReactFlow,
   NodeTypes,
   EdgeMouseHandler
@@ -40,8 +39,8 @@ import { DebugPanel } from './board/components/DebugPanel'
 import { FloatingAddButton } from './board/components/FloatingAddButton'
 import { NodeCountDisplay } from './board/components/NodeCountDisplay'
 
-// Define custom node types outside of the component to prevent recreation
-const nodeTypes: NodeTypes = {
+// Define base node types outside component
+const baseNodeTypes = {
   textNode: TextNode,
 };
 
@@ -54,13 +53,16 @@ interface BoardCanvasProps {
  * Orchestrates the board functionality through custom hooks
  */
 const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
+  // Memoize nodeTypes to prevent recreation
+  const nodeTypes = useMemo(() => baseNodeTypes, []);
+  
   // Access Redux store
-  const { storeNodes, storeEdges, selectedNodeId, editingNodeId, isDirty } = useBoardStore();
+  const { storeNodes, storeEdges, editingNodeId, isDirty } = useBoardStore();
   const dispatch = useDispatch();
   
   // ReactFlow state
-  const [nodes, setNodes, reactFlowNodesChange] = useNodesState([]);
-  const [edges, setEdges, reactFlowEdgesChange] = useEdgesState([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
@@ -91,8 +93,6 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   
   // Board event handlers
   const { 
-    onNodesChange, 
-    onEdgesChange, 
     onConnect, 
     onEdgeUpdate,
     onNodeClick
@@ -173,6 +173,28 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     }
   }, [reactFlowInstance]);
   
+  // Update node position after drag
+  const handleNodeDragStop = useCallback((e: React.MouseEvent, node: Node) => {
+    console.log("Node drag stop:", node.id, node.position);
+    document.body.style.cursor = 'default';
+    
+    // AGGRESSIVE: Apply direct update to both React Flow and Redux store
+    // 1. First update the React Flow state
+    setNodes(nodes => nodes.map(n => 
+      n.id === node.id 
+        ? { ...n, position: { ...node.position }, dragging: false }
+        : n
+    ));
+    
+    // 2. Force update the Redux store directly
+    setTimeout(() => {
+      const updatedNode = { ...node, position: { ...node.position }, dragging: false };
+      const updatedNodes = nodes.map(n => n.id === node.id ? updatedNode : n);
+      dispatch(updateNodes(updatedNodes));
+      console.log("Forcefully updated node position in Redux store:", node.id, node.position);
+    }, 10);
+  }, [nodes, dispatch, setNodes]);
+  
   return (
     <div className="h-screen w-full flex flex-col">
       {/* Top toolbar */}
@@ -188,8 +210,8 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
         <ReactFlow
           nodes={nodes}
           edges={edges}
-          onNodesChange={reactFlowNodesChange}
-          onEdgesChange={reactFlowEdgesChange}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onEdgeUpdate={onEdgeUpdate}
           onPaneClick={handlePaneClick}
@@ -203,6 +225,10 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
               instance.fitView({ padding: 0.2 });
             }, 500);
           }}
+          onNodeDragStart={() => {
+            document.body.style.cursor = 'grabbing';
+          }}
+          onNodeDragStop={handleNodeDragStop}
           nodeTypes={nodeTypes}
           connectionMode={ConnectionMode.Strict}
           defaultViewport={{ x: 0, y: 0, zoom: 1 }}
@@ -217,36 +243,6 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
           nodesConnectable={true}
           elementsSelectable={true}
           noDragClassName="no-drag"
-          onNodeDragStart={(e, node) => {
-            console.log("Node drag start:", node.id);
-            document.body.style.cursor = 'grabbing';
-          }}
-          onNodeDrag={(e, node) => {
-            // Update node position in real-time during dragging for smooth visual feedback
-            // The position changes are automatically applied to the visual state by ReactFlow
-            // We don't need to manually update the position here, but logging helps with debugging
-            // console.log("Node dragging:", node.id, node.position);
-          }}
-          onNodeDragStop={(e, node) => {
-            console.log("Node drag stop:", node.id, node.position);
-            document.body.style.cursor = 'default';
-            
-            // AGGRESSIVE: Apply direct update to both React Flow and Redux store
-            // 1. First update the React Flow state
-            setNodes(nodes => nodes.map(n => 
-              n.id === node.id 
-                ? { ...n, position: { ...node.position }, dragging: false }
-                : n
-            ));
-            
-            // 2. Force update the Redux store directly
-            setTimeout(() => {
-              const updatedNode = { ...node, position: { ...node.position }, dragging: false };
-              const updatedNodes = nodes.map(n => n.id === node.id ? updatedNode : n);
-              dispatch(updateNodes(updatedNodes));
-              console.log("Forcefully updated node position in Redux store:", node.id, node.position);
-            }, 10);
-          }}
           deleteKeyCode={['Delete', 'Backspace']}
           multiSelectionKeyCode={['Control', 'Meta']}
           panOnScroll={false}
