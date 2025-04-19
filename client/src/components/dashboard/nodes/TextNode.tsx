@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useState, useCallback } from 'react'
-import { Handle, NodeProps, Position, useReactFlow, MarkerType, Edge, Connection } from 'reactflow'
+import { Handle, NodeProps, Position, useReactFlow, Edge } from 'reactflow'
 import { useDispatch, useSelector } from 'react-redux'
 import { setSelectedNode, updateNodes, updateEdges, setEditingNode } from '@/store/boardSlice'
 import { NodeContent } from '@/store/boardSlice'
@@ -17,7 +17,7 @@ interface TextNodeData {
  */
 const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
   const dispatch = useDispatch()
-  const { getNode, setNodes, setEdges, getEdges } = useReactFlow()
+  const { getNode, setNodes, setEdges } = useReactFlow()
   const allNodes = useSelector((state: RootState) => state.board.nodes)
   const allEdges = useSelector((state: RootState) => state.board.edges)
   
@@ -28,12 +28,14 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
   // State for connecting mode
   const [isConnectingMode, setIsConnectingMode] = useState(false)
   
+  // Handle invalid data case
   if (!data) {
+    console.error('TextNode: Invalid node data')
     return <div>Invalid node data</div>
   }
   
   // Handle node selection
-  const handleClick = (e: React.MouseEvent) => {
+  const handleClick = useCallback((e: React.MouseEvent) => {
     // Don't trigger selection when clicking on label input
     if (isEditingLabel) {
       e.stopPropagation()
@@ -43,17 +45,17 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
     // Simply select the node, but don't open the edit panel
     // The edit panel will only open on double-click
     dispatch(setSelectedNode(id))
-  }
+  }, [dispatch, id, isEditingLabel])
   
   // Handle label edit
-  const handleLabelDoubleClick = (e: React.MouseEvent) => {
+  const handleLabelDoubleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation() // Prevent selection change
     setEditedLabel(data.label)
     setIsEditingLabel(true)
-  }
+  }, [data.label])
   
   // Handle content double-click to open edit panel
-  const handleContentDoubleClick = (e: React.MouseEvent) => {
+  const handleContentDoubleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation() // Prevent other events
     
     // First select the node
@@ -61,7 +63,7 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
     
     // Then set it as the node being edited
     dispatch(setEditingNode(id))
-  }
+  }, [dispatch, id])
   
   // Save label after editing
   const handleLabelSave = () => {
