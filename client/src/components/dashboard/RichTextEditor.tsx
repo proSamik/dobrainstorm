@@ -13,7 +13,7 @@ interface RichTextEditorProps {
  * Rich text editor component using TipTap
  * Supports markdown-style formatting and maintains HTML content
  */
-const RichTextEditor = ({ content, onChange, placeholder = 'Start typing...' }: RichTextEditorProps) => {
+export const RichTextEditor = ({ content, onChange, placeholder = 'Start typing...' }: RichTextEditorProps) => {
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -125,6 +125,4 @@ const RichTextEditor = ({ content, onChange, placeholder = 'Start typing...' }: 
       `}</style>
     </div>
   )
-}
-
-export default RichTextEditor 
+} 
