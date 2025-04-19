@@ -1,9 +1,9 @@
 import React from 'react';
-import { Panel } from 'reactflow';
+import { Panel, Node } from 'reactflow';
 import { useBoardStore } from '../hooks/useBoardStore';
 
 interface DebugPanelProps {
-  nodes: any[];
+  nodes: Node[];
   onFitView: () => void;
   onAddNode: () => void;
 }
