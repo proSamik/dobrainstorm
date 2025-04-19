@@ -13,7 +13,6 @@ interface BoardToolsProps {
  * Toolbar component with board operation buttons
  */
 export const BoardTools: React.FC<BoardToolsProps> = ({
-  onAddNode,
   onExport,
   onImport,
   onSave
@@ -55,13 +54,6 @@ export const BoardTools: React.FC<BoardToolsProps> = ({
         />
       </div>
       <div className="flex items-center space-x-2">
-        <button
-          onClick={onAddNode}
-          className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-          title="Add new node"
-        >
-          Add Node
-        </button>
         <button
           onClick={undoChange}
           className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
