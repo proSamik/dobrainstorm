@@ -23,17 +23,27 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [auth, setAuth] = useState<AuthState | null>(null)
 
-  // Function to validate auth state
-  const validateAuth = (authData: any): authData is AuthState => {
+// Function to validate auth state
+const validateAuth = (authData: unknown): authData is AuthState => {
+  if (
+    authData &&
+    typeof authData === 'object' &&
+    authData !== null &&
+    'id' in authData &&
+    'name' in authData &&
+    'email' in authData &&
+    'emailVerified' in authData
+  ) {
+    const { id, name, email, emailVerified } = authData as AuthState;
     return (
-      authData &&
-      typeof authData === 'object' &&
-      typeof authData.id === 'string' &&
-      typeof authData.name === 'string' &&
-      typeof authData.email === 'string' &&
-      typeof authData.emailVerified === 'boolean'
-    )
+      typeof id === 'string' &&
+      typeof name === 'string' &&
+      typeof email === 'string' &&
+      typeof emailVerified === 'boolean'
+    );
   }
+  return false;
+}
 
   // Initialize auth state from cookie
   useEffect(() => {
