@@ -5,14 +5,14 @@ import {
   EdgeChange, 
   Node, 
   NodeChange, 
-  useReactFlow,
-  MarkerType
+  useReactFlow
 } from 'reactflow';
 import { useDispatch } from 'react-redux';
 import { useDebounce } from '@/hooks/useDebounce';
 import { 
   setSelectedNode,
   updateEdges,
+  updateNodes
 } from '../../../../store/boardSlice';
 
 /**
@@ -31,40 +31,35 @@ export const useBoardHandlers = () => {
   const debouncedNodeUpdate = useDebounce(() => {
     if (!pendingNodeUpdateRef.current) return;
     pendingNodeUpdateRef.current = false;
+    setNodes(nodes => {
+      dispatch(updateNodes(nodes));
+      return nodes;
+    });
   }, 300);
   
   const debouncedEdgeUpdate = useDebounce(() => {
     if (!pendingEdgeUpdateRef.current) return;
     pendingEdgeUpdateRef.current = false;
+    const currentEdges = getEdges();
+    dispatch(updateEdges(currentEdges));
   }, 300);
   
   /**
    * Handle node changes (position, selection, etc.)
-   * This is the primary function that handles node movement
    */
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      // IMPORTANT: Let ReactFlow handle the state update directly
-      // This fixes the infinite recursion issue by delegating to ReactFlow's internal mechanism
-      
-      // Process position changes (for tracking)
+      // Process position changes
       const positionChanges = changes.filter(
         change => change.type === 'position' && 'position' in change
       );
       
-      // Check for final position changes (when drag is complete)
       if (positionChanges.length > 0) {
-        const finalPositionChanges = positionChanges.filter(
-          change => change.type === 'position' && 'dragging' in change && !change.dragging
-        );
-        
-        // Track that dragging has stopped - this will be used in BoardCanvas's onNodeDragStop
-        if (finalPositionChanges.length > 0) {
-          console.log("Final position detected in changes");
-        }
+        pendingNodeUpdateRef.current = true;
+        debouncedNodeUpdate();
       }
     },
-    [dispatch]
+    [debouncedNodeUpdate]
   );
   
   /**
@@ -72,23 +67,14 @@ export const useBoardHandlers = () => {
    */
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
-      // Let ReactFlow handle the changes directly to avoid recursion
       // Check for edge removals and update the Redux store
       const removals = changes.filter(change => change.type === 'remove');
       if (removals.length > 0) {
-        // Get the current edges from ReactFlow
-        const currentEdges = getEdges();
-        // Filter out removed edges
-        const remainingEdges = currentEdges.filter(
-          edge => !removals.some(removal => removal.id === edge.id)
-        );
-        
-        // Update Redux store with remaining edges
-        dispatch(updateEdges(remainingEdges));
-        console.log(`${removals.length} edges removed`);
+        pendingEdgeUpdateRef.current = true;
+        debouncedEdgeUpdate();
       }
     },
-    [dispatch, getEdges]
+    [debouncedEdgeUpdate]
   );
   
   /**
