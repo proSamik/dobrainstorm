@@ -56,7 +56,8 @@ const Navigation = () => {
               href="/"
               className="flex items-center font-semibold text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
             >
-              SaaS Platform
+              <img src="/logo.ico" alt="Map Your Ideas Logo" className="h-8 w-8 mr-2" />
+              Map Your Ideas
             </Link>
 
             {/* Desktop Navigation Links */}
