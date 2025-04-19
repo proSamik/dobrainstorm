@@ -183,6 +183,12 @@ export default function Boards() {
     )
   }
 
+  // Add authentication check
+  if (!userData) {
+    router.push('/auth/login')
+    return null
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-8 gap-4">
