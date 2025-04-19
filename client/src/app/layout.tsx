@@ -13,30 +13,38 @@ import Head from 'next/head'
 const inter = Inter({ subsets: ['latin'] })
 
 // Base site information for SEO
-const siteName = 'SaaS Platform'
-const siteDescription = 'A modern SaaS platform with authentication, theme support, and powerful features for businesses'
+const siteName = 'Map Your Ideas'
+const siteDescription = 'A modern platform for mapping and organizing your ideas effectively'
 
 // Generate default metadata for the site
 export const metadata: Metadata = {
-  title: siteName,
+  title: {
+    template: '%s | Map Your Ideas',
+    default: 'Map Your Ideas - Organize Your Thoughts',
+  },
   description: siteDescription,
-  keywords: ['saas', 'platform', 'software', 'business', 'service', 'cloud', 'web application'],
-  authors: [{ name: 'SaaS Platform Team' }],
+  keywords: ['mind mapping', 'brainstorming', 'ideas', 'organization', 'productivity', 'collaboration'],
+  authors: [{ name: 'Map Your Ideas Team' }],
+  icons: {
+    icon: '/logo.ico',
+    shortcut: '/logo.ico',
+    apple: '/logo.ico',
+  },
   openGraph: {
     type: 'website',
     siteName,
     images: [
       {
-        url: '/images/og-image.jpg',
-        width: 1200,
-        height: 630,
-        alt: 'SaaS Platform'
+        url: '/logo.ico',
+        width: 32,
+        height: 32,
+        alt: 'Map Your Ideas'
       }
     ]
   },
   twitter: {
     card: 'summary_large_image',
-    creator: '@saasplatform'
+    creator: '@mapyourideas'
   },
   robots: {
     index: true,
@@ -50,15 +58,15 @@ const organizationData = {
   '@type': 'Organization',
   name: siteName,
   url: process.env.NEXT_PUBLIC_SITE_URL || 'https://example.com',
-  logo: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://example.com'}/images/logo.png`,
+  logo: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://example.com'}/logo.ico`,
   sameAs: [
-    'https://twitter.com/saasplatform',
-    'https://github.com/saasplatform',
-    'https://www.linkedin.com/company/saasplatform'
+    'https://twitter.com/mapyourideas',
+    'https://github.com/mapyourideas',
+    'https://www.linkedin.com/company/mapyourideas'
   ],
   contactPoint: {
     '@type': 'ContactPoint',
-    email: 'support@saasplatform.com',
+    email: 'support@mapyourideas.com',
     contactType: 'customer service'
   }
 }
