@@ -27,8 +27,8 @@ const Navigation = () => {
       // Let authService handle the API call, error handling, and redirection
       await authService.logout()
       // No need for router.push here as authService will redirect
-    } catch (error: any) {
-      console.error('[Navigation] Catastrophic error during logout:', error)
+    } catch (error: unknown) {
+      console.error('[Navigation] Catastrophic error during logout:', error instanceof Error ? error.message : String(error))
       // Force redirect as last resort
       window.location.href = '/'
     }
