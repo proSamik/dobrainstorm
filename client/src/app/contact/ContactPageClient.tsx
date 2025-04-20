@@ -23,6 +23,8 @@ export default function ContactPageClient() {
       message: formData.get('message')?.toString(),
     }
 
+    console.log(data)
+
     // try {
     //   const response = await fetch('/api/contact', {
     //     method: 'POST',
@@ -56,7 +58,7 @@ export default function ContactPageClient() {
             Contact Us
           </h1>
           <p className="mt-6 text-lg leading-8 text-light-muted dark:text-dark-muted">
-            Have a question or feedback? We'd love to hear from you.
+            Have a question or feedback? We&apos;d love to hear from you.
           </p>
         </div>
 
