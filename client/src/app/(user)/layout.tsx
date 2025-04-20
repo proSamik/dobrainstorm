@@ -54,7 +54,10 @@ function BlurredContentView({ children, userData }: {
                     name={plan.name}
                     description={plan.description}
                     price={plan.price}
-                    features={plan.features}
+                    features={plan.features.map(feature => ({
+                      included: true,
+                      text: feature
+                    }))}
                     popular={plan.popular}
                     productId={plan.productId}
                     variantId={plan.variantId}
