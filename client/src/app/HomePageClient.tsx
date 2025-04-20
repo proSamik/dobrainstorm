@@ -20,9 +20,7 @@ export default function HomePageClient() {
       <Demo />
       <Features />
       <Pricing />
-      <Testimonials />
       <CTA />
-      <NewsletterSubscription />
       <Footer />
     </div>
   )
