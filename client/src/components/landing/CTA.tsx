@@ -10,7 +10,7 @@ export function CTA() {
           Ready to get started?
         </h2>
         <p className="mx-auto mt-6 max-w-xl text-lg leading-8 text-primary-100">
-          Join thousands of developers who are already using our platform to build amazing things.
+          Discover the potential of your ideas and start building amazing things today.
         </p>
         <div className="mt-10 flex items-center justify-center gap-x-6">
           <Link
