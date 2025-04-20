@@ -7,7 +7,7 @@ import { motion } from 'framer-motion'
  */
 export function Demo() {
   return (
-    <section id="demo" className="py-24 bg-light-background dark:bg-dark-background overflow-hidden">
+    <section id="demo" className="py-2 bg-light-background dark:bg-dark-background overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center mb-16">

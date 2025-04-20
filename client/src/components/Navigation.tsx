@@ -7,6 +7,7 @@ import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '@/contexts/AuthContext'
 import { authService } from '@/services/auth'
 import { ThemeToggle } from './ThemeToggle'
+import Image from 'next/image'
 
 /**
  * Navigation component that displays the top navigation bar
@@ -20,6 +21,9 @@ const Navigation = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
+  /**
+   * Handles user logout by clearing state and redirecting
+   */
   const handleLogout = async () => {
     try {
       // Call contextLogout first to clear React state immediately
@@ -56,7 +60,7 @@ const Navigation = () => {
               href="/"
               className="flex items-center font-semibold text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
             >
-              <img src="/logo.ico" alt="Map Your Ideas Logo" className="h-8 w-8 mr-2" />
+              <Image src="/logo.ico" alt="Map Your Ideas Logo" width={32} height={32} className="h-8 w-8 mr-2" />
               Map Your Ideas
             </Link>
 

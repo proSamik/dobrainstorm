@@ -7,8 +7,8 @@ import ContactPageClient from './ContactPageClient'
 // Generate metadata for SEO
 export const generateMetadata = (): Metadata => {
   return createMetadata({
-    title: 'Contact Us',
-    description: 'Get in touch with our team for support, inquiries, or partnership opportunities. We\'re here to help with all your software development needs.',
+    title: 'Contact Us | Map Your Ideas',
+    description: 'Get in touch with the Map Your Ideas team. We\'d love to hear from you!',
     keywords: ['contact', 'support', 'help', 'customer service', 'inquiry'],
     type: 'website',
   })

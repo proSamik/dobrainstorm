@@ -10,37 +10,61 @@ const sections = {
   terms: [
     {
       title: '1. Terms of Use',
-      content: 'By accessing and using this website, you accept and agree to be bound by the terms and provision of this agreement.'
+      content: 'By accessing and using Map Your Ideas, you accept and agree to be bound by the terms and provisions of this agreement. These terms apply to all visitors, users, and others who access or use our service.'
     },
     {
-      title: '2. Use License',
-      content: 'Permission is granted to temporarily download one copy of the materials (information or software) on SaaS Platform\'s website for personal, non-commercial transitory viewing only.'
+      title: '2. User Accounts and Authentication',
+      content: 'We offer email-based registration and Google Authentication. By using our authentication services, you agree to provide accurate and complete information. You are responsible for maintaining the security of your account and for all activities that occur under your account. We reserve the right to suspend or terminate accounts that violate our terms or are inactive for an extended period.'
     },
     {
-      title: '3. Disclaimer',
-      content: 'The materials on SaaS Platform\'s website are provided on an \'as is\' basis. SaaS Platform makes no warranties, expressed or implied, and hereby disclaims and negates all other warranties including, without limitation, implied warranties or conditions of merchantability, fitness for a particular purpose, or non-infringement of intellectual property or other violation of rights.'
+      title: '3. Data Storage and Sync',
+      content: 'We store and sync your user profile, email, username, subscription details, and board data with our database. This synchronization is essential for providing our services and ensuring your data is accessible across devices. You retain ownership of your content while granting us the necessary rights to provide and improve our services.'
     },
     {
-      title: '4. Limitations',
-      content: 'In no event shall SaaS Platform or its suppliers be liable for any damages (including, without limitation, damages for loss of data or profit, or due to business interruption) arising out of the use or inability to use the materials on SaaS Platform\'s website.'
+      title: '4. AI Services Integration',
+      content: 'Our platform integrates with various AI APIs to enhance your experience. By using these features, you acknowledge that: (a) any data you explicitly choose to process through AI services will be subject to their respective terms and conditions, (b) we do not modify your data without your consent, and (c) we do not share personal information with AI providers unless specifically requested by you for particular features.'
+    },
+    {
+      title: '5. Use License',
+      content: 'We grant you a personal, non-exclusive, non-transferable license to use Map Your Ideas for your personal or business purposes, subject to these terms and your subscription status.'
+    },
+    {
+      title: '6. Disclaimer',
+      content: 'The services are provided "as is" and "as available" without warranties of any kind, either express or implied. We do not warrant that the services will be uninterrupted or error-free, that defects will be corrected, or that our services or servers are free of harmful components.'
+    },
+    {
+      title: '7. Limitations',
+      content: 'To the fullest extent permitted by law, Map Your Ideas shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses resulting from your access to or use of or inability to access or use the services.'
     }
   ],
   privacy: [
     {
       title: '1. Information Collection',
-      content: 'We collect information that you provide directly to us, information we obtain automatically when you use our Services, and information from third party sources.'
+      content: 'We collect information you provide directly to us, including but not limited to: (a) Account information: email address, username, and profile details when you register, (b) Authentication data through Google sign-in, (c) Subscription and billing information, (d) Board content and organizational data you create or upload, (e) Usage data and interaction with our services.'
     },
     {
       title: '2. Use of Information',
-      content: 'We use the information we collect to provide, maintain, and improve our Services, to develop new ones, and to protect our Company and our users.'
+      content: 'We use the collected information to: (a) Provide, maintain, and improve our services, (b) Process your transactions, (c) Send you technical notices and support messages, (d) Respond to your comments and questions, (e) Develop new features and services, (f) Monitor and analyze usage patterns.'
     },
     {
-      title: '3. Information Sharing',
-      content: 'We do not share your personal information except in the limited circumstances described in this Privacy Policy.'
+      title: '3. AI Processing and Data Handling',
+      content: 'When you use our AI-enhanced features: (a) We only process data through AI APIs that you explicitly choose to analyze, (b) We do not store or use your personal data for AI training, (c) AI processing is governed by our partners\' terms of service, which we encourage you to review, (d) You maintain control over what data is processed by AI features.'
     },
     {
-      title: '4. Data Security',
-      content: 'We use reasonable measures to help protect information about you from loss, theft, misuse and unauthorized access, disclosure, alteration, and destruction.'
+      title: '4. Data Storage and Security',
+      content: 'We implement reasonable security measures to protect your information: (a) Data is encrypted in transit and at rest, (b) Regular security audits and updates are performed, (c) Access to personal data is restricted to authorized personnel, (d) We use industry-standard database security practices.'
+    },
+    {
+      title: '5. Information Sharing',
+      content: 'We do not share your personal information except: (a) With your explicit consent, (b) With service providers who assist in our operations, (c) When required by law or to protect rights and safety, (d) In connection with a business transfer or acquisition.'
+    },
+    {
+      title: '6. Data Retention',
+      content: 'We retain your information as long as your account is active or as needed to provide services. You can request data deletion, though we may retain certain information as required by law or for legitimate business purposes.'
+    },
+    {
+      title: '7. Your Rights and Choices',
+      content: 'You have the right to: (a) Access your personal information, (b) Correct inaccurate data, (c) Request deletion of your data, (d) Export your data in a portable format, (e) Opt-out of certain data processing and communications.'
     }
   ]
 }

@@ -7,12 +7,14 @@ import { AnimatePresence, motion } from 'framer-motion'
  * @param {Object} props - Component properties
  * @param {boolean} props.isVisible - Whether the pricing overlay should be visible
  * @param {Function} props.onClose - Function to call when the overlay is closed
+ * @param {string} props.title - Optional custom title for the overlay
+ * @param {string} props.description - Optional custom description for the overlay
  */
 const PricingOverlay = ({ 
   isVisible, 
   onClose,
-  title = "Choose a Plan",
-  description = "Choose a plan that's right for you to access all features and analytics."
+  title = "Choose Your Plan",
+  description = "Select a plan that fits your needs. All plans include unlimited mind maps and API key integration."
 }: { 
   isVisible: boolean; 
   onClose: () => void;
@@ -60,13 +62,7 @@ const PricingOverlay = ({
               {PRICING_PLANS.map((plan) => (
                 <PriceCard
                   key={plan.variantId}
-                  name={plan.name}
-                  description={plan.description}
-                  price={plan.price}
-                  features={plan.features}
-                  popular={plan.popular}
-                  productId={plan.productId}
-                  variantId={plan.variantId}
+                  {...plan}
                 />
               ))}
             </div>

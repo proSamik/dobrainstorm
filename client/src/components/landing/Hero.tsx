@@ -22,27 +22,21 @@ export function Hero() {
       </div>
 
       {/* Hero content */}
-      <div className="mx-auto max-w-7xl px-6 py-24 sm:py-32 lg:px-8">
+      <div className="mx-auto max-w-7xl px-6 py-12 sm:py-32 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
           <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">
-            Build Something Amazing with Our SaaS Platform
+            Transform Your Ideas into Clear Vision
           </h1>
           <p className="mt-6 text-lg leading-8 text-light-muted dark:text-dark-muted">
-            Get started with our modern, scalable, and secure platform. We provide all the tools you need to build and grow your business.
+            Create unlimited mind maps enhanced by AI. Organize your thoughts, brainstorm ideas, and plan projects with our intuitive platform. Start mapping your success today.
           </p>
           <div className="mt-10 flex items-center justify-center gap-x-6">
             <Link
               href="/auth?view=signup"
               className="rounded-md bg-primary-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
             >
-              Get started
+              Start for Free
               <ArrowRightIcon className="ml-2 -mr-1 h-4 w-4 inline-block" />
-            </Link>
-            <Link
-              href="/auth?view=login"
-              className="text-sm font-semibold leading-6"
-            >
-              Sign in <span aria-hidden="true">→</span>
             </Link>
           </div>
         </div>

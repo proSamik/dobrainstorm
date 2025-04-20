@@ -6,8 +6,8 @@
 // Define variant IDs from environment variables
 export const VARIANT_IDS = {
   BASIC: process.env.NEXT_PUBLIC_LEMON_SQUEEZY_VARIANT_ID_1 || '',
-  PRO: process.env.NEXT_PUBLIC_LEMON_SQUEEZY_VARIANT_ID_2 || '',
-  ENTERPRISE: process.env.NEXT_PUBLIC_LEMON_SQUEEZY_VARIANT_ID_3 || '',
+  PLUS: process.env.NEXT_PUBLIC_LEMON_SQUEEZY_VARIANT_ID_2 || '',
+  PRO: process.env.NEXT_PUBLIC_LEMON_SQUEEZY_VARIANT_ID_3 || '',
 }
 
 // Define the type for a pricing plan
@@ -15,7 +15,10 @@ export interface PricingPlan {
   name: string
   description: string
   price: number
-  features: string[]
+  features: Array<{
+    included: boolean
+    text: string
+  }>
   popular?: boolean
   productId: string
   variantId: string
@@ -25,28 +28,46 @@ export interface PricingPlan {
 export const PRICING_PLANS: PricingPlan[] = [
   {
     name: 'Basic',
-    description: 'All the basics for personal projects and simple websites.',
-    price: 9,
-    features: ['Up to 5 projects', 'Basic analytics', 'Email support'],
+    description: 'Perfect for getting started with mind mapping',
+    price: 4.99,
+    features: [
+      { included: true, text: 'Unlimited Mind Maps' },
+      { included: true, text: 'Basic Export Options' },
+      { included: true, text: 'Bring your API Key' },
+      { included: false, text: 'Additional AI Features' },
+      { included: false, text: 'Priority Support' },
+    ],
     productId: process.env.NEXT_PUBLIC_LEMON_SQUEEZY_PRODUCT_ID || '',
     variantId: VARIANT_IDS.BASIC,
   },
   {
-    name: 'Pro',
-    description: 'Perfect for professional developers and small teams.',
-    price: 29,
-    features: ['Up to 25 projects', 'Advanced analytics', 'Priority support', 'API access'],
+    name: 'Plus',
+    description: 'Enhanced features for power users',
+    price: 9.99,
+    features: [
+      { included: true, text: 'Unlimited Mind Maps' },
+      { included: true, text: 'Basic Export Options' },
+      { included: true, text: 'Bring your API Key' },
+      { included: true, text: '50 free AI Requests/month' },
+      { included: false, text: 'Priority Support' },
+    ],
     popular: true,
     productId: process.env.NEXT_PUBLIC_LEMON_SQUEEZY_PRODUCT_ID || '',
-    variantId: VARIANT_IDS.PRO,
+    variantId: VARIANT_IDS.PLUS,
   },
   {
-    name: 'Enterprise',
-    description: 'Ultimate resources for larger teams and complex projects.',
-    price: 99,
-    features: ['Unlimited projects', 'Custom analytics', 'Dedicated support', 'Advanced API access', 'Custom integrations'],
+    name: 'Pro',
+    description: 'Maximum power for serious professionals',
+    price: 19.99,
+    features: [
+      { included: true, text: 'Unlimited Mind Maps' },
+      { included: true, text: 'Basic Export Options' },
+      { included: true, text: 'Bring your API Key' },
+      { included: true, text: '500 free AI Requests/month' },
+      { included: true, text: 'Priority Support' },
+    ],
     productId: process.env.NEXT_PUBLIC_LEMON_SQUEEZY_PRODUCT_ID || '',
-    variantId: VARIANT_IDS.ENTERPRISE,
+    variantId: VARIANT_IDS.PRO,
   },
 ]
 
@@ -62,10 +83,10 @@ export const getPlanName = (variantId: string | number | null): string => {
   switch (variantStr) {
     case VARIANT_IDS.BASIC:
       return 'Basic Plan'
+    case VARIANT_IDS.PLUS:
+      return 'Plus Plan'
     case VARIANT_IDS.PRO:
       return 'Pro Plan'
-    case VARIANT_IDS.ENTERPRISE:
-      return 'Enterprise Plan'
     default:
       return 'Unknown Plan'
   }
