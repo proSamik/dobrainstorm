@@ -5,9 +5,7 @@ import { Hero } from '@/components/landing/Hero'
 import { Demo } from '@/components/landing/Demo'
 import { Features } from '@/components/landing/Features'
 import { Pricing } from '@/components/landing/Pricing'
-import { Testimonials } from '@/components/landing/Testimonials'
 import { CTA } from '@/components/landing/CTA'
-import NewsletterSubscription from '@/components/landing/NewsletterSubscription'
 
 /**
  * Client component for the landing page that displays the main marketing content
