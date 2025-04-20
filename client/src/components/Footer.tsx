@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 
 /**
  * Footer component that displays site-wide footer with links and information
@@ -16,7 +17,7 @@ export function Footer() {
               href="/"
               className="flex items-center font-semibold text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
             >
-              <img src="/logo.ico" alt="Map Your Ideas Logo" className="h-6 w-6 mr-2" />
+              <Image src="/logo.ico" alt="Map Your Ideas Logo" width={24} height={24} className="mr-2" />
               Map Your Ideas
             </Link>
             <p className="text-sm leading-6 text-light-muted dark:text-dark-muted">
