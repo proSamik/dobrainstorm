@@ -151,7 +151,7 @@ export const ParentNodeTrace = ({ nodeId }: ParentNodeTraceProps) => {
       </label>
       
       {/* ASCII Tree View */}
-      <div className="mb-4 p-2 bg-gray-50 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600">
+      <div className="mb-4 p-2 bg-gray-50 max-h-20 overflow-y-scroll space-y-3 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600">
         <pre className="text-xs text-gray-600 dark:text-gray-300 whitespace-pre font-mono">
           {nodeContext.asciiTree}
         </pre>
@@ -162,7 +162,7 @@ export const ParentNodeTrace = ({ nodeId }: ParentNodeTraceProps) => {
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           Node Details
         </label>
-        <div className="max-h-60 overflow-y-auto space-y-3">
+        <div className="max-h-40 overflow-y-scroll space-y-3">
           {nodeContext.nodeList.map((node) => (
             <div 
               key={node.id}
