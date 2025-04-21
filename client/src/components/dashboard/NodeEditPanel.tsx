@@ -263,9 +263,6 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
           )}
         </div>
 
-        <div>
-          <ParentNodeTrace nodeId={nodeId} />
-        </div>
 
         <div className="flex items-center gap-2">
             <button
@@ -287,6 +284,11 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
               &times;
             </button>
           </div>
+
+        <div>
+          <ParentNodeTrace nodeId={nodeId} />
+        </div>
+
       </div>
     </div>
   )
@@ -298,65 +300,167 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
 const ParentNodeTrace = ({ nodeId }: { nodeId: string }) => {
   const nodes = useSelector((state: RootState) => state.board.nodes)
   const edges = useSelector((state: RootState) => state.board.edges)
-  const [trace, setTrace] = useState<Array<{ id: string; content: string; label: string }>>([])
+  const [nodeContext, setNodeContext] = useState<{
+    asciiTree: string;
+    nodeList: Array<{ 
+      id: string; 
+      content: string; 
+      label: string;
+    }>;
+  }>({ asciiTree: '', nodeList: [] })
 
   useEffect(() => {
-    // Function to get parent node and its content
-    const getParentNode = (nodeId: string): { id: string; content: string; label: string } | null => {
-      // Find edge where this node is the target
-      const parentEdge = edges.find(edge => edge.target === nodeId)
-      if (!parentEdge) return null
-
-      // Find the parent node
-      const parentNode = nodes.find(node => node.id === parentEdge.source)
-      if (!parentNode) return null
-
-      return {
-        id: parentNode.id,
-        content: parentNode.data.content?.text?.slice(0, 100) || '',
-        label: parentNode.data.label || ''
+    // Function to get all connected nodes
+    const getConnectedNodes = (nodeId: string) => {
+      const connections = {
+        parents: [] as Array<{ id: string; label: string }>,
+        siblings: [] as Array<{ id: string; label: string }>,
+        children: [] as Array<{ id: string; label: string }>
       }
+
+      edges.forEach(edge => {
+        if (edge.target === nodeId) {
+          // This is a parent
+          const node = nodes.find(n => n.id === edge.source)
+          if (node) {
+            connections.parents.push({
+              id: node.id,
+              label: node.data.label || ''
+            })
+          }
+        } else if (edge.source === nodeId) {
+          // This is a child
+          const node = nodes.find(n => n.id === edge.target)
+          if (node) {
+            connections.children.push({
+              id: node.id,
+              label: node.data.label || ''
+            })
+          }
+        }
+      })
+
+      // Find siblings (nodes that share the same parent)
+      const parentIds = new Set(connections.parents.map(p => p.id))
+      edges.forEach(edge => {
+        if (parentIds.has(edge.source) && edge.target !== nodeId) {
+          const node = nodes.find(n => n.id === edge.target)
+          if (node) {
+            connections.siblings.push({
+              id: node.id,
+              label: node.data.label || ''
+            })
+          }
+        }
+      })
+
+      return connections
     }
 
-    // Build the trace array
-    const buildTrace = (startNodeId: string) => {
-      const traceArray = []
-      let currentNodeId = startNodeId
-      const visitedNodes = new Set()
+    // Extract plain text from HTML content
+    const getPlainText = (html: string) => {
+      const temp = document.createElement('div')
+      temp.innerHTML = html
+      return temp.textContent || temp.innerText || ''
+    }
 
-      while (true) {
-        const parentNode = getParentNode(currentNodeId)
-        if (!parentNode || visitedNodes.has(parentNode.id)) break
+    // Build the ASCII tree and node list
+    const buildTreeAndList = (startNodeId: string) => {
+      const nodeList: Array<{ id: string; label: string; content: string }> = []
+      const visitedNodes = new Set<string>()
+      let asciiTree = ''
+
+      const collectNodeInfo = (nodeId: string) => {
+        if (visitedNodes.has(nodeId)) return
+        const node = nodes.find(n => n.id === nodeId)
+        if (!node) return
+
+        visitedNodes.add(nodeId)
+        nodeList.push({
+          id: nodeId,
+          label: node.data.label || '',
+          content: getPlainText(node.data.content?.text || '')
+        })
+
+        const connections = getConnectedNodes(nodeId)
+        connections.parents.forEach(parent => collectNodeInfo(parent.id))
+        connections.siblings.forEach(sibling => collectNodeInfo(sibling.id))
+        connections.children.forEach(child => collectNodeInfo(child.id))
+      }
+
+      // First collect all connected nodes
+      collectNodeInfo(startNodeId)
+
+      // Build ASCII tree structure
+      const rootNodes = nodeList.filter(node => {
+        const connections = getConnectedNodes(node.id)
+        return connections.parents.length === 0
+      })
+
+      // Helper function to build tree lines
+      const buildTreeLines = (nodeId: string, prefix: string = '', isLast: boolean = true) => {
+        const node = nodes.find(n => n.id === nodeId)
+        if (!node) return
+
+        const connections = getConnectedNodes(nodeId)
+        const label = node.data.label || 'Untitled'
         
-        visitedNodes.add(parentNode.id)
-        traceArray.push(parentNode)
-        currentNodeId = parentNode.id
+        asciiTree += prefix + (isLast ? '└── ' : '├── ') + label + '\n'
+
+        const newPrefix = prefix + (isLast ? '    ' : '│   ')
+        const children = [...connections.children]
+        
+        children.forEach((child, index) => {
+          buildTreeLines(child.id, newPrefix, index === children.length - 1)
+        })
       }
 
-      return traceArray
+      // Build the tree starting from root nodes
+      rootNodes.forEach((root, index) => {
+        buildTreeLines(root.id, '', index === rootNodes.length - 1)
+      })
+
+      return { asciiTree, nodeList }
     }
 
-    setTrace(buildTrace(nodeId))
+    setNodeContext(buildTreeAndList(nodeId))
   }, [nodeId, nodes, edges])
 
-  if (trace.length === 0) return null
+  if (nodeContext.nodeList.length === 0) return null
 
   return (
     <div className="mt-4">
       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-        Parent Node Trace
+        Node Context Tree
       </label>
-      <div className="max-h-40 overflow-y-auto space-y-2">
-        {trace.map((node, index) => (
-          <div 
-            key={node.id} 
-            className="p-2 bg-gray-50 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600"
-          >
-            <div className="font-medium text-sm">{node.label}</div>
-            <div className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2" 
-                 dangerouslySetInnerHTML={{ __html: node.content }} />
-          </div>
-        ))}
+      
+      {/* ASCII Tree View */}
+      <div className="mb-4 p-2 bg-gray-50 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600">
+        <pre className="text-xs text-gray-600 dark:text-gray-300 whitespace-pre font-mono">
+          {nodeContext.asciiTree}
+        </pre>
+      </div>
+
+      {/* Node List */}
+      <div className="space-y-4">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          Node Details
+        </label>
+        <div className="max-h-60 overflow-y-auto space-y-3">
+          {nodeContext.nodeList.map((node) => (
+            <div 
+              key={node.id}
+              className="p-2 bg-gray-50 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600"
+            >
+              <div className="font-medium text-sm mb-1">{node.label}</div>
+              {node.content && (
+                <div className="text-sm text-gray-600 dark:text-gray-300">
+                  {node.content}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
