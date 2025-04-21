@@ -263,6 +263,10 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
           )}
         </div>
 
+        <div>
+          <ParentNodeTrace nodeId={nodeId} />
+        </div>
+
         <div className="flex items-center gap-2">
             <button
               onClick={handleSave}
@@ -283,6 +287,76 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
               &times;
             </button>
           </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Component to display the parent node trace
+ */
+const ParentNodeTrace = ({ nodeId }: { nodeId: string }) => {
+  const nodes = useSelector((state: RootState) => state.board.nodes)
+  const edges = useSelector((state: RootState) => state.board.edges)
+  const [trace, setTrace] = useState<Array<{ id: string; content: string; label: string }>>([])
+
+  useEffect(() => {
+    // Function to get parent node and its content
+    const getParentNode = (nodeId: string): { id: string; content: string; label: string } | null => {
+      // Find edge where this node is the target
+      const parentEdge = edges.find(edge => edge.target === nodeId)
+      if (!parentEdge) return null
+
+      // Find the parent node
+      const parentNode = nodes.find(node => node.id === parentEdge.source)
+      if (!parentNode) return null
+
+      return {
+        id: parentNode.id,
+        content: parentNode.data.content?.text?.slice(0, 100) || '',
+        label: parentNode.data.label || ''
+      }
+    }
+
+    // Build the trace array
+    const buildTrace = (startNodeId: string) => {
+      const traceArray = []
+      let currentNodeId = startNodeId
+      const visitedNodes = new Set()
+
+      while (true) {
+        const parentNode = getParentNode(currentNodeId)
+        if (!parentNode || visitedNodes.has(parentNode.id)) break
+        
+        visitedNodes.add(parentNode.id)
+        traceArray.push(parentNode)
+        currentNodeId = parentNode.id
+      }
+
+      return traceArray
+    }
+
+    setTrace(buildTrace(nodeId))
+  }, [nodeId, nodes, edges])
+
+  if (trace.length === 0) return null
+
+  return (
+    <div className="mt-4">
+      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+        Parent Node Trace
+      </label>
+      <div className="max-h-40 overflow-y-auto space-y-2">
+        {trace.map((node, index) => (
+          <div 
+            key={node.id} 
+            className="p-2 bg-gray-50 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600"
+          >
+            <div className="font-medium text-sm">{node.label}</div>
+            <div className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2" 
+                 dangerouslySetInnerHTML={{ __html: node.content }} />
+          </div>
+        ))}
       </div>
     </div>
   )
