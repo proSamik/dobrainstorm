@@ -36,6 +36,10 @@ func main() {
 		}
 	}
 
+	// Initialize the encryption system
+	handlers.InitEncryption()
+	log.Println("Encryption system initialized")
+
 	// Create database connection string
 	dbURL := fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
@@ -118,6 +122,15 @@ func main() {
 
 	// Strict rate limiter for write operations (e.g., 30 requests per minute)
 	boardWriteRateLimiter := middleware.NewRateLimiter(1*time.Minute, 30)
+
+	// Add settings API routes here, after the middlewares are initialized
+	settingsHandler := handlers.NewSettingsHandler(db)
+	mux.Handle("/settings/api-keys", authMiddleware.RequireAuth(
+		subscriptionMiddleware.HasActiveSubscription(
+			boardRateLimiter.Limit(http.HandlerFunc(settingsHandler.GetAPIKeys)))))
+	mux.Handle("/settings/save-keys", authMiddleware.RequireAuth(
+		subscriptionMiddleware.HasActiveSubscription(
+			boardWriteRateLimiter.Limit(http.HandlerFunc(settingsHandler.SaveKeys)))))
 
 	// Routes with subscription requirement
 	mux.Handle("/api/boards/list", authMiddleware.RequireAuth(
