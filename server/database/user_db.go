@@ -206,3 +206,75 @@ func (db *DB) UpdatePassword(id, hashedPassword string) error {
 
 	return nil
 }
+
+// GetUserSettings retrieves user settings from the database
+func (db *DB) GetUserSettings(userID string) (*models.UserSettings, error) {
+	var settings models.UserSettings
+
+	// Parse the UUID
+	parsedID, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user ID format: %w", err)
+	}
+
+	query := `
+		SELECT id, user_id, ai_settings, created_at, updated_at 
+		FROM user_settings 
+		WHERE user_id = $1
+		LIMIT 1
+	`
+
+	row := db.QueryRow(query, parsedID)
+	err = row.Scan(
+		&settings.ID,
+		&settings.UserID,
+		&settings.AISettings,
+		&settings.CreatedAt,
+		&settings.UpdatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// Return empty settings with no error if not found
+			return &models.UserSettings{}, nil
+		}
+		return nil, err
+	}
+
+	return &settings, nil
+}
+
+// SaveUserSettings creates or updates user settings in the database
+func (db *DB) SaveUserSettings(userID string, aiSettings []byte) error {
+	// Parse the UUID
+	parsedID, err := uuid.Parse(userID)
+	if err != nil {
+		return fmt.Errorf("invalid user ID format: %w", err)
+	}
+
+	// Check if settings already exist
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM user_settings WHERE user_id = $1", parsedID).Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	currentTime := time.Now()
+
+	// Create or update based on existence
+	if count == 0 {
+		// Create new settings
+		_, err = db.Exec(
+			"INSERT INTO user_settings (user_id, ai_settings, created_at, updated_at) VALUES ($1, $2, $3, $4)",
+			parsedID, aiSettings, currentTime, currentTime,
+		)
+	} else {
+		// Update existing settings
+		_, err = db.Exec(
+			"UPDATE user_settings SET ai_settings = $1, updated_at = $2 WHERE user_id = $3",
+			aiSettings, currentTime, parsedID,
+		)
+	}
+
+	return err
+}
