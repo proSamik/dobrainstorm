@@ -4,12 +4,16 @@ import axios from 'axios';
 
 interface OpenAIModel {
   id: string;
-  [key: string]: any;
+  object: string;
+  created: number;
+  owned_by: string;
 }
 
 interface KlusterAIModel {
   id: string;
-  [key: string]: any;
+  object: string;
+  created: number;
+  owned_by: string;
 }
 
 /**
