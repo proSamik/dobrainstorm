@@ -236,7 +236,8 @@ export default function BoardsSettings() {
         }
       })
     }
-  }, [validationStates, apiKeys]) // Add dependencies
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Empty dependency array to run only on mount
   
   // Handle API key input change with debounced validation
   const handleApiKeyChange = (provider: ApiProvider, value: string) => {
