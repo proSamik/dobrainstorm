@@ -1,7 +1,8 @@
 import './globals.css'
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
-import { Toaster } from 'react-hot-toast'
+import { Toaster as HotToaster } from 'react-hot-toast'
+import { Toaster as SonnerToaster } from 'sonner'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { AuthProvider } from '@/contexts/AuthContext'
 import Navigation from '@/components/Navigation'
@@ -97,11 +98,18 @@ export default function RootLayout({
             <PageView />
             {children}
             <PrismInit />
-            <Toaster 
+            {/* React Hot Toast for legacy components */}
+            <HotToaster 
               position="bottom-right"
               toastOptions={{
                 className: 'bg-light-background dark:bg-dark-background text-light-foreground dark:text-dark-foreground',
               }}
+            />
+            {/* Sonner Toast for newer components */}
+            <SonnerToaster 
+              position="bottom-right"
+              theme="system"
+              className="bg-light-background dark:bg-dark-background text-light-foreground dark:text-dark-foreground"
             />
           </AuthProvider>
         </ThemeProvider>
