@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { authService } from '@/services/auth'
 import { Spinner } from '@/components/ui/spinner'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { validateApiKey, ValidateKeyResponse } from '@/lib/apiKeyValidation'
+import { validateApiKey } from '@/lib/apiKeyValidation'
 import { toast } from 'sonner'
 import { Label } from '@/components/ui/label'
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select'
@@ -22,9 +22,16 @@ interface ApiKeyData {
   selectedModel: string
 }
 
-interface ApiResponse {
-  data?: any
-  error?: string
+// Server response interfaces
+interface ApiKeyResponse {
+  key: string
+  isValid: boolean
+  models: string[]
+  selectedModel: string
+}
+
+interface ServerResponse {
+  [provider: string]: ApiKeyResponse
 }
 
 /**
@@ -60,13 +67,13 @@ export default function BoardsSettings() {
    * Process API response to ensure proper data structure
    * This helps normalize the data from different server response formats
    */
-  const processApiResponse = (responseData: any) => {
+  const processApiResponse = (responseData: ServerResponse) => {
     if (!responseData) {
       console.log('No response data to process');
       return {};
     }
     
-    const result: Record<string, any> = {};
+    const result: Record<string, ApiKeyResponse> = {};
     
     // Process each provider in the response
     Object.keys(responseData).forEach(provider => {
@@ -130,7 +137,7 @@ export default function BoardsSettings() {
         // Make API call to Go backend to fetch saved keys
         console.log('Fetching API keys...');
         // NOTE: authService.get directly returns the data, not a response object with a data property
-        const data = await authService.get<any>('/settings/api-keys')
+        const data = await authService.get<ServerResponse>('/settings/api-keys')
         console.log('Original API Keys Response:', data); // Debug log
         
         // Process the data that comes directly from the service
@@ -229,7 +236,7 @@ export default function BoardsSettings() {
         }
       })
     }
-  }, [])
+  }, [validationStates, apiKeys]) // Add dependencies
   
   // Handle API key input change with debounced validation
   const handleApiKeyChange = (provider: ApiProvider, value: string) => {
@@ -378,9 +385,10 @@ export default function BoardsSettings() {
         }))
         setError(`Invalid ${provider} API key: ${response.error || 'Please check and try again.'}`)
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(`Error validating ${provider} API key:`, err)
-      setError(`Failed to validate ${provider} API key. ${err.message || 'Unknown error'}`)
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      setError(`Failed to validate ${provider} API key. ${errorMessage}`)
       
       setApiKeys(prev => ({
         ...prev,
@@ -412,7 +420,7 @@ export default function BoardsSettings() {
     
     // Check if each valid key has a selected model
     const missingModelSelection = Object.entries(apiKeys)
-      .filter(([_, data]) => data.isValid && !data.selectedModel)
+      .filter(([, data]) => data.isValid && !data.selectedModel)
       .map(([provider]) => provider)
     
     if (missingModelSelection.length > 0) {
@@ -426,8 +434,8 @@ export default function BoardsSettings() {
     try {
       // Only send validated keys with selected models to the server
       const keysToSave = Object.entries(apiKeys)
-        .filter(([_, data]) => data.isValid && data.selectedModel)
-        .reduce((acc, [provider, data]) => ({
+        .filter(([, data]) => data.isValid && data.selectedModel)
+        .reduce<Record<string, { key: string; models: string[] }>>((acc, [provider, data]) => ({
           ...acc,
           [provider]: {
             key: data.key,
@@ -448,9 +456,10 @@ export default function BoardsSettings() {
       } else {
         throw new Error(response?.data?.error || 'Failed to save API keys')
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error saving API keys:', err)
-      setError(`Failed to save API keys. ${err.response?.data?.error || err.message || 'Please try again.'}`)
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      setError(`Failed to save API keys. ${errorMessage}`)
     } finally {
       setIsSaving(false)
     }
@@ -514,21 +523,15 @@ export default function BoardsSettings() {
   const ApiKeySection = ({
     provider,
     apiKeyData,
-    setApiKeyData,
     handleApiKeyChange,
     handleApiKeyBlur,
-    validateApiKeyWithTimeout,
-    renderModelList,
-    handleModelChange
+    renderModelList
   }: {
     provider: ApiProvider
     apiKeyData: ApiKeyData
-    setApiKeyData: (data: ApiKeyData) => void
     handleApiKeyChange: (provider: ApiProvider, value: string) => void
     handleApiKeyBlur: (provider: ApiProvider) => void
-    validateApiKeyWithTimeout: (provider: ApiProvider, key: string) => Promise<void>
     renderModelList: (provider: ApiProvider) => React.ReactNode
-    handleModelChange: (provider: ApiProvider, selectedModel: string) => Promise<void>
   }) => {
     // Debug log to help diagnose the issue
     console.log(`Rendering ${provider} section with data:`, apiKeyData);
@@ -714,34 +717,25 @@ export default function BoardsSettings() {
             <ApiKeySection
               provider="openai"
               apiKeyData={apiKeys.openai}
-              setApiKeyData={(data: ApiKeyData) => setApiKeys(prev => ({ ...prev, openai: data }))}
               handleApiKeyChange={handleApiKeyChange}
               handleApiKeyBlur={handleApiKeyBlur}
-              validateApiKeyWithTimeout={validateApiKeyWithTimeout}
               renderModelList={renderModelList}
-              handleModelChange={handleModelChange}
             />
             
             <ApiKeySection
               provider="claude"
               apiKeyData={apiKeys.claude}
-              setApiKeyData={(data: ApiKeyData) => setApiKeys(prev => ({ ...prev, claude: data }))}
               handleApiKeyChange={handleApiKeyChange}
               handleApiKeyBlur={handleApiKeyBlur}
-              validateApiKeyWithTimeout={validateApiKeyWithTimeout}
               renderModelList={renderModelList}
-              handleModelChange={handleModelChange}
             />
             
             <ApiKeySection
               provider="klusterai"
               apiKeyData={apiKeys.klusterai}
-              setApiKeyData={(data: ApiKeyData) => setApiKeys(prev => ({ ...prev, klusterai: data }))}
               handleApiKeyChange={handleApiKeyChange}
               handleApiKeyBlur={handleApiKeyBlur}
-              validateApiKeyWithTimeout={validateApiKeyWithTimeout}
               renderModelList={renderModelList}
-              handleModelChange={handleModelChange}
             />
           </SettingsSection>
         )}
