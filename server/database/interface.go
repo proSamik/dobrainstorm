@@ -1,12 +1,17 @@
 package database
 
 import (
+	"database/sql"
 	"saas-server/models"
 	"time"
 )
 
 // DBInterface defines the interface for database operations
 type DBInterface interface {
+	// Database core operations
+	QueryRow(query string, args ...interface{}) *sql.Row
+	Exec(query string, args ...interface{}) (sql.Result, error)
+
 	// User operations
 	GetUserByEmail(email string) (*models.User, error)
 	GetUserByID(id string) (*models.User, error)
@@ -34,6 +39,10 @@ type DBInterface interface {
 	CreatePasswordResetToken(userID string, token string, expiresAt time.Time) error
 	GetPasswordResetToken(token string) (string, error)
 	MarkPasswordResetTokenUsed(token string) error
+
+	// User settings operations
+	GetUserSettings(userID string) (*models.UserSettings, error)
+	SaveUserSettings(userID string, aiSettings []byte) error
 
 	// Order operations
 	GetUserOrders(userID string) ([]models.Orders, error)
