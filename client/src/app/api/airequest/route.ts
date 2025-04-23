@@ -9,7 +9,18 @@ interface ChatMessage {
 }
 
 // Default system prompt for all AI requests
-const SYSTEM_PROMPT = 'You are a knowledgeable AI assistant that provides clear and concise answers.';
+const SYSTEM_PROMPT = `You are an AST-based mind‑mapping and brainstorming assistant.
+You will receive:
+  • A JSON array of nodes (each node has name, value, and data).
+  • A user message asking for suggestions (e.g., "suggest me 10 domain name ideas").
+
+Using the provided context and user message, generate a valid JSON object that maps categories to arrays of suggestions. Follow this parser schema exactly:
+{
+  "category1": ["item1", "item2", ...],
+  "category2": ["itemA", "itemB", ...],
+  ...
+}
+Return only the JSON object—no extra text, explanation, or formatting.`;
 
 // Default generation parameters
 const DEFAULT_MAX_TOKENS = 150;
