@@ -28,6 +28,24 @@ const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_TOP_P = 1.0;
 
 /**
+ * Parse raw AI response text into a JSON object, extracting any JSON block if needed.
+ * @param raw The raw string from the AI.
+ * @returns The parsed JSON value.
+ * @throws Error if parsing fails.
+ */
+function parseJSON(raw: string): any {
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (match) {
+      return JSON.parse(match[0]);
+    }
+    throw new Error(`Unable to parse JSON from AI response: ${error instanceof Error ? error.message : error}`);
+  }
+}
+
+/**
  * Determine the provider (OpenAI, Claude, or KlusterAI) based on the model name.
  * @param model The model identifier string.
  * @returns The provider key.
@@ -94,7 +112,7 @@ export async function POST(request: NextRequest) {
       const openai = new OpenAI({ apiKey });
 
       // Send chat completion request via OpenAI SDK
-      aiResponse = await openai.chat.completions.create({
+      const res = await openai.chat.completions.create({
         model,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
@@ -105,8 +123,10 @@ export async function POST(request: NextRequest) {
         temperature: DEFAULT_TEMPERATURE,
         top_p: DEFAULT_TOP_P,
       });
-
-      return NextResponse.json(aiResponse);
+      // Extract and parse the JSON output
+      const raw = res.choices?.[0]?.message?.content ?? '';
+      const parsed = parseJSON(raw);
+      return NextResponse.json(parsed);
     }
 
     if (provider === 'claude') {
@@ -128,12 +148,14 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'application/json',
         },
       });
-
-      return NextResponse.json(response.data);
+      // Extract and parse the JSON output
+      const rawC = response.data.completion?.content ?? response.data.completion ?? '';
+      const parsedC = parseJSON(rawC);
+      return NextResponse.json(parsedC);
     }
 
     // KlusterAI (OpenAI-compatible)
-    aiResponse = await axios.post(
+    const respK = await axios.post(
       'https://api.kluster.ai/v1/chat/completions',
       {
         model,
@@ -153,8 +175,10 @@ export async function POST(request: NextRequest) {
         },
       }
     );
-
-    return NextResponse.json(aiResponse.data);
+    // Extract and parse the JSON output
+    const rawK = respK.data.choices?.[0]?.message?.content ?? '';
+    const parsedK = parseJSON(rawK);
+    return NextResponse.json(parsedK);
   } catch (error) {
     console.error('AI request error:', error);
     return NextResponse.json(
