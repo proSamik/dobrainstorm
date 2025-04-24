@@ -154,8 +154,28 @@ const boardSlice = createSlice({
       state.history.past.push(deepCloneNodesEdges(state.nodes, state.edges))
       state.history.future = []
       
-      state.edges = action.payload
-      state.isDirty = true
+      // Detect and fix duplicate edge IDs
+      const edgeMap = new Map<string, Edge>();
+      const uniqueEdges: Edge[] = [];
+      
+      action.payload.forEach(edge => {
+        // If this ID already exists in our map, create a new unique ID
+        if (edgeMap.has(edge.id)) {
+          console.warn(`Duplicate edge ID detected: ${edge.id}. Creating a new unique ID.`);
+          const newEdge = { 
+            ...edge, 
+            id: `edge-${Date.now()}-${Math.random().toString(36).substring(2, 12)}`
+          };
+          edgeMap.set(newEdge.id, newEdge);
+          uniqueEdges.push(newEdge);
+        } else {
+          edgeMap.set(edge.id, edge);
+          uniqueEdges.push(edge);
+        }
+      });
+      
+      state.edges = uniqueEdges;
+      state.isDirty = true;
     },
     
     // Add a new node
