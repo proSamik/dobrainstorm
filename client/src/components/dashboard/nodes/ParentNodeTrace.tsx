@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSelector } from 'react-redux'
 import { RootState } from '@/store'
+import { getPlainText } from '@/lib/utils/text-helpers'
 
 interface ParentNodeTraceProps {
   nodeId: string
@@ -71,13 +72,6 @@ export const ParentNodeTrace = ({ nodeId }: ParentNodeTraceProps) => {
       })
 
       return connections
-    }
-
-    // Extract plain text from HTML content
-    const getPlainText = (html: string) => {
-      const temp = document.createElement('div')
-      temp.innerHTML = html
-      return temp.textContent || temp.innerText || ''
     }
 
     // Build the ASCII tree and node list
