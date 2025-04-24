@@ -7,6 +7,12 @@ import Image from 'next/image'
 import { setEditingNode, NodeContent, updateNodes } from '@/store/boardSlice'
 import { RichTextEditor } from './nodes/RichTextEditor'
 import { ParentNodeTrace } from './nodes/ParentNodeTrace'
+import { authService } from '@/services/auth'
+import axios from 'axios'
+
+// Define AI providers
+type ApiProvider = 'openai' | 'claude' | 'klusterai';
+const PROVIDERS: ApiProvider[] = ['openai', 'claude', 'klusterai'];
 
 interface NodeEditPanelProps {
   nodeId: string
@@ -20,6 +26,7 @@ interface NodeEditPanelProps {
 const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
   const dispatch = useDispatch()
   const nodes = useSelector((state: RootState) => state.board.nodes)
+  const edges = useSelector((state: RootState) => state.board.edges)
   const panelRef = useRef<HTMLDivElement>(null)
   
   // Find the selected node
@@ -32,6 +39,26 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
   const [isDirty, setIsDirty] = useState(false)
   const [panelWidth, setPanelWidth] = useState(320) // Default width
   const [isDragging, setIsDragging] = useState(false)
+  
+  // Node context (ascii tree + details)
+  const [nodeContext, setNodeContext] = useState<{ asciiTree: string; nodeList: Array<{ label: string; content: string }> }>({ asciiTree: '', nodeList: [] })
+  
+  // Chat input and API results
+  const [chatInput, setChatInput] = useState('')
+  const [suggestions, setSuggestions] = useState<any>(null)
+  const [loadingChat, setLoadingChat] = useState(false)
+  const [chatError, setChatError] = useState<string | null>(null)
+  
+  // All providers' credentials and status
+  const [providers, setProviders] = useState<Record<ApiProvider, { key: string; isValid: boolean; models: string[]; selectedModel: string }>>({
+    openai: { key: '', isValid: false, models: [], selectedModel: '' },
+    claude: { key: '', isValid: false, models: [], selectedModel: '' },
+    klusterai: { key: '', isValid: false, models: [], selectedModel: '' },
+  });
+  // Which provider is currently selected in this chat
+  const [selectedProvider, setSelectedProvider] = useState<ApiProvider>('openai');
+  const [apiKey, setApiKey] = useState<string>('');
+  const [model, setModel] = useState<string>('');
   
   // Update local state when the selected node changes
   useEffect(() => {
@@ -169,6 +196,109 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     setIsDirty(true)
   }
   
+  // Compute nodeContext (reuse ParentNodeTrace logic)
+  /**
+   * Build ASCII tree and node details list from the board state
+   */
+  useEffect(() => {
+    // Copy buildTreeAndList from ParentNodeTrace
+    const getConnectedNodes = (id: string) => {
+      const con = { parents: [], siblings: [], children: [] } as any;
+      edges.forEach(e => {
+        if (e.target === id) con.parents.push(e.source);
+        else if (e.source === id) con.children.push(e.target);
+      });
+      const parentSet = new Set(con.parents);
+      edges.forEach(e => {
+        if (parentSet.has(e.source) && e.target !== id) con.siblings.push(e.target);
+      });
+      return con;
+    };
+    const getPlain = (html: string) => {
+      const tmp = document.createElement('div'); tmp.innerHTML = html; return tmp.textContent || '';
+    };
+    const buildTree = (startId: string) => {
+      const list: any[] = [];
+      const visited = new Set<string>();
+      const collect = (id: string) => {
+        if (visited.has(id)) return;
+        const n = nodes.find(x => x.id === id);
+        if (!n) return; visited.add(id);
+        list.push({ label: n.data.label, content: getPlain(n.data.content?.text || '') });
+        const con = getConnectedNodes(id);
+        con.parents.forEach(collect);
+        con.siblings.forEach(collect);
+        con.children.forEach(collect);
+      };
+      collect(startId);
+      // ascii
+      let tree = '';
+      const build = (id: string, prefix = '', last = true) => {
+        const n = nodes.find(x => x.id === id);
+        if (!n) return;
+        tree += prefix + (last ? '└── ' : '├── ') + n.data.label + '\n';
+        const con = getConnectedNodes(id);
+        con.children.forEach((c: string, i: number) => build(c, prefix + (last ? '    ' : '│   '), i === con.children.length - 1));
+      };
+      const roots = list.filter(l => getConnectedNodes(l.id).parents.length === 0).map(l => l.id);
+      roots.forEach((rid, idx) => build(rid, '', idx === roots.length - 1));
+      return { asciiTree: tree, nodeList: list };
+    };
+    setNodeContext(buildTree(nodeId));
+  }, [nodeId, nodes, edges]);
+  
+  /**
+   * Fetch and store API keys, validity, models for each provider; select default provider
+   */
+  useEffect(() => {
+    authService.get('/settings/api-keys')
+      .then((data: Record<string, any>) => {
+        // Build new providers map
+        const updated: typeof providers = { ...providers };
+        PROVIDERS.forEach((p) => {
+          const pd = data[p];
+          if (pd) {
+            updated[p] = {
+              key: pd.key,
+              isValid: !!pd.isValid,
+              models: pd.models || [],
+              selectedModel: pd.selectedModel || (pd.models?.[0] || ''),
+            };
+          }
+        });
+        setProviders(updated);
+        // Default select openai if valid, else first valid provider
+        const defaultProv = updated.openai.isValid
+          ? 'openai'
+          : PROVIDERS.find(p => updated[p].isValid) || 'openai';
+        setSelectedProvider(defaultProv);
+        setApiKey(updated[defaultProv].key);
+        setModel(updated[defaultProv].selectedModel);
+      })
+      .catch(err => console.error('Failed to load API keys', err));
+  }, []);
+  
+  /**
+   * Send a brainstorming request to the AI API with the node context and user input
+   */
+  const handleGenerate = async () => {
+    setLoadingChat(true); setChatError(null);
+    try {
+      const contextMsgs = [
+        { role: 'user', content: `Node Context Tree:\n${nodeContext.asciiTree}` },
+        { role: 'user', content: `Node Details:\n${nodeContext.nodeList.map(n => `${n.label}: ${n.content}`).join('\n')}` }
+      ];
+      const resp = await axios.post(
+        '/api/airequest',
+        { model, message: chatInput, context: contextMsgs, apiKey },
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+      setSuggestions(resp.data);
+    } catch (e: any) {
+      setChatError(e.message || 'Error generating suggestions');
+    } finally { setLoadingChat(false); }
+  };
+  
   // If no node is selected, don't render anything
   if (!selectedNode) {
     return null
@@ -264,6 +394,42 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
           )}
         </div>
 
+        {/* Chat window */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium">Ask AI</label>
+          {/* Provider selector */}
+          <select
+            className="block mt-1 mb-2 border rounded p-1"
+            value={selectedProvider}
+            onChange={(e) => {
+              const p = e.target.value as ApiProvider;
+              setSelectedProvider(p);
+              setApiKey(providers[p].key);
+              setModel(providers[p].selectedModel);
+            }}
+          >
+            {PROVIDERS.map((p) => (
+              <option key={p} value={p} disabled={!providers[p].isValid}>
+                {p} {providers[p].isValid ? '' : '(no key)'}
+              </option>
+            ))}
+          </select>
+          <textarea
+            value={chatInput}
+            onChange={e => setChatInput(e.target.value)}
+            className="w-full p-2 border rounded"
+            placeholder="Type your request, e.g. 'suggest me 10 domain name ideas'"
+          />
+          <button
+            onClick={handleGenerate}
+            disabled={loadingChat || !chatInput}
+            className="mt-2 px-3 py-1 bg-blue-600 text-white rounded disabled:opacity-50"
+          >{loadingChat ? 'Generating...' : 'Generate'}</button>
+          {chatError && <p className="text-red-500">{chatError}</p>}
+          {suggestions && (
+            <pre className="mt-2 p-2 bg-gray-100 rounded text-sm font-mono">{JSON.stringify(suggestions, null, 2)}</pre>
+          )}
+        </div>
 
         <div className="flex items-center gap-2">
             <button
