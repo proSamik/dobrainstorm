@@ -366,7 +366,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
         setModel(updated[defaultProv].selectedModel);
       })
       .catch(err => console.error('Failed to load API keys', err));
-  }, [providers]);
+  }, []);
   
   /**
    * Send a brainstorming request to the AI API with the node context and user input
