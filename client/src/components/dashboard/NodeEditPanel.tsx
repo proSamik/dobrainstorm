@@ -196,6 +196,10 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
   const [apiKey, setApiKey] = useState<string>('');
   const [model, setModel] = useState<string>('');
   
+  // State for editing JSON suggestions
+  const [editableSuggestions, setEditableSuggestions] = useState<string>('');
+  const [isEditingSuggestions, setIsEditingSuggestions] = useState<boolean>(false);
+  
   // Update local state when the selected node changes
   useEffect(() => {
     if (selectedNode) {
@@ -332,151 +336,167 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     setIsDirty(true)
   }
   
-  /**
-   * Fetch and store API keys, validity, models for each provider; select default provider
-   */
-  useEffect(() => {
-    authService.get('/settings/api-keys')
-      .then((data: Record<string, {
-        key: string;
-        isValid: boolean;
-        models?: string[];
-        selectedModel?: string;
-      }>) => {
-        // Build new providers map
-        const updated: typeof providers = { ...providers };
-        PROVIDERS.forEach((p) => {
-          const pd = data[p];
-          if (pd) {
-            updated[p] = {
-              key: pd.key,
-              isValid: !!pd.isValid,
-              models: pd.models || [],
-              selectedModel: pd.selectedModel || (pd.models?.[0] || ''),
-            };
-          }
-        });
-        setProviders(updated);
-        // Default select openai if valid, else first valid provider
-        const defaultProv = updated.openai.isValid
-          ? 'openai'
-          : PROVIDERS.find(p => updated[p].isValid) || 'openai';
-        setSelectedProvider(defaultProv);
-        setApiKey(updated[defaultProv].key);
-        setModel(updated[defaultProv].selectedModel);
-      })
-      .catch(err => console.error('Failed to load API keys', err));
-  }, []);
-  
-  /**
-   * Send a brainstorming request to the AI API with the node context and user input
-   */
-  const handleGenerate = async () => {
-    setLoadingChat(true); 
-    setChatError(null);
+  // Parse JSON from a string
+  const parseJSON = useCallback((jsonString: string) => {
+    console.log("Parsing JSON:", jsonString);
+    
+    if (!jsonString || jsonString.trim() === '') {
+      console.warn("Empty JSON string provided");
+      setChatError('Empty JSON. Please add content before creating a mind map.');
+      return null;
+    }
     
     try {
-      // Get context data
-      const treeText = nodeContext.asciiTree || '';
-      const nodeDetails = nodeContext.nodeList || [];
-      const boardTitle = nodeContext.boardTitle || 'Untitled Board';
-      const currentNode = nodeContext.currentNode || { label: 'Unnamed Node' };
+      const parsed = JSON.parse(jsonString);
       
-      // Structure context messages properly for the API
-      const contextMsgs: {role: string; content: string}[] = [];
-      
-      // 1. Add current node details
-      const currentNodeName = currentNode.label || 'Unnamed Node';
-      const currentNodeContent = currentNode.content?.text || '';
-      
-      contextMsgs.push({ 
-        role: 'user' as const, 
-        content: `Current node: ${currentNodeName}\nDetails: ${getPlainText(currentNodeContent)}` as const
-      });
-      
-      // 2. Add board title
-      contextMsgs.push({ 
-        role: 'user', 
-        content: `Board title: ${boardTitle}` 
-      });
-      
-      // 3. Add the complete node tree
-      if (treeText.trim() !== '') {
-        contextMsgs.push({ 
-          role: 'user', 
-          content: `Node Context Tree:\n${treeText}` 
-        });
-      } else {
-        console.warn('ASCII tree is empty, using fallback structure');
-        contextMsgs.push({ 
-          role: 'user', 
-          content: `Node Context Tree: ${currentNodeName}` 
-        });
+      // Validate that it's an object with arrays
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        console.warn("JSON is not an object:", parsed);
+        setChatError('JSON must be an object with categories and arrays of ideas.');
+        return null;
       }
       
-      // 4. Add all node details
-      if (nodeDetails.length > 0) {
-        const detailsText = nodeDetails
-          .map(n => `${n.label || 'Unnamed'}: ${n.content || 'No content'}`)
-          .join('\n');
-        contextMsgs.push({ 
-          role: 'user', 
-          content: `Node Details:\n${detailsText}` 
-        });
-      }
-      
-      // 5. Add specific instruction for JSON format to enable branching
-      contextMsgs.push({
-        role: 'user',
-        content: `Please provide your response in a valid JSON format with categories as keys and arrays of ideas as values. For example: { "Category 1": ["Idea 1", "Idea 2"], "Category 2": ["Idea 3", "Idea 4"] }. This will be used to automatically create a mind map.`
+      // Check for valid structure (keys with array values)
+      let isValid = true;
+      Object.keys(parsed).forEach(key => {
+        if (!Array.isArray(parsed[key])) {
+          console.warn(`Value for key "${key}" is not an array:`, parsed[key]);
+          isValid = false;
+        }
       });
       
-      // Log the context being sent
-      console.log('Sending context to API:', contextMsgs);
-      
-      // Send the request with structured context
-      const resp = await axios.post(
-        '/api/airequest',
-        { 
-          model, 
-          message: chatInput, 
-          context: contextMsgs, 
-          apiKey,
-          provider: selectedProvider
-        },
-        { headers: { 'Content-Type': 'application/json' } }
-      );
-      
-      // Handle the response
-      if (resp.data && Object.keys(resp.data).length > 0) {
-        setSuggestions(resp.data);
-      } else {
-        setChatError('Received empty response from AI');
+      if (!isValid) {
+        setChatError('Each category must have an array of ideas.');
+        return null;
       }
-    } catch (error: unknown) {
-      console.error('Error generating suggestions:', error);
-      setChatError(error instanceof Error 
-        ? error.message 
-        : (error && typeof error === 'object' && 'message' in error 
-            ? String(error.message) 
-            : 'Error generating suggestions'
-          )
-      );
-    } finally { 
-      setLoadingChat(false); 
+      
+      console.log("Successfully parsed JSON:", parsed);
+      setChatError('');
+      return parsed;
+    } catch (error) {
+      console.error("JSON parse error:", error);
+      setChatError('Invalid JSON format. Please fix before creating mind map.');
+      return null;
     }
-  };
-  
+  }, [setChatError]);
+
+  /**
+   * Toggle between viewing and editing suggestions
+   */
+  const toggleEditMode = useCallback(() => {
+    console.log("toggleEditMode called, current state:", { isEditingSuggestions, editableSuggestions });
+    
+    if (isEditingSuggestions) {
+      // When exiting edit mode, parse the JSON
+      try {
+        const parsedJson = parseJSON(editableSuggestions);
+        console.log("Parsed JSON:", parsedJson);
+        
+        // Update suggestions if valid JSON
+        if (parsedJson) {
+          console.log("Updating suggestions with parsed JSON");
+          setSuggestions(parsedJson);
+        }
+        
+        // Always turn off edit mode, even if parsing failed
+        console.log("Setting isEditingSuggestions to false");
+        setIsEditingSuggestions(false);
+        
+      } catch (error) {
+        console.error("Error in toggleEditMode:", error);
+        // Still exit edit mode even if there was an error
+        setIsEditingSuggestions(false);
+      }
+    } else {
+      console.log("Entering edit mode");
+      setIsEditingSuggestions(true);
+    }
+    
+    // Add a timeout to verify the state was changed
+    setTimeout(() => {
+      console.log("State after toggleEditMode:", { isEditingSuggestions });
+    }, 100);
+    
+  }, [isEditingSuggestions, editableSuggestions, parseJSON, setSuggestions]);
+
+  /**
+   * Format the JSON to make it more readable
+   */
+  const formatJSON = useCallback(() => {
+    try {
+      const parsed = JSON.parse(editableSuggestions);
+      const formatted = JSON.stringify(parsed, null, 2);
+      setEditableSuggestions(formatted);
+      setChatError('');
+      console.log("JSON formatted successfully");
+    } catch (error) {
+      console.error("Error formatting JSON:", error);
+      setChatError('Invalid JSON format. Please fix before creating mind map.');
+    }
+  }, [editableSuggestions, setEditableSuggestions, setChatError]);
+
+  /**
+   * Handle editing the JSON suggestions
+   */
+  const handleEditSuggestions = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setEditableSuggestions(e.target.value);
+    // Clear error message as user types to fix the issue
+    if (chatError?.includes('Invalid JSON')) {
+      setChatError(null);
+    }
+  }, [chatError, setChatError]);
+
+  /**
+   * Clear the AI suggestions and reset related state
+   */
+  const clearSuggestions = useCallback(() => {
+    setSuggestions(null);
+    setEditableSuggestions('');
+    setChatError(null);
+    setIsEditingSuggestions(false);
+  }, [setSuggestions, setEditableSuggestions, setChatError, setIsEditingSuggestions]);
+
   /**
    * Create branch nodes from AI suggestions
    * This will automatically create new nodes based on the AI response
    * and connect them to the current node
    */
   const createBranchesFromSuggestions = useCallback(() => {
-    if (!suggestions || !selectedNode) return;
+    console.log("Creating branches with state:", { 
+      isEditingSuggestions, 
+      editableSuggestions, 
+      suggestions 
+    });
+    
+    // Always try to use the editableSuggestions first since it's the most up-to-date
+    let currentSuggestions = null;
+    
+    try {
+      if (editableSuggestions) {
+        // Parse the current editable suggestions
+        const parsedJson = JSON.parse(editableSuggestions);
+        console.log("Using parsed editable suggestions:", parsedJson);
+        currentSuggestions = parsedJson;
+      } else if (suggestions) {
+        // Fall back to the suggestions state if no editable text
+        console.log("Using stored suggestions:", suggestions);
+        currentSuggestions = suggestions;
+      }
+    } catch (error) {
+      console.error("Error parsing suggestions:", error);
+      setChatError('Invalid JSON format. Please fix before creating mind map.');
+      return;
+    }
+
+    if (!currentSuggestions || !selectedNode) {
+      console.warn("No suggestions or node selected");
+      return;
+    }
+    
+    console.log("Creating mind map with suggestions:", currentSuggestions);
     
     // Get the categories and ideas from the suggestions
-    const categories = Object.keys(suggestions);
+    const categories = Object.keys(currentSuggestions);
     if (categories.length === 0) {
       console.warn('No categories found in suggestions');
       return;
@@ -496,7 +516,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     // Calculate total height needed for the entire mind map
     let totalHeight = 0;
     categories.forEach(category => {
-      const ideas = suggestions[category];
+      const ideas = currentSuggestions[category];
       if (!Array.isArray(ideas) || ideas.length === 0) return;
       totalHeight += getCategoryHeight(ideas.length);
     });
@@ -510,7 +530,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     
     // For each category, create a section with its ideas
     categories.forEach((category, categoryIndex) => {
-      const ideas = suggestions[category];
+      const ideas = currentSuggestions[category];
       if (!Array.isArray(ideas) || ideas.length === 0) return;
       
       // Calculate spacing for this category's section
@@ -599,10 +619,175 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     dispatch(updateNodes(createdNodes));
     dispatch(updateEdges(createdEdges));
     
-    // Clear the suggestions
+    // Clear the suggestions after creating the mind map
     setSuggestions(null);
+    setEditableSuggestions('');
     
-  }, [suggestions, selectedNode, nodes, edges, dispatch]);
+  }, [suggestions, editableSuggestions, selectedNode, nodes, edges, dispatch, isEditingSuggestions, setSuggestions, setEditableSuggestions, setChatError]);
+  
+  /**
+   * Send a brainstorming request to the AI API with the node context and user input
+   */
+  const handleGenerate = async () => {
+    setLoadingChat(true); 
+    setChatError(null);
+    
+    try {
+      // Get context data
+      const treeText = nodeContext.asciiTree || '';
+      const nodeDetails = nodeContext.nodeList || [];
+      const boardTitle = nodeContext.boardTitle || 'Untitled Board';
+      const currentNode = nodeContext.currentNode || { label: 'Unnamed Node' };
+      
+      // Structure context messages properly for the API
+      const contextMsgs: {role: string; content: string}[] = [];
+      
+      // 1. Add current node details
+      const currentNodeName = currentNode.label || 'Unnamed Node';
+      const currentNodeContent = currentNode.content?.text || '';
+      
+      contextMsgs.push({ 
+        role: 'user' as const, 
+        content: `Current node: ${currentNodeName}\nDetails: ${getPlainText(currentNodeContent)}` as const
+      });
+      
+      // 2. Add board title
+      contextMsgs.push({ 
+        role: 'user', 
+        content: `Board title: ${boardTitle}` 
+      });
+      
+      // 3. Add the complete node tree
+      if (treeText.trim() !== '') {
+        contextMsgs.push({ 
+          role: 'user', 
+          content: `Node Context Tree:\n${treeText}` 
+        });
+      } else {
+        console.warn('ASCII tree is empty, using fallback structure');
+        contextMsgs.push({ 
+          role: 'user', 
+          content: `Node Context Tree: ${currentNodeName}` 
+        });
+      }
+      
+      // 4. Add all node details
+      if (nodeDetails.length > 0) {
+        const detailsText = nodeDetails
+          .map(n => `${n.label || 'Unnamed'}: ${n.content || 'No content'}`)
+          .join('\n');
+        contextMsgs.push({ 
+          role: 'user', 
+          content: `Node Details:\n${detailsText}` 
+        });
+      }
+      
+      // 5. Add specific instruction for JSON format to enable branching
+      contextMsgs.push({
+        role: 'user',
+        content: `Please provide your response in a valid JSON format with categories as keys and arrays of ideas as values. For example: { "Category 1": ["Idea 1", "Idea 2"], "Category 2": ["Idea 3", "Idea 4"] }. This will be used to automatically create a mind map.`
+      });
+      
+      // Log the context being sent
+      console.log('Sending context to API:', contextMsgs);
+      
+      // Send the request with structured context
+      const resp = await axios.post(
+        '/api/airequest',
+        { 
+          model, 
+          message: chatInput, 
+          context: contextMsgs, 
+          apiKey,
+          provider: selectedProvider
+        },
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+      
+      // Handle the response
+      if (resp.data && Object.keys(resp.data).length > 0) {
+        setSuggestions(resp.data);
+        // Initialize editable suggestions with the JSON response
+        setEditableSuggestions(JSON.stringify(resp.data, null, 2));
+        setIsEditingSuggestions(false); // Make sure we're in view mode initially
+      } else {
+        setChatError('Received empty response from AI');
+      }
+    } catch (error: unknown) {
+      console.error('Error generating suggestions:', error);
+      setChatError(error instanceof Error 
+        ? error.message 
+        : (error && typeof error === 'object' && 'message' in error 
+            ? String(error.message) 
+            : 'Error generating suggestions'
+          )
+      );
+    } finally { 
+      setLoadingChat(false); 
+    }
+  };
+  
+  /**
+   * Fetch and store API keys, validity, models for each provider; select default provider
+   */
+  useEffect(() => {
+    const fetchApiKeys = async () => {
+      try {
+        const data = await authService.get('/settings/api-keys') as Record<string, {
+          key: string;
+          isValid: boolean;
+          models?: string[];
+          selectedModel?: string;
+        }>;
+        
+        // Build new providers map without referencing the existing providers state
+        const updated: Record<ApiProvider, {
+          key: string;
+          isValid: boolean;
+          models: string[];
+          selectedModel: string;
+        }> = {} as Record<ApiProvider, {
+          key: string;
+          isValid: boolean;
+          models: string[];
+          selectedModel: string;
+        }>; 
+        
+        PROVIDERS.forEach((p) => {
+          const pd = data[p];
+          if (pd) {
+            updated[p] = {
+              key: pd.key,
+              isValid: !!pd.isValid,
+              models: pd.models || [],
+              selectedModel: pd.selectedModel || (pd.models?.[0] || ''),
+            };
+          } else {
+            // Initialize with empty values if no data found
+            updated[p] = {
+              key: '',
+              isValid: false,
+              models: [],
+              selectedModel: '',
+            };
+          }
+        });
+        
+        setProviders(updated);
+        // Default select openai if valid, else first valid provider
+        const defaultProv = updated.openai.isValid
+          ? 'openai'
+          : PROVIDERS.find(p => updated[p].isValid) || 'openai';
+        setSelectedProvider(defaultProv);
+        setApiKey(updated[defaultProv].key);
+        setModel(updated[defaultProv].selectedModel);
+      } catch (err) {
+        console.error('Failed to load API keys', err);
+      }
+    };
+    
+    fetchApiKeys();
+  }, []);
   
   // If no node is selected, don't render anything
   if (!selectedNode) {
@@ -731,19 +916,73 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
             className="mt-2 px-3 py-1 bg-blue-600 text-white rounded disabled:opacity-50"
           >{loadingChat ? 'Generating...' : 'Generate'}</button>
           {chatError && <p className="text-red-500">{chatError}</p>}
-          {suggestions && (
-            <div className="mt-4">
+          
+          {/* Editable AI Suggestions */}
+          {editableSuggestions && (
+            <div className="mt-4 border border-gray-300 rounded p-2">
               <div className="flex justify-between items-center mb-2">
                 <h4 className="text-sm font-medium">AI Suggestions</h4>
-                <button
-                  onClick={createBranchesFromSuggestions}
-                  className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
-                  title="Create a mind map from these suggestions"
-                >
-                  ✨ Create Mind Map
-                </button>
+                <div className="flex gap-2">
+                  {isEditingSuggestions && (
+                    <button
+                      onClick={formatJSON}
+                      className="px-2 py-1 text-gray-600 text-xs rounded hover:bg-gray-100"
+                      title="Format JSON"
+                    >
+                      📋 Format
+                    </button>
+                  )}
+                  <button
+                    onClick={clearSuggestions}
+                    className="px-2 py-1 text-gray-600 text-xs rounded hover:bg-gray-100"
+                    title="Clear suggestions"
+                  >
+                    🗑️ Clear
+                  </button>
+                  <button
+                    onClick={toggleEditMode}
+                    className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                    title={isEditingSuggestions ? "Save changes" : "Edit suggestions"}
+                  >
+                    {isEditingSuggestions ? "✓ Done" : "✎ Edit"}
+                  </button>
+                  <button
+                    onClick={createBranchesFromSuggestions}
+                    className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                    title="Create a mind map from these suggestions"
+                    disabled={isEditingSuggestions && chatError?.includes('Invalid JSON')}
+                  >
+                    ✨ Create Mind Map
+                  </button>
+                </div>
               </div>
-              <pre className="mt-2 p-2 bg-gray-100 rounded text-sm font-mono overflow-auto max-h-40">{JSON.stringify(suggestions, null, 2)}</pre>
+              
+              {isEditingSuggestions ? (
+                <textarea 
+                  value={editableSuggestions}
+                  onChange={handleEditSuggestions}
+                  className="w-full h-64 p-2 bg-gray-50 font-mono text-sm border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder='{
+  "Category 1": ["Idea 1", "Idea 2"],
+  "Category 2": ["Idea 3", "Idea 4"]
+}'
+                />
+              ) : (
+                <div className="bg-gray-50 p-2 rounded-b h-64 overflow-auto">
+                  <pre className="text-sm font-mono text-gray-800">{editableSuggestions}</pre>
+                </div>
+              )}
+              
+              {isEditingSuggestions && (
+                <div className="mt-2 text-xs text-gray-500">
+                  <p>Edit the JSON above to customize your mind map. Make sure to maintain the correct JSON format.</p>
+                  <ul className="list-disc ml-4 mt-1">
+                    <li>Each key becomes a category node</li>
+                    <li>Each array item becomes a child idea node</li>
+                    <li>You can add, remove, or modify categories and ideas</li>
+                  </ul>
+                </div>
+              )}
             </div>
           )}
         </div>
