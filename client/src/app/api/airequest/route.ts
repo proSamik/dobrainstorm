@@ -28,28 +28,62 @@ You will receive:
 
 Your task is to generate a structured set of ideas that can be used to expand the mind map.
 
-RESPONSE FORMAT: Return a valid JSON object that maps categories to arrays of ideas. Each category will become a new node, and each idea in the array will become a child node of that category.
+RESPONSE FORMAT: Return a valid JSON object with an improved structure:
 
-Follow this schema exactly:
 {
-  "Category 1": ["Idea 1A", "Idea 1B", "Idea 1C"],
-  "Category 2": ["Idea 2A", "Idea 2B", "Idea 2C"],
-  ...
+  "Category 1": [
+    {
+      "title": "Concept 1A", 
+      "reason": "Why this idea is relevant or important",
+      "sub_branches": [
+        {"title": "Sub-concept 1", "reason": "Explanation for sub-concept"},
+        {"title": "Sub-concept 2", "reason": "Explanation for sub-concept"}
+      ]
+    },
+    {
+      "title": "Concept 1B",
+      "reason": "Justification for this idea's inclusion"
+    }
+  ],
+  "Category 2": [
+    {
+      "title": "Concept 2A",
+      "reason": "Reasoning behind this idea"
+    }
+  ]
 }
 
 GUIDELINES:
 - Create 3-5 categories that naturally group related ideas
-- Provide 3-6 specific ideas for each category
-- Keep idea text concise (under 10 words each is ideal)
-- Make categories descriptive but brief
-- Ensure all ideas are relevant to the user's query and current node context
+- Provide 3-6 specific concepts for each category
+- Keep concept titles concise (under 8 words is ideal)
+- Include a brief reason/justification for each concept (1-2 sentences)
+- Add sub_branches only where it adds significant value (optional)
+- Ensure all concepts are relevant to the user's query and current node context
 - Return ONLY the JSON object with no additional text, explanation, or formatting
 
 EXAMPLE RESPONSE:
 {
-  "Market Research": ["Competitor analysis", "Customer surveys", "Industry trends", "Market size estimation"],
-  "Product Features": ["User authentication", "Data visualization", "Export functionality", "Mobile responsiveness"],
-  "Marketing Strategies": ["Content marketing", "Social media presence", "Email campaigns", "SEO optimization"]
+  "Market Research": [
+    {
+      "title": "Competitor analysis",
+      "reason": "Understanding competitors' strengths and weaknesses informs our strategy."
+    },
+    {
+      "title": "Customer surveys",
+      "reason": "Direct feedback from target users reveals actual needs and pain points."
+    }
+  ],
+  "Product Features": [
+    {
+      "title": "User authentication",
+      "reason": "Security is essential for maintaining user trust and data integrity.",
+      "sub_branches": [
+        {"title": "Social login", "reason": "Reduces friction in the signup process."},
+        {"title": "Two-factor authentication", "reason": "Adds an extra layer of security."}
+      ]
+    }
+  ]
 }
 
 Remember: The output will be automatically parsed to create nodes in a mind map, so maintaining the exact JSON format is critical.`;

@@ -352,21 +352,69 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
       // Validate that it's an object with arrays
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
         console.warn("JSON is not an object:", parsed);
-        setChatError('JSON must be an object with categories and arrays of ideas.');
+        setChatError('JSON must be an object with categories and arrays of concepts.');
         return null;
       }
       
       // Check for valid structure (keys with array values)
       let isValid = true;
       Object.keys(parsed).forEach(key => {
+        // Check each category has an array value
         if (!Array.isArray(parsed[key])) {
           console.warn(`Value for key "${key}" is not an array:`, parsed[key]);
           isValid = false;
+          return;
         }
+        
+        // Check each item in category array has title and reason
+        parsed[key].forEach((item, index) => {
+          // Support both new and old format
+          if (typeof item === 'string') {
+            // Old format - convert to new format
+            parsed[key][index] = {
+              title: item,
+              reason: "No reason provided"
+            };
+          } else if (typeof item === 'object' && item !== null) {
+            // New format - validate required fields
+            if (!item.title) {
+              console.warn(`Item at index ${index} in category "${key}" is missing title`);
+              isValid = false;
+            }
+            
+            // Ensure reason exists
+            if (!item.reason) {
+              item.reason = "No reason provided";
+            }
+            
+            // Validate sub_branches if present
+            if (item.sub_branches) {
+              if (!Array.isArray(item.sub_branches)) {
+                console.warn(`sub_branches for item "${item.title}" is not an array`);
+                isValid = false;
+              } else {
+                // Validate each sub-branch
+                item.sub_branches.forEach((subItem: any, subIndex: number) => {
+                  if (typeof subItem !== 'object' || !subItem.title) {
+                    console.warn(`Sub-branch at index ${subIndex} for item "${item.title}" is invalid`);
+                    isValid = false;
+                  }
+                  // Ensure reason exists for sub-branches
+                  if (!subItem.reason) {
+                    subItem.reason = "No reason provided";
+                  }
+                });
+              }
+            }
+          } else {
+            console.warn(`Item at index ${index} in category "${key}" is not an object or string`);
+            isValid = false;
+          }
+        });
       });
       
       if (!isValid) {
-        setChatError('Each category must have an array of ideas.');
+        setChatError('The JSON structure is invalid. Each category must have an array of concept objects with title and reason properties.');
         return null;
       }
       
@@ -495,7 +543,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     
     console.log("Creating mind map with suggestions:", currentSuggestions);
     
-    // Get the categories and ideas from the suggestions
+    // Get the categories and concepts from the suggestions
     const categories = Object.keys(currentSuggestions);
     if (categories.length === 0) {
       console.warn('No categories found in suggestions');
@@ -505,20 +553,32 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     // Define node size and spacing constants
     const NODE_HEIGHT = 150;
     const CATEGORY_MARGIN_BOTTOM = 40; // Extra margin between category sections
+    const SUB_BRANCH_X_OFFSET = 200; // Horizontal offset for sub-branches
+    const SUB_BRANCH_Y_OFFSET = 100; // Vertical spacing between sub-branches
     
-    // Calculate total height needed for all categories and their ideas
-    const getCategoryHeight = (ideaCount: number) => {
-      // Height of a category includes the category node itself plus all its ideas
-      // We add some padding between groups
-      return NODE_HEIGHT + (ideaCount * NODE_HEIGHT) + CATEGORY_MARGIN_BOTTOM;
+    // Calculate total height needed for all categories and their concepts
+    const getCategoryHeight = (categoryItems: any[]) => {
+      // Base height for the category and its direct concepts
+      let height = NODE_HEIGHT + (categoryItems.length * NODE_HEIGHT);
+      
+      // Add height for sub-branches if present
+      categoryItems.forEach(item => {
+        if (item.sub_branches && Array.isArray(item.sub_branches)) {
+          // Add space for each sub-branch
+          height += item.sub_branches.length * SUB_BRANCH_Y_OFFSET;
+        }
+      });
+      
+      // Add margin between categories
+      return height + CATEGORY_MARGIN_BOTTOM;
     };
     
     // Calculate total height needed for the entire mind map
     let totalHeight = 0;
     categories.forEach(category => {
-      const ideas = currentSuggestions[category];
-      if (!Array.isArray(ideas) || ideas.length === 0) return;
-      totalHeight += getCategoryHeight(ideas.length);
+      const categoryItems = currentSuggestions[category];
+      if (!Array.isArray(categoryItems) || categoryItems.length === 0) return;
+      totalHeight += getCategoryHeight(categoryItems);
     });
     
     // All nodes and edges including existing ones
@@ -528,20 +588,18 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     // Starting vertical position - center the entire structure
     let currentY = selectedNode.position.y - totalHeight / 2;
     
-    // For each category, create a section with its ideas
+    // For each category, create a section with its concepts
     categories.forEach((category, categoryIndex) => {
-      const ideas = currentSuggestions[category];
-      if (!Array.isArray(ideas) || ideas.length === 0) return;
+      const categoryItems = currentSuggestions[category];
+      if (!Array.isArray(categoryItems) || categoryItems.length === 0) return;
       
       // Calculate spacing for this category's section
-      const categoryHeight = getCategoryHeight(ideas.length);
-      // Position category node at the vertical center of its section
-      const categoryY = currentY + (categoryHeight / 2);
+      const categoryHeight = getCategoryHeight(categoryItems);
       
       // Position category node to the right of the parent node
       const categoryNodePosition = {
         x: selectedNode.position.x + 500, // Horizontal distance from parent
-        y: categoryY - (ideas.length * NODE_HEIGHT) / 2 // Align with the center of this category's ideas
+        y: currentY + NODE_HEIGHT // Position at the top of its section
       };
       
       const categoryNodeId = `node-${Date.now()}-${categoryIndex}`;
@@ -554,8 +612,9 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
         data: {
           label: category,
           content: {
-            text: `<p>${category}</p>`,
-            images: []
+            text: '', // No need to duplicate the category name in the content
+            images: [],
+            isHtml: true // Ensure isHtml is set to true
           }
         },
         draggable: true
@@ -574,41 +633,207 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
       createdNodes.push(categoryNode);
       createdEdges.push(categoryEdge);
       
-      // Create idea nodes for this category
-      ideas.forEach((idea, ideaIndex) => {
-        // Position ideas vertically in a column
-        const ideaY = categoryNodePosition.y + (ideaIndex * NODE_HEIGHT);
+      // Track vertical position for concepts
+      let conceptY = categoryNodePosition.y + NODE_HEIGHT;
+      
+      // Create concept nodes for this category
+      categoryItems.forEach((item, itemIndex) => {
+        console.log(`Processing item ${itemIndex}:`, item);
         
-        const ideaNodeId = `node-idea-${Date.now()}-${categoryIndex}-${ideaIndex}`;
-        const ideaNode: Node = {
-          id: ideaNodeId,
+        // Make sure item is correctly processed - this is the core issue
+        let conceptTitle, conceptReason;
+        
+        if (typeof item === 'string') {
+          console.log(`Item ${itemIndex} is a string:`, item);
+          conceptTitle = item;
+          conceptReason = '';
+        } else if (item && typeof item === 'object') {
+          console.log(`Item ${itemIndex} is an object with properties:`, Object.keys(item));
+          
+          // Handle item.title correctly
+          if (typeof item.title === 'string') {
+            conceptTitle = item.title;
+          } else if (item.title) {
+            console.warn(`Item ${itemIndex} has non-string title:`, item.title);
+            conceptTitle = String(item.title); // Convert to string if possible
+          } else {
+            console.warn(`Item ${itemIndex} missing title, using placeholder`);
+            conceptTitle = `Concept ${itemIndex + 1}`;
+          }
+          
+          // Handle item.reason correctly
+          if (typeof item.reason === 'string') {
+            conceptReason = item.reason;
+          } else if (item.reason) {
+            console.warn(`Item ${itemIndex} has non-string reason:`, item.reason);
+            conceptReason = String(item.reason); // Convert to string if possible
+          } else {
+            conceptReason = '';
+          }
+        } else {
+          console.error(`Item ${itemIndex} has unexpected type:`, typeof item);
+          conceptTitle = `Concept ${itemIndex + 1}`;
+          conceptReason = '';
+        }
+        
+        // DEBUG: Log the processed title and reason
+        console.log(`Processed concept node: "${conceptTitle}" with reason: "${conceptReason}"`);
+        
+        // Make sure we're not directly converting objects to strings in the HTML, which would display as [object Object]
+        let safeConceptTitle = typeof conceptTitle === 'string' ? conceptTitle : JSON.stringify(conceptTitle);
+        let safeConceptReason = typeof conceptReason === 'string' ? conceptReason : JSON.stringify(conceptReason);
+        
+        // Create HTML content with ONLY the reason (no title)
+        let conceptContent = "";
+        if (safeConceptReason && safeConceptReason.trim() !== '') {
+          // Display only the reason text, since title is already shown as node label
+          conceptContent = `<p style="color: #4b5563; font-style: italic;">${safeConceptReason}</p>`;
+        } else {
+          console.warn(`Missing reason for concept: ${safeConceptTitle}`);
+          conceptContent = `<p class="text-gray-400 italic">No description provided</p>`;
+        }
+        
+        // DEBUG: Log the final HTML content
+        console.log(`Final concept HTML content: ${conceptContent}`);
+        
+        const conceptNodeId = `node-concept-${Date.now()}-${categoryIndex}-${itemIndex}`;
+        const conceptNode: Node = {
+          id: conceptNodeId,
           type: 'textNode',
           position: {
             x: categoryNodePosition.x + 300, // Horizontal distance from category
-            y: ideaY
+            y: conceptY
           },
           data: {
-            label: typeof idea === 'string' ? idea : `Idea ${ideaIndex + 1}`,
+            label: safeConceptTitle,
             content: {
-              text: `<p>${idea}</p>`,
-              images: []
+              text: conceptContent,
+              images: [],
+              isHtml: true // Ensure isHtml is set to true
             }
           },
           draggable: true
         };
         
-        // Connect idea to category
-        const ideaEdge: Edge = {
-          id: `edge-${categoryNodeId}-${ideaNodeId}`,
+        // Connect concept to category
+        const conceptEdge: Edge = {
+          id: `edge-${categoryNodeId}-${conceptNodeId}`,
           source: categoryNodeId,
-          target: ideaNodeId,
+          target: conceptNodeId,
           type: 'default',
           sourceHandle: Position.Right,
           targetHandle: Position.Left
         };
         
-        createdNodes.push(ideaNode);
-        createdEdges.push(ideaEdge);
+        createdNodes.push(conceptNode);
+        createdEdges.push(conceptEdge);
+        
+        // Create sub-branches if present
+        if (item.sub_branches && Array.isArray(item.sub_branches) && item.sub_branches.length > 0) {
+          // Starting Y position for sub-branches
+          let subBranchY = conceptY;
+          
+          item.sub_branches.forEach((subItem: any, subIndex: number) => {
+            console.log(`Processing sub-branch ${subIndex}:`, subItem);
+            
+            // Handle sub-branch items correctly
+            let subBranchTitle, subBranchReason;
+            
+            if (typeof subItem === 'string') {
+              console.log(`Sub-branch ${subIndex} is a string:`, subItem);
+              subBranchTitle = subItem;
+              subBranchReason = '';
+            } else if (subItem && typeof subItem === 'object') {
+              console.log(`Sub-branch ${subIndex} is an object with properties:`, Object.keys(subItem));
+              
+              // Handle subItem.title correctly
+              if (typeof subItem.title === 'string') {
+                subBranchTitle = subItem.title;
+              } else if (subItem.title) {
+                console.warn(`Sub-branch ${subIndex} has non-string title:`, subItem.title);
+                subBranchTitle = String(subItem.title); // Convert to string if possible
+              } else {
+                console.warn(`Sub-branch ${subIndex} missing title, using placeholder`);
+                subBranchTitle = `Sub-concept ${subIndex + 1}`;
+              }
+              
+              // Handle subItem.reason correctly
+              if (typeof subItem.reason === 'string') {
+                subBranchReason = subItem.reason;
+              } else if (subItem.reason) {
+                console.warn(`Sub-branch ${subIndex} has non-string reason:`, subItem.reason);
+                subBranchReason = String(subItem.reason); // Convert to string if possible
+              } else {
+                subBranchReason = '';
+              }
+            } else {
+              console.error(`Sub-branch ${subIndex} has unexpected type:`, typeof subItem);
+              subBranchTitle = `Sub-concept ${subIndex + 1}`;
+              subBranchReason = '';
+            }
+            
+            // DEBUG: Log the processed title and reason
+            console.log(`Processed sub-branch: "${subBranchTitle}" with reason: "${subBranchReason}"`);
+            
+            // Make sure we're not directly converting objects to strings in the HTML, which would display as [object Object]
+            let safeSubBranchTitle = typeof subBranchTitle === 'string' ? subBranchTitle : JSON.stringify(subBranchTitle);
+            let safeSubBranchReason = typeof subBranchReason === 'string' ? subBranchReason : JSON.stringify(subBranchReason);
+            
+            // Create HTML content with ONLY the reason (no title)
+            let subBranchContent = "";
+            if (safeSubBranchReason && safeSubBranchReason.trim() !== '') {
+              // Display only the reason text, since title is already shown as node label
+              subBranchContent = `<p style="color: #4b5563; font-style: italic;">${safeSubBranchReason}</p>`;
+            } else {
+              console.warn(`Missing reason for sub-branch: ${safeSubBranchTitle}`);
+              subBranchContent = `<p class="text-gray-400 italic">No description provided</p>`;
+            }
+            
+            // DEBUG: Log the final HTML content
+            console.log(`Final sub-branch HTML content: ${subBranchContent}`);
+            
+            const subBranchNodeId = `node-sub-${Date.now()}-${categoryIndex}-${itemIndex}-${subIndex}`;
+            const subBranchNode: Node = {
+              id: subBranchNodeId,
+              type: 'textNode',
+              position: {
+                x: conceptNode.position.x + SUB_BRANCH_X_OFFSET,
+                y: subBranchY
+              },
+              data: {
+                label: safeSubBranchTitle,
+                content: {
+                  text: subBranchContent,
+                  images: [],
+                  isHtml: true // Ensure isHtml is set to true
+                }
+              },
+              draggable: true
+            };
+            
+            // Connect sub-branch to concept
+            const subBranchEdge: Edge = {
+              id: `edge-${conceptNodeId}-${subBranchNodeId}`,
+              source: conceptNodeId,
+              target: subBranchNodeId,
+              type: 'default',
+              sourceHandle: Position.Right,
+              targetHandle: Position.Left
+            };
+            
+            createdNodes.push(subBranchNode);
+            createdEdges.push(subBranchEdge);
+            
+            // Update Y position for next sub-branch
+            subBranchY += SUB_BRANCH_Y_OFFSET;
+          });
+          
+          // Update the conceptY for the next concept, accounting for sub-branches
+          conceptY = subBranchY + NODE_HEIGHT;
+        } else {
+          // No sub-branches, just move to next concept
+          conceptY += NODE_HEIGHT;
+        }
       });
       
       // Update current Y position for the next category section
@@ -685,7 +910,22 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
       // 5. Add specific instruction for JSON format to enable branching
       contextMsgs.push({
         role: 'user',
-        content: `Please provide your response in a valid JSON format with categories as keys and arrays of ideas as values. For example: { "Category 1": ["Idea 1", "Idea 2"], "Category 2": ["Idea 3", "Idea 4"] }. This will be used to automatically create a mind map.`
+        content: `Please provide your response in a valid JSON format with categories as keys and arrays of concept objects as values. Each concept object should include a "title" and a "reason" explaining why it's important. Optionally, concepts can have "sub_branches" for deeper exploration. For example: 
+{
+  "Category 1": [
+    {
+      "title": "Concept 1",
+      "reason": "Why this concept is important",
+      "sub_branches": [
+        {"title": "Sub-concept A", "reason": "Explanation for this sub-concept"}
+      ]
+    }
+  ],
+  "Category 2": [
+    {"title": "Concept 2", "reason": "Justification for this concept"}
+  ]
+}
+This structure will be used to automatically create a mind map with meaningful content.`
       });
       
       // Log the context being sent
@@ -706,6 +946,90 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
       
       // Handle the response
       if (resp.data && Object.keys(resp.data).length > 0) {
+        console.log("Raw API response data type:", typeof resp.data);
+        console.log("Raw API response:", JSON.stringify(resp.data, null, 2));
+        
+        // Verify that we've actually got the right format - Object with array values
+        let hasCorrectFormat = true;
+        try {
+          if (typeof resp.data !== 'object' || Array.isArray(resp.data)) {
+            console.error("API response is not an object:", resp.data);
+            hasCorrectFormat = false;
+          } else {
+            // Check each category and its items
+            Object.entries(resp.data).forEach(([category, items], categoryIndex) => {
+              console.log(`Category ${categoryIndex}: "${category}" with items:`, items);
+              
+              if (!Array.isArray(items)) {
+                console.error(`Category "${category}" does not contain an array:`, items);
+                hasCorrectFormat = false;
+                // Try to fix it by converting to an array if possible
+                if (items && typeof items === 'object') {
+                  console.log(`Attempting to convert category "${category}" to proper format`);
+                  const fixedItems = [];
+                  for (const [key, value] of Object.entries(items)) {
+                    console.log(`Processing entry with key "${key}" and value:`, value);
+                    if (typeof value === 'string') {
+                      fixedItems.push({ title: key, reason: value });
+                    } else if (value && typeof value === 'object') {
+                      fixedItems.push({ 
+                        title: key, 
+                        reason: JSON.stringify(value)
+                      });
+                    }
+                  }
+                  console.log(`Fixed items for category "${category}":`, fixedItems);
+                  resp.data[category] = fixedItems;
+                }
+              } else {
+                // Process each item in the array
+                items.forEach((item, itemIndex) => {
+                  console.log(`Item ${itemIndex} in category "${category}":`, item);
+                  
+                  if (typeof item === 'string') {
+                    console.log(`Converting string item to object: ${item}`);
+                    resp.data[category][itemIndex] = {
+                      title: item,
+                      reason: "No reason provided"
+                    };
+                  } else if (item && typeof item === 'object') {
+                    if (!item.title) {
+                      console.warn(`Item ${itemIndex} in category "${category}" missing title:`, item);
+                      resp.data[category][itemIndex].title = `Concept ${itemIndex + 1}`;
+                    } else if (typeof item.title !== 'string') {
+                      console.warn(`Item ${itemIndex} in category "${category}" has non-string title:`, item.title);
+                      resp.data[category][itemIndex].title = String(item.title);
+                    }
+                    
+                    if (!item.reason) {
+                      console.warn(`Item ${itemIndex} in category "${category}" missing reason`);
+                      resp.data[category][itemIndex].reason = "No reason provided";
+                    } else if (typeof item.reason !== 'string') {
+                      console.warn(`Item ${itemIndex} in category "${category}" has non-string reason:`, item.reason);
+                      resp.data[category][itemIndex].reason = String(item.reason);
+                    }
+                  } else {
+                    console.warn(`Invalid item ${itemIndex} in category "${category}":`, item);
+                    resp.data[category][itemIndex] = {
+                      title: `Concept ${itemIndex + 1}`,
+                      reason: "Invalid data converted to concept"
+                    };
+                  }
+                });
+              }
+            });
+          }
+        } catch (err) {
+          console.error("Error validating/fixing response structure:", err);
+          hasCorrectFormat = false;
+        }
+        
+        if (!hasCorrectFormat) {
+          console.warn("API response format issues detected, attempted to fix");
+        }
+        
+        console.log("Final processed data:", JSON.stringify(resp.data, null, 2));
+        
         setSuggestions(resp.data);
         // Initialize editable suggestions with the JSON response
         setEditableSuggestions(JSON.stringify(resp.data, null, 2));
