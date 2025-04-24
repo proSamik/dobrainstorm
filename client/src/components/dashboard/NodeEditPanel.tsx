@@ -553,19 +553,169 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     // Define node size and spacing constants
     const NODE_HEIGHT = 150;
     const CATEGORY_MARGIN_BOTTOM = 40; // Extra margin between category sections
-    const SUB_BRANCH_X_OFFSET = 200; // Horizontal offset for sub-branches
-    const SUB_BRANCH_Y_OFFSET = 100; // Vertical spacing between sub-branches
+    const BASE_HORIZONTAL_SPACING = 300; // Base horizontal distance between parent and children
+    const NODE_WIDTH_ESTIMATION_FACTOR = 15; // Pixels per character for width estimation
+    const MIN_NODE_WIDTH = 150; // Minimum width for a node
+    const HORIZONTAL_SAFETY_MARGIN = 50; // Extra safety margin to prevent horizontal overlaps
+    const VERTICAL_SAFETY_MARGIN = 30; // Extra safety margin to prevent vertical overlaps
+    const CATEGORY_X_OFFSET = BASE_HORIZONTAL_SPACING; // Distance from parent to category
+    const CONCEPT_X_OFFSET = BASE_HORIZONTAL_SPACING; // Distance from category to concept
+    const SUB_BRANCH_X_OFFSET = BASE_HORIZONTAL_SPACING; // Horizontal offset for sub-branches
+    const SUB_BRANCH_Y_OFFSET = 150; // Vertical spacing between sub-branches (increased from 100)
+    const SUB_SUB_BRANCH_X_OFFSET = BASE_HORIZONTAL_SPACING; // Horizontal offset for sub-sub-branches
+    const SUB_SUB_BRANCH_Y_OFFSET = 150; // Vertical spacing between sub-sub-branches (increased from 100)
+    
+    /**
+     * Estimate node dimensions based on content
+     * @param label The node label text
+     * @param content The node content HTML
+     * @returns Estimated width and height
+     */
+    const estimateNodeDimensions = (label: string, content: string = '') => {
+      // Estimate width based on the longer of label or first line of content
+      const contentFirstLine = content.split('</p>')[0]?.replace(/<[^>]*>/g, '') || '';
+      const longestText = label.length > contentFirstLine.length ? label : contentFirstLine;
+      
+      // Calculate width (characters * estimation factor, with minimum width)
+      const estimatedWidth = Math.max(
+        MIN_NODE_WIDTH,
+        longestText.length * NODE_WIDTH_ESTIMATION_FACTOR
+      );
+      
+      // Calculate height based on content complexity
+      // Start with base height, add more for each paragraph
+      let estimatedHeight = NODE_HEIGHT;
+      const paragraphCount = (content.match(/<p/g) || []).length;
+      if (paragraphCount > 1) {
+        estimatedHeight += (paragraphCount - 1) * 30;
+      }
+      
+      return { width: estimatedWidth, height: estimatedHeight };
+    };
+    
+    /**
+     * Check if a proposed node position would overlap with existing nodes
+     * @param x Proposed X position
+     * @param y Proposed Y position
+     * @param width Node width
+     * @param height Node height
+     * @returns True if position is clear, false if overlapping
+     */
+    const isPositionClear = (x: number, y: number, width: number, height: number) => {
+      // Add safety margins to dimensions
+      const safetyWidth = width + HORIZONTAL_SAFETY_MARGIN;
+      const safetyHeight = height + VERTICAL_SAFETY_MARGIN;
+      
+      // Check against all existing nodes
+      for (const node of nodes) {
+        // Skip nodes without valid position
+        if (!node.position) continue;
+        
+        // Estimate existing node dimensions
+        const nodeContent = node.data.content?.text || '';
+        const nodeDimensions = estimateNodeDimensions(node.data.label || '', nodeContent);
+        
+        // Check for overlap using bounding boxes with safety margins
+        const existingLeft = node.position.x - HORIZONTAL_SAFETY_MARGIN/2;
+        const existingRight = node.position.x + nodeDimensions.width + HORIZONTAL_SAFETY_MARGIN/2;
+        const existingTop = node.position.y - VERTICAL_SAFETY_MARGIN/2;
+        const existingBottom = node.position.y + nodeDimensions.height + VERTICAL_SAFETY_MARGIN/2;
+        
+        const newLeft = x - HORIZONTAL_SAFETY_MARGIN/2;
+        const newRight = x + safetyWidth;
+        const newTop = y - VERTICAL_SAFETY_MARGIN/2;
+        const newBottom = y + safetyHeight;
+        
+        // If there's overlap in both x and y directions, the nodes overlap
+        if (
+          newRight > existingLeft && 
+          newLeft < existingRight && 
+          newBottom > existingTop && 
+          newTop < existingBottom
+        ) {
+          console.log(`Overlap detected between new node at (${x},${y}) and existing node at (${node.position.x},${node.position.y})`);
+          return false;
+        }
+      }
+      
+      return true;
+    };
+    
+    /**
+     * Find a clear position for a new node
+     * @param baseX Desired X position
+     * @param baseY Desired Y position
+     * @param width Node width
+     * @param height Node height
+     * @returns Clear position coordinates
+     */
+    const findClearPosition = (baseX: number, baseY: number, width: number, height: number) => {
+      // Try the original position first
+      if (isPositionClear(baseX, baseY, width, height)) {
+        return { x: baseX, y: baseY };
+      }
+      
+      console.log(`Finding clear position for node. Base position: (${baseX},${baseY})`);
+      
+      // Try increasing vertical offsets first
+      for (let yOffset = 50; yOffset <= 500; yOffset += 50) {
+        // Try below
+        if (isPositionClear(baseX, baseY + yOffset, width, height)) {
+          console.log(`Found clear position below at (${baseX},${baseY + yOffset})`);
+          return { x: baseX, y: baseY + yOffset };
+        }
+        
+        // Try above
+        if (isPositionClear(baseX, baseY - yOffset, width, height)) {
+          console.log(`Found clear position above at (${baseX},${baseY - yOffset})`);
+          return { x: baseX, y: baseY - yOffset };
+        }
+      }
+      
+      // If vertical adjustments don't work, try increasing horizontal distance
+      for (let xOffset = 50; xOffset <= 500; xOffset += 50) {
+        if (isPositionClear(baseX + xOffset, baseY, width, height)) {
+          console.log(`Found clear position with extra horizontal offset at (${baseX + xOffset},${baseY})`);
+          return { x: baseX + xOffset, y: baseY };
+        }
+      }
+      
+      // Last resort: combine increased horizontal and vertical offsets
+      console.log(`Using last resort positioning with large offsets`);
+      return { x: baseX + 400, y: baseY + 200 };
+    };
+    
+    // Make sure we're not creating the mind map if there's no selected node
+    if (!selectedNode) {
+      console.error("Cannot create mind map: No node selected");
+      setChatError("Please select a node before creating a mind map");
+      return;
+    }
     
     // Calculate total height needed for all categories and their concepts
     const getCategoryHeight = (categoryItems: any[]) => {
       // Base height for the category and its direct concepts
       let height = NODE_HEIGHT + (categoryItems.length * NODE_HEIGHT);
       
-      // Add height for sub-branches if present
+      // Add height for sub-branches and sub-sub-branches
       categoryItems.forEach(item => {
         if (item.sub_branches && Array.isArray(item.sub_branches)) {
-          // Add space for each sub-branch
-          height += item.sub_branches.length * SUB_BRANCH_Y_OFFSET;
+          const subBranchCount = item.sub_branches.length;
+          
+          // Calculate height needed for all sub-branches
+          let subBranchesHeight = subBranchCount * SUB_BRANCH_Y_OFFSET;
+          
+          // Check for sub-sub-branches and add their height
+          item.sub_branches.forEach((subItem: any) => {
+            if (subItem.sub_branches && Array.isArray(subItem.sub_branches)) {
+              // For each sub-branch that has sub-sub-branches, add extra height
+              const subSubBranchCount = subItem.sub_branches.length;
+              subBranchesHeight += subSubBranchCount * SUB_SUB_BRANCH_Y_OFFSET;
+            }
+          });
+          
+          // Add the calculated sub-branch height to total height
+          height += subBranchesHeight;
         }
       });
       
@@ -581,12 +731,49 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
       totalHeight += getCategoryHeight(categoryItems);
     });
     
+    // Calculate safe starting positions for the mind map
+    const getBasePosition = () => {
+      if (!selectedNode) {
+        console.warn("No selected node found, using default position");
+        return { x: window.innerWidth / 2 - BASE_HORIZONTAL_SPACING, y: window.innerHeight / 2 };
+      }
+      
+      // Check if the selected node has a valid position
+      if (selectedNode.position && 
+          typeof selectedNode.position.x === 'number' && 
+          typeof selectedNode.position.y === 'number') {
+        return selectedNode.position;
+      }
+      
+      // If position is undefined or has invalid coordinates
+      console.warn("Selected node has invalid position properties:", selectedNode.position);
+      
+      // Look for other nodes to get a reasonable position
+      const otherNodes = nodes.filter(n => n.id !== selectedNode.id && n.position);
+      if (otherNodes.length > 0) {
+        // Use the position of another node as reference
+        const referenceNode = otherNodes[0];
+        console.log("Using reference node for positioning:", referenceNode.id);
+        return {
+          x: referenceNode.position.x,
+          y: referenceNode.position.y
+        };
+      }
+      
+      // Fallback to center of viewport if position is invalid
+      console.warn("No valid reference positions found, using center of viewport");
+      return { x: window.innerWidth / 2 - BASE_HORIZONTAL_SPACING, y: window.innerHeight / 2 };
+    };
+    
+    // Get base position for the mind map
+    const basePosition = getBasePosition();
+    
     // All nodes and edges including existing ones
     const createdNodes = [...nodes];
     const createdEdges = [...edges];
     
     // Starting vertical position - center the entire structure
-    let currentY = selectedNode.position.y - totalHeight / 2;
+    let currentY = basePosition.y - totalHeight / 2;
     
     // For each category, create a section with its concepts
     categories.forEach((category, categoryIndex) => {
@@ -596,15 +783,25 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
       // Calculate spacing for this category's section
       const categoryHeight = getCategoryHeight(categoryItems);
       
-      // Position category node to the right of the parent node
-      const categoryNodePosition = {
-        x: selectedNode.position.x + 500, // Horizontal distance from parent
+      // Calculate desired position for category node
+      const desiredCategoryPosition = {
+        x: basePosition.x + CATEGORY_X_OFFSET, // Distance from parent to category
         y: currentY + NODE_HEIGHT // Position at the top of its section
       };
       
-      const categoryNodeId = `node-${Date.now()}-${categoryIndex}`;
+      // Estimate dimensions for category node
+      const categoryDimensions = estimateNodeDimensions(category);
+      
+      // Find a clear position for the category node
+      const categoryNodePosition = findClearPosition(
+        desiredCategoryPosition.x, 
+        desiredCategoryPosition.y, 
+        categoryDimensions.width, 
+        categoryDimensions.height
+      );
       
       // Create the category node
+      const categoryNodeId = `node-${Date.now()}-${categoryIndex}`;
       const categoryNode: Node = {
         id: categoryNodeId,
         type: 'textNode',
@@ -619,6 +816,9 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
         },
         draggable: true
       };
+      
+      // Debug node positions
+      console.log(`Created category node "${category}" at position:`, categoryNodePosition);
       
       // Connect from the parent node to this category
       const categoryEdge: Edge = {
@@ -693,17 +893,32 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
           conceptContent = `<p class="text-gray-400 italic">No description provided</p>`;
         }
         
-        // DEBUG: Log the final HTML content
-        console.log(`Final concept HTML content: ${conceptContent}`);
+        // Calculate desired position for concept node
+        const desiredConceptPosition = {
+          x: categoryNodePosition.x + CONCEPT_X_OFFSET, // Distance from category to concept
+          y: conceptY
+        };
+        
+        // Estimate dimensions for concept node
+        const conceptDimensions = estimateNodeDimensions(safeConceptTitle, conceptContent);
+        
+        // Find a clear position for the concept node
+        const conceptNodePosition = findClearPosition(
+          desiredConceptPosition.x, 
+          desiredConceptPosition.y, 
+          conceptDimensions.width, 
+          conceptDimensions.height
+        );
+        
+        // Debug node positions
+        console.log(`Creating concept node "${safeConceptTitle}" with dimensions ${conceptDimensions.width}x${conceptDimensions.height}`);
+        console.log(`Desired position: (${desiredConceptPosition.x},${desiredConceptPosition.y}), Actual clear position: (${conceptNodePosition.x},${conceptNodePosition.y})`);
         
         const conceptNodeId = `node-concept-${Date.now()}-${categoryIndex}-${itemIndex}`;
         const conceptNode: Node = {
           id: conceptNodeId,
           type: 'textNode',
-          position: {
-            x: categoryNodePosition.x + 300, // Horizontal distance from category
-            y: conceptY
-          },
+          position: conceptNodePosition,
           data: {
             label: safeConceptTitle,
             content: {
@@ -714,6 +929,10 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
           },
           draggable: true
         };
+        
+        // Debug node positions
+        console.log(`Created concept node "${safeConceptTitle}" at position:`, conceptNode.position, 
+          `(X offset from category: ${CONCEPT_X_OFFSET}, total X from root: ${basePosition.x + CATEGORY_X_OFFSET + CONCEPT_X_OFFSET})`);
         
         // Connect concept to category
         const conceptEdge: Edge = {
@@ -731,51 +950,21 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
         // Create sub-branches if present
         if (item.sub_branches && Array.isArray(item.sub_branches) && item.sub_branches.length > 0) {
           // Starting Y position for sub-branches
-          let subBranchY = conceptY;
+          let subBranchY = conceptY - ((item.sub_branches.length * SUB_BRANCH_Y_OFFSET) / 2);
+          let previousSubBranchHeight = 0;
+          
+          // Track sub-branch nodes to handle potential sub-sub-branches
+          const subBranchNodes: Node[] = [];
+          const subBranchEdges: Edge[] = [];
           
           item.sub_branches.forEach((subItem: any, subIndex: number) => {
-            console.log(`Processing sub-branch ${subIndex}:`, subItem);
+            // Create sub-branch node
+            const subBranchTitle = typeof subItem === 'string' ? subItem : 
+              (typeof subItem.title === 'string' ? subItem.title : `Sub-concept ${subIndex + 1}`);
+            const subBranchReason = typeof subItem === 'string' ? '' : 
+              (typeof subItem.reason === 'string' ? subItem.reason : '');
             
-            // Handle sub-branch items correctly
-            let subBranchTitle, subBranchReason;
-            
-            if (typeof subItem === 'string') {
-              console.log(`Sub-branch ${subIndex} is a string:`, subItem);
-              subBranchTitle = subItem;
-              subBranchReason = '';
-            } else if (subItem && typeof subItem === 'object') {
-              console.log(`Sub-branch ${subIndex} is an object with properties:`, Object.keys(subItem));
-              
-              // Handle subItem.title correctly
-              if (typeof subItem.title === 'string') {
-                subBranchTitle = subItem.title;
-              } else if (subItem.title) {
-                console.warn(`Sub-branch ${subIndex} has non-string title:`, subItem.title);
-                subBranchTitle = String(subItem.title); // Convert to string if possible
-              } else {
-                console.warn(`Sub-branch ${subIndex} missing title, using placeholder`);
-                subBranchTitle = `Sub-concept ${subIndex + 1}`;
-              }
-              
-              // Handle subItem.reason correctly
-              if (typeof subItem.reason === 'string') {
-                subBranchReason = subItem.reason;
-              } else if (subItem.reason) {
-                console.warn(`Sub-branch ${subIndex} has non-string reason:`, subItem.reason);
-                subBranchReason = String(subItem.reason); // Convert to string if possible
-              } else {
-                subBranchReason = '';
-              }
-            } else {
-              console.error(`Sub-branch ${subIndex} has unexpected type:`, typeof subItem);
-              subBranchTitle = `Sub-concept ${subIndex + 1}`;
-              subBranchReason = '';
-            }
-            
-            // DEBUG: Log the processed title and reason
-            console.log(`Processed sub-branch: "${subBranchTitle}" with reason: "${subBranchReason}"`);
-            
-            // Make sure we're not directly converting objects to strings in the HTML, which would display as [object Object]
+            // Make sure we're not directly converting objects to strings in the HTML
             let safeSubBranchTitle = typeof subBranchTitle === 'string' ? subBranchTitle : JSON.stringify(subBranchTitle);
             let safeSubBranchReason = typeof subBranchReason === 'string' ? subBranchReason : JSON.stringify(subBranchReason);
             
@@ -789,17 +978,42 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
               subBranchContent = `<p class="text-gray-400 italic">No description provided</p>`;
             }
             
-            // DEBUG: Log the final HTML content
-            console.log(`Final sub-branch HTML content: ${subBranchContent}`);
+            // Apply some spacing adjustment based on previous sub-branch's height
+            subBranchY += previousSubBranchHeight;
+            
+            // Check for sub-sub-branches and calculate extra height requirements
+            const hasSubSubBranches = subItem.sub_branches && 
+                                     Array.isArray(subItem.sub_branches) && 
+                                     subItem.sub_branches.length > 0;
+            
+            const subSubBranchCount = hasSubSubBranches ? subItem.sub_branches.length : 0;
+            
+            // Calculate desired position for sub-branch node
+            const desiredSubBranchPosition = {
+              x: conceptNode.position.x + SUB_BRANCH_X_OFFSET,
+              y: subBranchY
+            };
+            
+            // Estimate dimensions for sub-branch node
+            const subBranchDimensions = estimateNodeDimensions(safeSubBranchTitle, subBranchContent);
+            
+            // Find a clear position for the sub-branch node
+            const subBranchNodePosition = findClearPosition(
+              desiredSubBranchPosition.x, 
+              desiredSubBranchPosition.y, 
+              subBranchDimensions.width, 
+              subBranchDimensions.height
+            );
+            
+            // Debug node positions
+            console.log(`Creating sub-branch node "${safeSubBranchTitle}" with dimensions ${subBranchDimensions.width}x${subBranchDimensions.height}`);
+            console.log(`Desired position: (${desiredSubBranchPosition.x},${desiredSubBranchPosition.y}), Actual clear position: (${subBranchNodePosition.x},${subBranchNodePosition.y})`);
             
             const subBranchNodeId = `node-sub-${Date.now()}-${categoryIndex}-${itemIndex}-${subIndex}`;
             const subBranchNode: Node = {
               id: subBranchNodeId,
               type: 'textNode',
-              position: {
-                x: conceptNode.position.x + SUB_BRANCH_X_OFFSET,
-                y: subBranchY
-              },
+              position: subBranchNodePosition,
               data: {
                 label: safeSubBranchTitle,
                 content: {
@@ -821,15 +1035,105 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
               targetHandle: Position.Left
             };
             
-            createdNodes.push(subBranchNode);
-            createdEdges.push(subBranchEdge);
+            subBranchNodes.push(subBranchNode);
+            subBranchEdges.push(subBranchEdge);
             
-            // Update Y position for next sub-branch
-            subBranchY += SUB_BRANCH_Y_OFFSET;
+            // Handle sub-sub-branches if present
+            if (hasSubSubBranches) {
+              // Starting Y position for sub-sub-branches, centered on parent sub-branch
+              let subSubBranchY = subBranchY - ((subSubBranchCount * SUB_SUB_BRANCH_Y_OFFSET) / 2);
+              
+              // Ensure minimum spacing between sub-branches with sub-sub-branches
+              previousSubBranchHeight = Math.max(
+                SUB_BRANCH_Y_OFFSET * 1.5, // Ensure at least 1.5x normal spacing
+                subSubBranchCount * SUB_SUB_BRANCH_Y_OFFSET / 2 // Or half the space needed for sub-sub-branches
+              );
+              
+              subItem.sub_branches.forEach((subSubItem: any, subSubIndex: number) => {
+                // Extract title and reason
+                const subSubBranchTitle = typeof subSubItem === 'string' ? subSubItem : 
+                  (typeof subSubItem.title === 'string' ? subSubItem.title : `Sub-sub-concept ${subSubIndex + 1}`);
+                const subSubBranchReason = typeof subSubItem === 'string' ? '' : 
+                  (typeof subSubItem.reason === 'string' ? subSubItem.reason : '');
+                
+                // Make safe versions for HTML
+                let safeSubSubBranchTitle = typeof subSubBranchTitle === 'string' ? 
+                  subSubBranchTitle : JSON.stringify(subSubBranchTitle);
+                let safeSubSubBranchReason = typeof subSubBranchReason === 'string' ? 
+                  subSubBranchReason : JSON.stringify(subSubBranchReason);
+                
+                // Create HTML content for sub-sub-branch
+                let subSubBranchContent = "";
+                if (safeSubSubBranchReason && safeSubSubBranchReason.trim() !== '') {
+                  subSubBranchContent = `<p style="color: #4b5563; font-style: italic;">${safeSubSubBranchReason}</p>`;
+                } else {
+                  subSubBranchContent = `<p class="text-gray-400 italic">No description provided</p>`;
+                }
+                
+                // Calculate desired position for sub-sub-branch node
+                const desiredSubSubBranchPosition = {
+                  x: subBranchNodePosition.x + SUB_SUB_BRANCH_X_OFFSET,
+                  y: subSubBranchY
+                };
+                
+                // Estimate dimensions for sub-sub-branch node
+                const subSubBranchDimensions = estimateNodeDimensions(safeSubSubBranchTitle, subSubBranchContent);
+                
+                // Find a clear position for the sub-sub-branch node
+                const subSubBranchNodePosition = findClearPosition(
+                  desiredSubSubBranchPosition.x, 
+                  desiredSubSubBranchPosition.y, 
+                  subSubBranchDimensions.width, 
+                  subSubBranchDimensions.height
+                );
+                
+                // Debug node positions
+                console.log(`Creating sub-sub-branch node "${safeSubSubBranchTitle}" with dimensions ${subSubBranchDimensions.width}x${subSubBranchDimensions.height}`);
+                
+                const subSubBranchNodeId = `node-subsub-${Date.now()}-${categoryIndex}-${itemIndex}-${subIndex}-${subSubIndex}`;
+                const subSubBranchNode: Node = {
+                  id: subSubBranchNodeId,
+                  type: 'textNode',
+                  position: subSubBranchNodePosition,
+                  data: {
+                    label: safeSubSubBranchTitle,
+                    content: {
+                      text: subSubBranchContent,
+                      images: [],
+                      isHtml: true
+                    }
+                  },
+                  draggable: true
+                };
+                
+                // Connect to parent sub-branch
+                const subSubBranchEdge: Edge = {
+                  id: `edge-${subBranchNodeId}-${subSubBranchNodeId}`,
+                  source: subBranchNodeId,
+                  target: subSubBranchNodeId,
+                  type: 'default',
+                  sourceHandle: Position.Right,
+                  targetHandle: Position.Left
+                };
+                
+                subBranchNodes.push(subSubBranchNode);
+                subBranchEdges.push(subSubBranchEdge);
+                
+                // Update Y position for next sub-sub-branch
+                subSubBranchY += SUB_SUB_BRANCH_Y_OFFSET;
+              });
+            } else {
+              // Regular sub-branch without children
+              previousSubBranchHeight = SUB_BRANCH_Y_OFFSET;
+            }
           });
           
-          // Update the conceptY for the next concept, accounting for sub-branches
-          conceptY = subBranchY + NODE_HEIGHT;
+          // Add all sub-branch nodes to the overall nodes collection
+          createdNodes.push(...subBranchNodes);
+          createdEdges.push(...subBranchEdges);
+          
+          // Update conceptY to account for sub-branches
+          conceptY += Math.max(NODE_HEIGHT, previousSubBranchHeight * item.sub_branches.length);
         } else {
           // No sub-branches, just move to next concept
           conceptY += NODE_HEIGHT;
