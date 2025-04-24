@@ -652,12 +652,12 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
           {/* Node count display */}
           <NodeCountDisplay count={nodes.length} />
           
-          {/* Debug panel */}
+          {/* Debug panel
           <DebugPanel 
             nodes={nodes} 
             onFitView={handleFitView} 
             onAddNode={createNode} 
-          />
+          /> */}
           
           {/* Selection Box Overlay */}
           {selectionBox.isActive && (
