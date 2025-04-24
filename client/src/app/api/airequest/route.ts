@@ -386,20 +386,43 @@ export async function POST(request: NextRequest) {
         dangerouslyAllowBrowser: false
       });
 
+      // Prepare messages for OpenAI API
+      // Start with system message
+      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+        { role: 'system', content: SYSTEM_PROMPT }
+      ];
+      
+      // Add context messages, properly typed by role
+      if (context && Array.isArray(context)) {
+        context.forEach(ctx => {
+          if (ctx.role === 'system') {
+            messages.push({ role: 'system', content: ctx.content });
+          } else if (ctx.role === 'user') {
+            messages.push({ role: 'user', content: ctx.content });
+          } else if (ctx.role === 'assistant') {
+            messages.push({ role: 'assistant', content: ctx.content });
+          } else if (ctx.role === 'function' && ctx.name) {
+            messages.push({ role: 'function', content: ctx.content, name: ctx.name });
+          } else if (ctx.role === 'tool') {
+            // Note: OpenAI's tool messages have a different structure than our internal API
+            // For now, we'll create a user message with the content to avoid type errors
+            messages.push({ role: 'user', content: `Tool message: ${ctx.content}` });
+            console.warn('Tool message type converted to user message for OpenAI compatibility');
+          }
+        });
+      }
+      
+      // Add user message
+      messages.push({ role: 'user', content: message });
+
       // Send chat completion request via OpenAI SDK
-      /* eslint-disable @typescript-eslint/no-explicit-any */
       const res = await openai.chat.completions.create({
         model,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          ...(context ?? []),
-          { role: 'user', content: message },
-        ] as any,
+        messages,
         max_tokens: DEFAULT_MAX_TOKENS,
         temperature: DEFAULT_TEMPERATURE,
         top_p: DEFAULT_TOP_P,
       });
-      /* eslint-enable @typescript-eslint/no-explicit-any */
       
       // Detailed logging of OpenAI response
       try {
