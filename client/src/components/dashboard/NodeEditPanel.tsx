@@ -9,7 +9,7 @@ import { RichTextEditor } from './nodes/RichTextEditor'
 import { ParentNodeTrace } from './nodes/ParentNodeTrace'
 import { authService } from '@/services/auth'
 import axios from 'axios'
-import { Node, Edge } from 'reactflow'
+import { Node, Edge, Position } from 'reactflow'
 
 // Define AI providers
 type ApiProvider = 'openai' | 'claude' | 'klusterai';
@@ -460,35 +460,46 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
       return;
     }
     
-    // Define node size constants to help with collision detection
-    const NODE_WIDTH = 200;
-    const NODE_HEIGHT = 100;
-    const VERTICAL_SPACING = 180; // Vertical spacing between category nodes
-    const HORIZONTAL_SPACING = 250; // Horizontal spacing between parent and child nodes
-    const IDEA_HORIZONTAL_SPACING = 200; // Horizontal spacing between idea nodes
-    const IDEA_VERTICAL_SPACING = 120; // Vertical spacing between idea nodes
+    // Define node size and spacing constants
+    const NODE_HEIGHT = 150;
+    const CATEGORY_MARGIN_BOTTOM = 40; // Extra margin between category sections
     
-    // All nodes we've created so far in this operation plus existing nodes
+    // Calculate total height needed for all categories and their ideas
+    const getCategoryHeight = (ideaCount: number) => {
+      // Height of a category includes the category node itself plus all its ideas
+      // We add some padding between groups
+      return NODE_HEIGHT + (ideaCount * NODE_HEIGHT) + CATEGORY_MARGIN_BOTTOM;
+    };
+    
+    // Calculate total height needed for the entire mind map
+    let totalHeight = 0;
+    categories.forEach(category => {
+      const ideas = suggestions[category];
+      if (!Array.isArray(ideas) || ideas.length === 0) return;
+      totalHeight += getCategoryHeight(ideas.length);
+    });
+    
+    // All nodes and edges including existing ones
     const createdNodes = [...nodes];
     const createdEdges = [...edges];
     
-    // Starting position for the first category - to the right of selected node
-    const startX = selectedNode.position.x + HORIZONTAL_SPACING;
-    // Start from a position slightly above the middle to center the categories
-    const startY = selectedNode.position.y - (categories.length * VERTICAL_SPACING) / 2;
+    // Starting vertical position - center the entire structure
+    let currentY = selectedNode.position.y - totalHeight / 2;
     
-    // Create a node for each category in a vertical column
+    // For each category, create a section with its ideas
     categories.forEach((category, categoryIndex) => {
       const ideas = suggestions[category];
       if (!Array.isArray(ideas) || ideas.length === 0) return;
       
-      // Calculate vertical position for this category
-      const categoryY = startY + (categoryIndex * VERTICAL_SPACING);
+      // Calculate spacing for this category's section
+      const categoryHeight = getCategoryHeight(ideas.length);
+      // Position category node at the vertical center of its section
+      const categoryY = currentY + (categoryHeight / 2);
       
-      // Position for the category node - aligned vertically
+      // Position category node to the right of the parent node
       const categoryNodePosition = {
-        x: startX,
-        y: categoryY
+        x: selectedNode.position.x + 300, // Horizontal distance from parent
+        y: categoryY - (ideas.length * NODE_HEIGHT) / 2 // Align with the center of this category's ideas
       };
       
       const categoryNodeId = `node-${Date.now()}-${categoryIndex}`;
@@ -508,46 +519,34 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
         draggable: true
       };
       
-      // Connect the category node to the parent node
+      // Connect from the parent node to this category
       const categoryEdge: Edge = {
         id: `edge-${selectedNode.id}-${categoryNodeId}`,
         source: selectedNode.id,
         target: categoryNodeId,
-        type: 'default'
+        type: 'default',
+        sourceHandle: Position.Right,
+        targetHandle: Position.Left
       };
       
-      // Add category node to our created nodes list
       createdNodes.push(categoryNode);
       createdEdges.push(categoryEdge);
       
-      // Create idea nodes as children of the category node in a horizontal row
-      const ideaNodes: Node[] = [];
-      const ideaEdges: Edge[] = [];
-      
-      // Calculate how to distribute ideas
-      const maxIdeasPerRow = 3; // Maximum number of ideas per row
-      
+      // Create idea nodes for this category
       ideas.forEach((idea, ideaIndex) => {
-        // Calculate row and column for this idea
-        const row = Math.floor(ideaIndex / maxIdeasPerRow);
-        const col = ideaIndex % maxIdeasPerRow;
+        // Position ideas vertically in a column
+        const ideaY = categoryNodePosition.y + (ideaIndex * NODE_HEIGHT);
         
-        // Calculate position for this idea
-        const ideaX = categoryNodePosition.x + HORIZONTAL_SPACING + (col * IDEA_HORIZONTAL_SPACING);
-        const ideaY = categoryY + (row * IDEA_VERTICAL_SPACING) - ((Math.min(ideas.length, maxIdeasPerRow) - 1) * IDEA_VERTICAL_SPACING / 4);
-        
-        const ideaNodeId = `node-${Date.now()}-${categoryIndex}-${ideaIndex}`;
-        
-        // Create the idea node
+        const ideaNodeId = `node-idea-${Date.now()}-${categoryIndex}-${ideaIndex}`;
         const ideaNode: Node = {
           id: ideaNodeId,
           type: 'textNode',
           position: {
-            x: ideaX,
+            x: categoryNodePosition.x + 300, // Horizontal distance from category
             y: ideaY
           },
           data: {
-            label: typeof idea === 'string' ? idea.split(' ').slice(0, 4).join(' ') : `Idea ${ideaIndex + 1}`,
+            label: typeof idea === 'string' ? idea : `Idea ${ideaIndex + 1}`,
             content: {
               text: `<p>${idea}</p>`,
               images: []
@@ -556,22 +555,22 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
           draggable: true
         };
         
-        // Connect the idea node to the category node
+        // Connect idea to category
         const ideaEdge: Edge = {
           id: `edge-${categoryNodeId}-${ideaNodeId}`,
           source: categoryNodeId,
           target: ideaNodeId,
-          type: 'default'
+          type: 'default',
+          sourceHandle: Position.Right,
+          targetHandle: Position.Left
         };
         
-        // Add to our local arrays
-        ideaNodes.push(ideaNode);
-        ideaEdges.push(ideaEdge);
-        
-        // Also add to our created nodes list
         createdNodes.push(ideaNode);
         createdEdges.push(ideaEdge);
       });
+      
+      // Update current Y position for the next category section
+      currentY += categoryHeight;
     });
     
     // Now update the Redux store with all created nodes and edges at once
