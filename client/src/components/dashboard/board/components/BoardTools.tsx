@@ -7,15 +7,20 @@ interface BoardToolsProps {
   onExport: () => void;
   onImport: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onSave: () => void;
+  cursorMode?: 'grab' | 'pointer';
+  onToggleCursorMode?: () => void;
 }
 
 /**
  * Toolbar component with board operation buttons
  */
 export const BoardTools: React.FC<BoardToolsProps> = ({
+  onAddNode,
   onExport,
   onImport,
-  onSave
+  onSave,
+  cursorMode = 'grab',
+  onToggleCursorMode
 }) => {
   const router = useRouter();
   const { boardName, isDirty, updateName, undoChange, redoChange } = useBoardStore();
@@ -53,7 +58,33 @@ export const BoardTools: React.FC<BoardToolsProps> = ({
           className="px-2 py-1 border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none bg-transparent font-semibold"
         />
       </div>
-      <div className="flex items-center space-x-2">
+      
+      <div className="flex items-center space-x-3">
+        {onToggleCursorMode && (
+          <button
+            onClick={onToggleCursorMode}
+            className={`flex items-center px-3 py-1 rounded text-sm ${
+              cursorMode === 'grab' 
+                ? 'bg-blue-100 text-blue-700 border border-blue-300' 
+                : 'bg-gray-100 text-gray-700 border border-gray-300'
+            }`}
+            title={`Click to switch to ${cursorMode === 'grab' ? 'pointer' : 'grab'} mode`}
+          >
+            <span className="mr-1">
+              {cursorMode === 'grab' ? '✋' : '👆'}
+            </span>
+            {cursorMode === 'grab' ? 'Grab Mode' : 'Pointer Mode'}
+          </button>
+        )}
+        
+        <button
+          onClick={onAddNode}
+          className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+          title="Add a new node"
+        >
+          + Add Node
+        </button>
+        
         <button
           onClick={undoChange}
           className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"

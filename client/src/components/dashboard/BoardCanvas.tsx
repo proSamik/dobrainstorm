@@ -124,6 +124,77 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     onEdgeUpdate
   } = useBoardHandlers();
   
+  // Add state to track if Cmd/Ctrl is pressed for panning the canvas
+  const [isPanningMode, setIsPanningMode] = useState(false);
+  
+  // Add state to track the cursor mode (grab or pointer)
+  const [cursorMode, setCursorMode] = useState<'grab' | 'pointer'>('grab');
+  
+  // Listen for modifier key presses to toggle panning mode
+  useEffect(() => {
+    // Add a CSS rule to set the default cursor for the ReactFlow pane
+    const style = document.createElement('style');
+    style.textContent = `
+      .react-flow__pane {
+        cursor: ${cursorMode === 'grab' ? 'grab' : 'default'} !important;
+      }
+      body.panning .react-flow__pane {
+        cursor: grab !important;
+      }
+      body.selecting .react-flow__pane {
+        cursor: crosshair !important;
+      }
+    `;
+    document.head.appendChild(style);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // In grab mode, we use Cmd/Ctrl to temporarily switch to pointer mode
+      // In pointer mode, we use Cmd/Ctrl to temporarily switch to grab/pan mode
+      if (e.metaKey || e.ctrlKey) {
+        setIsPanningMode(cursorMode === 'pointer');
+        document.body.classList.toggle('panning', cursorMode === 'pointer');
+        document.body.style.cursor = cursorMode === 'pointer' ? 'grab' : 'default';
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      // Exit temporary mode when Cmd/Ctrl is released
+      if (e.key === 'Meta' || e.key === 'Control') {
+        setIsPanningMode(cursorMode === 'grab');
+        document.body.classList.toggle('panning', cursorMode === 'grab');
+        document.body.style.cursor = cursorMode === 'grab' ? 'grab' : 'default';
+      }
+    };
+
+    // Initialize the correct cursor mode on load
+    setIsPanningMode(cursorMode === 'grab');
+    document.body.classList.toggle('panning', cursorMode === 'grab');
+    document.body.style.cursor = cursorMode === 'grab' ? 'grab' : 'default';
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      document.body.classList.remove('panning');
+      document.body.classList.remove('selecting');
+      document.head.removeChild(style);
+      // Reset cursor when component unmounts
+      document.body.style.cursor = 'default';
+    };
+  }, [cursorMode]);
+  
+  // Toggle between cursor modes
+  const toggleCursorMode = useCallback(() => {
+    const newMode = cursorMode === 'grab' ? 'pointer' : 'grab';
+    setCursorMode(newMode);
+    // Update panning mode based on the new cursor mode
+    setIsPanningMode(newMode === 'grab');
+    document.body.classList.toggle('panning', newMode === 'grab');
+    document.body.style.cursor = newMode === 'grab' ? 'grab' : 'default';
+  }, [cursorMode]);
+  
   // Force create a demo node if the board is still empty after a timeout
   useEffect(() => {
     if (storeNodes.length === 0) {
@@ -197,10 +268,14 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   const handleSelectionStart = useCallback((event: React.MouseEvent) => {
     // Only start selection if we're clicking on the pane (not a node)
     if ((event.target as HTMLElement).classList.contains('react-flow__pane')) {
-      // Don't start selection if right button or if we're holding Shift/Ctrl/Meta
-      if (event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey) return;
+      // Don't start selection if right button
+      if (event.button !== 0) return;
+      
+      // If in panning mode (Cmd/Ctrl held), don't start selection
+      if (isPanningMode) return;
       
       // Set cursor to crosshair during selection
+      document.body.classList.add('selecting');
       document.body.style.cursor = 'crosshair';
       
       // Get the position in flow coordinates
@@ -218,7 +293,7 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
       // Prevent default behavior
       event.preventDefault();
     }
-  }, [screenToFlowPosition]);
+  }, [screenToFlowPosition, isPanningMode]);
   
   // Update selection box as mouse moves
   const handleSelectionMove = useCallback((event: React.MouseEvent) => {
@@ -235,15 +310,16 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
         currentY: flowPos.y
       }));
       
-      // Calculate selection box dimensions is done when selection ends
+      // Preview selection highlights can be implemented here if needed
     }
   }, [selectionBox.isActive, screenToFlowPosition]);
   
   // End selection process
-  const handleSelectionEnd = useCallback(() => {
+  const handleSelectionEnd = useCallback((event: React.MouseEvent) => {
     if (selectionBox.isActive) {
-      // Reset cursor style
-      document.body.style.cursor = 'default';
+      // Reset cursor style based on panning mode
+      document.body.classList.remove('selecting');
+      document.body.style.cursor = isPanningMode ? 'grab' : 'default';
       
       // Calculate selection box dimensions
       const selectionRect = {
@@ -254,7 +330,7 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
       };
       
       // Find nodes inside the selection box
-      const newSelectedNodeIds = nodes.filter(node => {
+      const nodesInSelection = nodes.filter(node => {
         const nodeLeft = node.position.x;
         const nodeTop = node.position.y;
         const nodeRight = node.position.x + (node.width || 150);
@@ -268,9 +344,26 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
         );
       }).map(node => node.id);
       
-      // Update selected nodes
-      if (newSelectedNodeIds.length > 0) {
-        dispatch(setSelectedNodes(newSelectedNodeIds));
+      // Update selected nodes based on selection behavior
+      if (nodesInSelection.length > 0) {
+        if (event.shiftKey) {
+          // If shift is pressed, toggle selection state of the nodes in selection
+          const newSelectedIds = [...selectedNodeIds];
+          nodesInSelection.forEach(nodeId => {
+            const index = newSelectedIds.indexOf(nodeId);
+            if (index !== -1) {
+              // Remove if already selected
+              newSelectedIds.splice(index, 1);
+            } else {
+              // Add if not selected
+              newSelectedIds.push(nodeId);
+            }
+          });
+          dispatch(setSelectedNodes(newSelectedIds));
+        } else {
+          // Normal selection replaces current selection with new selection
+          dispatch(setSelectedNodes(nodesInSelection));
+        }
       }
       
       selectionStartPosRef.current = null;
@@ -280,7 +373,7 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
         isActive: false
       }));
     }
-  }, [selectionBox.isActive, selectionBox.startX, selectionBox.startY, selectionBox.currentX, selectionBox.currentY, nodes, dispatch]);
+  }, [selectionBox.isActive, selectionBox.startX, selectionBox.startY, selectionBox.currentX, selectionBox.currentY, nodes, dispatch, selectedNodeIds, isPanningMode]);
   
   // Update node position after drag
   const handleNodeDragStart: NodeDragHandler = useCallback((event, node) => {
@@ -375,8 +468,14 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   const handleNodeClick: NodeMouseHandler = useCallback((event, node) => {
     console.log("Node clicked:", node.id);
     
-    // Multiple selection with shift or ctrl/cmd key
-    if (event.shiftKey || event.ctrlKey || event.metaKey) {
+    // If Cmd/Ctrl is held for panning, don't change selection
+    if (isPanningMode) {
+      event.stopPropagation();
+      return;
+    }
+    
+    if (event.shiftKey) {
+      // Shift click toggles this node's selection
       const isSelected = selectedNodeIds.includes(node.id);
       
       if (isSelected) {
@@ -395,7 +494,7 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     
     // Prevent selection box from activating
     event.stopPropagation();
-  }, [selectedNodeIds, dispatch]);
+  }, [selectedNodeIds, dispatch, isPanningMode]);
   
   // Handle deletion of multiple nodes
   useEffect(() => {
@@ -455,16 +554,15 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     // Close context menu
     setContextMenu(null);
     
-    // Clear selection if clicking on the pane and not starting a selection box
+    // Clear selection when clicking on the pane, unless shift is held or we're in a selection
     if (
       !event.shiftKey && 
-      !event.ctrlKey && 
-      !event.metaKey && 
-      !selectionBox.isActive
+      !selectionBox.isActive &&
+      !isPanningMode // Don't clear selection in panning mode
     ) {
       dispatch(setSelectedNodes([]));
     }
-  }, [dispatch, selectionBox.isActive]);
+  }, [dispatch, selectionBox.isActive, isPanningMode]);
   
   // Fit view to ensure all nodes are visible
   const handleFitView = useCallback(() => {
@@ -481,11 +579,13 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
         onExport={handleExport}
         onImport={handleImportFile}
         onSave={handleSave}
+        cursorMode={cursorMode}
+        onToggleCursorMode={toggleCursorMode}
       />
       
       {/* Main canvas */}
       <div 
-        className="flex-1 h-full" 
+        className={`flex-1 h-full ${isPanningMode ? 'cursor-grab' : 'cursor-default'}`}
         ref={reactFlowWrapper}
         onMouseDown={handleSelectionStart}
         onMouseMove={handleSelectionMove}
@@ -528,15 +628,18 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
           elementsSelectable={true}
           noDragClassName="no-drag"
           deleteKeyCode={['Delete', 'Backspace']}
-          multiSelectionKeyCode={['Control', 'Meta']}
+          multiSelectionKeyCode={[]} // Remove modifier key requirement for multi-selection
           panOnScroll={false}
-          panOnDrag={true}
-          selectionOnDrag={false}
+          panOnDrag={isPanningMode} // Only enable panning when in panning mode
+          selectionOnDrag={!isPanningMode} // Only enable selection when not in panning mode
           zoomOnScroll={false}
           zoomOnPinch={true}
           preventScrolling={true}
           proOptions={{ hideAttribution: true }}
-          style={{ background: '#f8fafc' }}
+          style={{ 
+            background: '#f8fafc',
+            cursor: isPanningMode ? 'grab' : 'default'
+          }}
         >
           <Background color="#aaa" gap={16} />
           <Controls showInteractive={true} />

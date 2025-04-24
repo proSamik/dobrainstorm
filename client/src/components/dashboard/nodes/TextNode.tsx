@@ -222,22 +222,25 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
     <div
       className={`px-4 py-3 rounded-lg shadow-md ${
         selected 
-          ? 'bg-blue-50 border-2 border-blue-500' 
+          ? 'bg-blue-50 border-2 border-blue-500' // Primary selected node - strong blue border
           : isMultiSelected
-            ? 'bg-blue-50 border-2 border-blue-300' // Style for multi-selected nodes
-            : 'bg-white border border-gray-200'
+            ? 'bg-blue-50 border-2 border-blue-300' // Multi-selected but not primary - lighter blue border
+            : 'bg-white border border-gray-200'    // Not selected - regular styling
       }`}
       style={{ 
         minWidth: 150,
         touchAction: 'none',
         userSelect: 'none',
-        // Add a light blue shadow for multi-selected nodes
-        boxShadow: isMultiSelected && !selected 
-          ? '0 0 0 2px rgba(59, 130, 246, 0.3), 0 4px 6px -1px rgba(0, 0, 0, 0.1)' 
-          : undefined
+        // Different shadows for selection states
+        boxShadow: selected 
+          ? '0 0 0 2px rgba(59, 130, 246, 0.5), 0 4px 6px -1px rgba(0, 0, 0, 0.1)' // Strong shadow for primary selection
+          : isMultiSelected 
+            ? '0 0 0 2px rgba(59, 130, 246, 0.3), 0 4px 6px -1px rgba(0, 0, 0, 0.1)' // Lighter shadow for multi-selection
+            : '0 1px 3px rgba(0, 0, 0, 0.1)'
       }}
       onClick={handleClick}
       data-id={id}
+      data-selected={selected ? 'true' : 'false'}
       data-multiselected={isMultiSelected ? 'true' : 'false'}
     >
       {/* Drag handle and editable label */}
