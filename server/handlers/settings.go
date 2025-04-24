@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"saas-server/database"
 	"saas-server/middleware"
 	"saas-server/pkg/encryption"
+	"strings"
 )
 
 // SettingsHandler handles API endpoints related to user settings
@@ -70,8 +72,32 @@ func (h *SettingsHandler) GetAPIKeys(w http.ResponseWriter, r *http.Request) {
 	// Create response with masked keys
 	maskedSettings := make(map[string]interface{})
 	for provider, data := range aiSettings {
-		// Use the stored encrypted key directly (no decrypt/mask)
+		// Pass the encrypted key directly - don't try to decrypt or mask it
+		// The client will handle decryption
 		encryptedKey := data.Key
+
+		// Validate that the key appears to be a valid Base64 encrypted value
+		// and not a masked key (e.g., with bullet points) or Bearer prefixed key
+		validBase64 := true
+		if len(encryptedKey) > 0 {
+			for _, c := range encryptedKey {
+				// Check if character is valid Base64 (A-Z, a-z, 0-9, +, /, or =)
+				if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+					(c >= '0' && c <= '9') || c == '+' || c == '/' || c == '=') {
+					validBase64 = false
+					break
+				}
+			}
+		}
+
+		// If the key contains "Bearer" or bullet points or isn't valid Base64,
+		// clear it to force the user to re-enter a valid key
+		if !validBase64 ||
+			len(encryptedKey) < 10 ||
+			encryptedKey == "" {
+			log.Printf("[SettingsHandler] Invalid key format for provider %s - will be cleared", provider)
+			encryptedKey = ""
+		}
 
 		// Ensure models is not null
 		models := data.Models
@@ -156,6 +182,18 @@ func (h *SettingsHandler) SaveKeys(w http.ResponseWriter, r *http.Request) {
 
 	// Encrypt keys before storage
 	for provider, data := range keysToSave {
+		// Clean up the key before encrypting - remove Bearer prefix, whitespace, and non-printable chars
+		cleanKey := data.Key
+
+		// If key contains "Bearer" or bullets, reject it
+		if cleanKey == "" || len(cleanKey) < 10 ||
+			(len(cleanKey) > 0 && (strings.Contains(cleanKey, "•") ||
+				strings.HasPrefix(cleanKey, "Bearer"))) {
+			log.Printf("[SettingsHandler] Invalid key format detected for provider %s", provider)
+			http.Error(w, fmt.Sprintf("Invalid API key format for %s", provider), http.StatusBadRequest)
+			return
+		}
+
 		encryptedKey, err := encryption.Encrypt(data.Key)
 		if err != nil {
 			log.Printf("[SettingsHandler] Error encrypting key: %v", err)
