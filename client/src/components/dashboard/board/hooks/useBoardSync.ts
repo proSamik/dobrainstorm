@@ -161,7 +161,7 @@ export const useBoardSync = (
     
     // Run sync
     syncStoreToReactFlow();
-  }, [storeNodes, storeEdges, nodesEqual, edgesEqual]);
+  }, [storeNodes, storeEdges, nodesEqual, edgesEqual, nodes, edges, setNodes, setEdges]);
   
   // Update refs when ReactFlow state changes
   useEffect(() => {

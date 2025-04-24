@@ -3,6 +3,21 @@ import OpenAI from 'openai';
 import axios from 'axios';
 import crypto from 'crypto';
 
+// Define types for API request and response
+interface ApiMessage {
+  role: 'system' | 'user' | 'assistant' | 'function' | 'tool';
+  content: string;
+  name?: string;
+}
+
+interface ApiRequest {
+  provider: 'openai' | 'claude' | 'klusterai';
+  model: string;
+  message: string;
+  context?: ApiMessage[];
+  apiKey: string;
+}
+
 // Default system prompt for all AI requests
 const SYSTEM_PROMPT = `You are an expert mind-mapping and brainstorming assistant for creative thinking.
 
@@ -50,7 +65,7 @@ const DEFAULT_TOP_P = 1.0;
  * @returns The parsed JSON value.
  * @throws Error if parsing fails.
  */
-function parseJSON(raw: string): any {
+function parseJSON(raw: string): Record<string, string[]> {
   if (!raw || typeof raw !== 'string') {
     console.error('Invalid input to parseJSON, received:', raw);
     throw new Error('Empty or invalid response received from AI service');
@@ -99,7 +114,7 @@ function parseJSON(raw: string): any {
     
     try {
       return JSON.parse(fixed);
-    } catch (e) {
+    } catch {
       // If direct parsing with fixes failed, try the original cleaned version
       return JSON.parse(cleaned);
     }
@@ -112,8 +127,6 @@ function parseJSON(raw: string): any {
       const cleaned = cleanRaw(raw);
       const fixed = fixJsonStructure(cleaned);
       
-      // Try to find a JSON object block with balanced braces
-      let match = null;
       try {
         // Look for the outermost {...} that contains valid JSON
         const objMatches = fixed.match(/\{(?:[^{}]|(?:\{[^{}]*\}))*\}/g) || [];
@@ -122,11 +135,11 @@ function parseJSON(raw: string): any {
             const parsed = JSON.parse(potentialJson);
             console.log('Found valid JSON object');
             return parsed;
-          } catch (e) {
+          } catch {
             // Continue trying other matches
           }
         }
-      } catch (e) {
+      } catch {
         console.log('Complex regex matching failed, falling back to simpler approach');
       }
       
@@ -139,7 +152,7 @@ function parseJSON(raw: string): any {
           console.log('Extracted JSON block:', extracted.substring(0, 100) + (extracted.length > 100 ? '...' : ''));
           const potentialFixed = fixJsonStructure(extracted);
           return JSON.parse(potentialFixed);
-        } catch (e) {
+        } catch {
           console.log('Simple extraction failed, continuing to array check');
         }
       }
@@ -152,11 +165,11 @@ function parseJSON(raw: string): any {
             const parsed = JSON.parse(potentialArr);
             console.log('Found valid JSON array');
             return parsed;
-          } catch (e) {
+          } catch {
             // Continue trying other matches
           }
         }
-      } catch (e) {
+      } catch {
         console.log('Complex regex array matching failed, falling back to simpler approach');
       }
       
@@ -169,7 +182,7 @@ function parseJSON(raw: string): any {
           console.log('Extracted JSON array:', extracted.substring(0, 100) + (extracted.length > 100 ? '...' : ''));
           const potentialFixed = fixJsonStructure(extracted);
           return JSON.parse(potentialFixed);
-        } catch (e) {
+        } catch {
           console.log('Simple array extraction failed, continuing to fallback');
         }
       }
@@ -202,46 +215,16 @@ function parseJSON(raw: string): any {
         }
       }
       
-      // If we found any categories with items, return them
       if (Object.keys(categories).length > 0) {
-        console.log(`Manually extracted categories: ${Object.keys(categories).join(', ')}`);
         return categories;
       }
       
-      // Attempt to infer category from key before array as a last resort
-      let category = 'suggestions';
-      const catMatch = fixed.match(/"([^"']+)"\s*:\s*\[/);
-      if (catMatch) {
-        category = catMatch[1];
-        console.log(`Inferred category: ${category}`);
-      }
-      
-      // Extract all quoted strings in the raw text, taking care to handle escaped quotes
-      const items: string[] = [];
-      const quoteRegex = /"((?:\\"|[^"])+?)"/g;
-      let quoteMatch;
-      while ((quoteMatch = quoteRegex.exec(fixed)) !== null) {
-        if (quoteMatch[1] && quoteMatch[1] !== category) {
-          items.push(quoteMatch[1].replace(/\\"/g, '"'));
-        }
-      }
-      
-      console.log(`Manually extracted ${items.length} items for category ${category}`);
-      
-      // Return a simple structure if we found any items
-      if (items.length > 0) {
-        return { [category]: items };
-      }
-      
-      // Absolute last resort: return empty result
-      console.warn('Could not extract any valid items, returning empty response');
-      return { suggestions: [] };
-    } catch (secondError) {
-      console.error('Error parsing extracted JSON:', secondError);
-      
-      // Absolute last resort: return empty result rather than throwing
-      console.warn('Returning empty fallback response');
-      return { suggestions: [] };
+      // If all else fails, return a fallback structure
+      return { "Error": ["Failed to parse AI response into JSON format"] };
+    } catch (extractError) {
+      console.error('Error in JSON extraction:', extractError);
+      // Return a fallback for any parsing failures
+      return { "Error": ["Failed to parse AI response"] };
     }
   }
 }
@@ -301,7 +284,7 @@ export async function POST(request: NextRequest) {
   try {
     // Parse request body (including provider and encrypted apiKey)
     const body = await request.json();
-    const { provider: bodyProvider, model, message, context, apiKey: encryptedKey } = body as any;
+    const { provider: bodyProvider, model, message, context, apiKey: encryptedKey } = body as ApiRequest;
 
     if (!encryptedKey) {
       return NextResponse.json({ error: 'Missing encrypted apiKey' }, { status: 401 });
@@ -338,8 +321,8 @@ export async function POST(request: NextRequest) {
       console.log(`[DIAGNOSTIC] Decrypted key contains bullets: ${apiKey.includes('•')}`);
       console.log(`[DIAGNOSTIC] Decrypted key Unicode check: ${Array.from(apiKey).map(c => c.charCodeAt(0)).slice(0, 10)}`);
       
-    } catch (e: any) {
-      console.error('API key decryption failed:', e.message);
+    } catch (e: unknown) {
+      console.error('API key decryption failed:', e instanceof Error ? e.message : String(e));
       return NextResponse.json(
         { error: 'Failed to decrypt API key. Please re-enter it in Settings.' },
         { status: 400 }
@@ -384,7 +367,8 @@ export async function POST(request: NextRequest) {
       ? bodyProvider
       : getProviderFromModel(model);
 
-    let aiResponse: any;
+    // Declare a type for the AI response to avoid 'any'
+    let aiResponse: Record<string, string[]> = { "Empty": [] };
 
     if (provider === 'openai') {
       // Ensure we're using a clean API key (OpenAI expects raw key without Bearer)
@@ -403,17 +387,19 @@ export async function POST(request: NextRequest) {
       });
 
       // Send chat completion request via OpenAI SDK
+      /* eslint-disable @typescript-eslint/no-explicit-any */
       const res = await openai.chat.completions.create({
         model,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           ...(context ?? []),
           { role: 'user', content: message },
-        ],
+        ] as any,
         max_tokens: DEFAULT_MAX_TOKENS,
         temperature: DEFAULT_TEMPERATURE,
         top_p: DEFAULT_TOP_P,
       });
+      /* eslint-enable @typescript-eslint/no-explicit-any */
       
       // Detailed logging of OpenAI response
       try {
@@ -443,14 +429,14 @@ export async function POST(request: NextRequest) {
 
     if (provider === 'claude') {
       // Prepare payload for Anthropic Messages API
-      const payload: any = {
+      const payload = {
         model,
         system: SYSTEM_PROMPT,
         messages: [...(context ?? []), { role: 'user', content: message }],
         max_tokens: DEFAULT_MAX_TOKENS,
         temperature: DEFAULT_TEMPERATURE,
         top_p: DEFAULT_TOP_P,
-      };
+      } as const;
 
       // Call Anthropic Messages API
       const response = await axios.post('https://api.anthropic.com/v1/messages', payload, {
@@ -520,7 +506,7 @@ export async function POST(request: NextRequest) {
           max_tokens: DEFAULT_MAX_TOKENS,
           temperature: DEFAULT_TEMPERATURE,
           top_p: DEFAULT_TOP_P,
-        },
+        } as Record<string, unknown>,
         {
           headers: {
             Authorization: authKey,
@@ -561,38 +547,8 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(aiResponse);
-  } catch (error) {
-    console.error('AI request error:', error);
-    
-    // Check if we can extract a meaningful error message
-    let errorMessage = 'Unknown error';
-    let statusCode = 500;
-    
-    if (error instanceof Error) {
-      errorMessage = error.message;
-      
-      // Log the full error stack for debugging
-      console.error('Full error stack:', error.stack);
-      
-      // Check if it's an OpenAI API error
-      const openAiError = error as any;
-      if (openAiError.status) {
-        statusCode = openAiError.status;
-        console.log(`OpenAI API error status: ${openAiError.status}`);
-      }
-      
-      // Special handling for JSON parsing errors
-      if (errorMessage.includes('JSON')) {
-        errorMessage = 'The AI returned an invalid response format. Please try again or modify your prompt.';
-      }
-    }
-    
-    return NextResponse.json(
-      { 
-        error: errorMessage,
-        details: process.env.NODE_ENV === 'development' ? String(error) : undefined 
-      },
-      { status: statusCode }
-    );
+  } catch (error: unknown) {
+    console.error('Error processing API request:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 } 

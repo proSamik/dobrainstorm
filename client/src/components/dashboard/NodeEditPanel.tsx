@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState } from '@/store'
 import Image from 'next/image'
-import { setEditingNode, NodeContent, updateNodes, updateEdges } from '@/store/boardSlice'
+import { setEditingNode, updateNodes, updateEdges } from '@/store/boardSlice'
 import { RichTextEditor } from './nodes/RichTextEditor'
 import { ParentNodeTrace } from './nodes/ParentNodeTrace'
 import { authService } from '@/services/auth'
@@ -22,12 +22,25 @@ const getPlainText = (html: string) => {
   return tmp.textContent || '';
 };
 
+// First, update the currentNode's type to include content
+interface NodeContent {
+  text?: string;
+  images?: string[];
+  isHtml?: boolean;
+}
+
+interface NodeData {
+  label?: string;
+  content?: NodeContent;
+  [key: string]: unknown;
+}
+
 // Define the node context type
 interface NodeContextData {
   asciiTree: string;
   nodeList: Array<{ id: string; label: string; content: string }>;
   boardTitle: string;
-  currentNode: any;
+  currentNode: NodeData | null;
 }
 
 /**
@@ -168,7 +181,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
   
   // Chat input and API results
   const [chatInput, setChatInput] = useState('')
-  const [suggestions, setSuggestions] = useState<any>(null)
+  const [suggestions, setSuggestions] = useState<Record<string, string[]> | null>(null)
   const [loadingChat, setLoadingChat] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
   
@@ -324,7 +337,12 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
    */
   useEffect(() => {
     authService.get('/settings/api-keys')
-      .then((data: Record<string, any>) => {
+      .then((data: Record<string, {
+        key: string;
+        isValid: boolean;
+        models?: string[];
+        selectedModel?: string;
+      }>) => {
         // Build new providers map
         const updated: typeof providers = { ...providers };
         PROVIDERS.forEach((p) => {
@@ -348,7 +366,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
         setModel(updated[defaultProv].selectedModel);
       })
       .catch(err => console.error('Failed to load API keys', err));
-  }, []);
+  }, [providers]);
   
   /**
    * Send a brainstorming request to the AI API with the node context and user input
@@ -365,17 +383,15 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
       const currentNode = nodeContext.currentNode || { label: 'Unnamed Node' };
       
       // Structure context messages properly for the API
-      const contextMsgs = [];
+      const contextMsgs: {role: string; content: string}[] = [];
       
       // 1. Add current node details
       const currentNodeName = currentNode.label || 'Unnamed Node';
-      const currentNodeContent = typeof currentNode.content === 'object' && currentNode.content?.text 
-        ? currentNode.content.text 
-        : '';
+      const currentNodeContent = currentNode.content?.text || '';
       
       contextMsgs.push({ 
-        role: 'user', 
-        content: `Current node: ${currentNodeName}\nDetails: ${getPlainText(currentNodeContent)}` 
+        role: 'user' as const, 
+        content: `Current node: ${currentNodeName}\nDetails: ${getPlainText(currentNodeContent)}` as const
       });
       
       // 2. Add board title
@@ -437,9 +453,15 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
       } else {
         setChatError('Received empty response from AI');
       }
-    } catch (e: any) {
-      console.error('Error generating suggestions:', e);
-      setChatError(e.response?.data?.error || e.message || 'Error generating suggestions');
+    } catch (error: unknown) {
+      console.error('Error generating suggestions:', error);
+      setChatError(error instanceof Error 
+        ? error.message 
+        : (error && typeof error === 'object' && 'message' in error 
+            ? String(error.message) 
+            : 'Error generating suggestions'
+          )
+      );
     } finally { 
       setLoadingChat(false); 
     }
