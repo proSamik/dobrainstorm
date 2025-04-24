@@ -9,10 +9,133 @@ import { RichTextEditor } from './nodes/RichTextEditor'
 import { ParentNodeTrace } from './nodes/ParentNodeTrace'
 import { authService } from '@/services/auth'
 import axios from 'axios'
+import { Node, Edge } from 'reactflow'
 
 // Define AI providers
 type ApiProvider = 'openai' | 'claude' | 'klusterai';
 const PROVIDERS: ApiProvider[] = ['openai', 'claude', 'klusterai'];
+
+// Helper function to get plain text from HTML
+const getPlainText = (html: string) => {
+  const tmp = document.createElement('div'); 
+  tmp.innerHTML = html; 
+  return tmp.textContent || '';
+};
+
+// Define the node context type
+interface NodeContextData {
+  asciiTree: string;
+  nodeList: Array<{ id: string; label: string; content: string }>;
+  boardTitle: string;
+  currentNode: any;
+}
+
+/**
+ * Custom hook to build node context tree
+ * IMPORTANT: This hook must be called in a React component at the top level,
+ * we pass in boardTitle instead of using useSelector inside to avoid invalid hook calls.
+ */
+function useNodeTreeBuilder(nodeId: string, nodes: Node[], edges: Edge[], boardTitle: string) {
+  // Create and memoize node context
+  const [nodeContext, setNodeContext] = useState<NodeContextData>({
+    asciiTree: '',
+    nodeList: [],
+    boardTitle,
+    currentNode: null
+  });
+
+  // Build the tree whenever nodes, edges, or the selected node changes
+  useEffect(() => {
+    // Build tree function
+    const buildTree = () => {
+      // Track visited nodes
+      const visited = new Set<string>();
+      const nodeList: Array<{ id: string; label: string; content: string }> = [];
+      let asciiTree = '';
+      
+      // Collect connected nodes data
+      const collectNodes = (id: string, prefix = '', isLast = true) => {
+        if (!id || visited.has(id)) return;
+        visited.add(id);
+        
+        // Find this node
+        const node = nodes.find(n => n.id === id);
+        if (!node) return;
+        
+        // Add to list
+        nodeList.push({
+          id: node.id,
+          label: node.data.label || 'Unnamed Node',
+          content: getPlainText(node.data.content?.text || '')
+        });
+        
+        // Add to tree with formatting
+        const label = node.data.label || 'Unnamed Node';
+        asciiTree += `${prefix}${isLast ? '└── ' : '├── '}${label}${id === nodeId ? ' (current)' : ''}\n`;
+        
+        // Get children
+        const children = edges
+          .filter(edge => edge.source === id)
+          .map(edge => edge.target);
+        
+        // Add children with proper formatting
+        children.forEach((childId, index) => {
+          collectNodes(
+            childId, 
+            prefix + (isLast ? '    ' : '│   '), 
+            index === children.length - 1
+          );
+        });
+      };
+      
+      // Find root nodes (no parents)
+      const rootNodes = nodes.filter(node => 
+        !edges.some(edge => edge.target === node.id)
+      ).map(node => node.id);
+      
+      // Build the tree
+      if (rootNodes.length > 0) {
+        rootNodes.forEach((rootId, index) => {
+          collectNodes(rootId, '', index === rootNodes.length - 1);
+        });
+      } else if (nodeId) {
+        // No root nodes, start with selected node
+        collectNodes(nodeId, '', true);
+      }
+      
+      // If tree is empty, at least show the current node
+      if (asciiTree === '' && nodeId) {
+        const node = nodes.find(n => n.id === nodeId);
+        if (node) {
+          asciiTree = `└── ${node.data.label || 'Unnamed Node'} (current)\n`;
+          
+          // Make sure we have this node in the list
+          if (!nodeList.some(n => n.id === nodeId)) {
+            nodeList.push({
+              id: node.id,
+              label: node.data.label || 'Unnamed Node',
+              content: getPlainText(node.data.content?.text || '')
+            });
+          }
+        }
+      }
+      
+      return {
+        asciiTree,
+        nodeList,
+        boardTitle,
+        currentNode: nodes.find(n => n.id === nodeId)?.data || null
+      };
+    };
+    
+    // Build and update
+    const result = buildTree();
+    console.log("Built node tree:", result.asciiTree);
+    setNodeContext(result);
+  }, [nodeId, nodes, edges, boardTitle]);
+  
+  return nodeContext;
+}
 
 interface NodeEditPanelProps {
   nodeId: string
@@ -29,6 +152,9 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
   const edges = useSelector((state: RootState) => state.board.edges)
   const panelRef = useRef<HTMLDivElement>(null)
   
+  // Use our custom hook to build the node tree
+  const nodeContext = useNodeTreeBuilder(nodeId, nodes, edges, useSelector((state: RootState) => state.board.boardName) || 'Untitled Board');
+  
   // Find the selected node
   const selectedNode = nodes.find(node => node.id === nodeId)
   
@@ -39,9 +165,6 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
   const [isDirty, setIsDirty] = useState(false)
   const [panelWidth, setPanelWidth] = useState(320) // Default width
   const [isDragging, setIsDragging] = useState(false)
-  
-  // Node context (ascii tree + details)
-  const [nodeContext, setNodeContext] = useState<{ asciiTree: string; nodeList: Array<{ label: string; content: string }> }>({ asciiTree: '', nodeList: [] })
   
   // Chat input and API results
   const [chatInput, setChatInput] = useState('')
@@ -196,57 +319,6 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     setIsDirty(true)
   }
   
-  // Compute nodeContext (reuse ParentNodeTrace logic)
-  /**
-   * Build ASCII tree and node details list from the board state
-   */
-  useEffect(() => {
-    // Copy buildTreeAndList from ParentNodeTrace
-    const getConnectedNodes = (id: string) => {
-      const con = { parents: [], siblings: [], children: [] } as any;
-      edges.forEach(e => {
-        if (e.target === id) con.parents.push(e.source);
-        else if (e.source === id) con.children.push(e.target);
-      });
-      const parentSet = new Set(con.parents);
-      edges.forEach(e => {
-        if (parentSet.has(e.source) && e.target !== id) con.siblings.push(e.target);
-      });
-      return con;
-    };
-    const getPlain = (html: string) => {
-      const tmp = document.createElement('div'); tmp.innerHTML = html; return tmp.textContent || '';
-    };
-    const buildTree = (startId: string) => {
-      const list: any[] = [];
-      const visited = new Set<string>();
-      const collect = (id: string) => {
-        if (visited.has(id)) return;
-        const n = nodes.find(x => x.id === id);
-        if (!n) return; visited.add(id);
-        list.push({ label: n.data.label, content: getPlain(n.data.content?.text || '') });
-        const con = getConnectedNodes(id);
-        con.parents.forEach(collect);
-        con.siblings.forEach(collect);
-        con.children.forEach(collect);
-      };
-      collect(startId);
-      // ascii
-      let tree = '';
-      const build = (id: string, prefix = '', last = true) => {
-        const n = nodes.find(x => x.id === id);
-        if (!n) return;
-        tree += prefix + (last ? '└── ' : '├── ') + n.data.label + '\n';
-        const con = getConnectedNodes(id);
-        con.children.forEach((c: string, i: number) => build(c, prefix + (last ? '    ' : '│   '), i === con.children.length - 1));
-      };
-      const roots = list.filter(l => getConnectedNodes(l.id).parents.length === 0).map(l => l.id);
-      roots.forEach((rid, idx) => build(rid, '', idx === roots.length - 1));
-      return { asciiTree: tree, nodeList: list };
-    };
-    setNodeContext(buildTree(nodeId));
-  }, [nodeId, nodes, edges]);
-  
   /**
    * Fetch and store API keys, validity, models for each provider; select default provider
    */
@@ -282,21 +354,89 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
    * Send a brainstorming request to the AI API with the node context and user input
    */
   const handleGenerate = async () => {
-    setLoadingChat(true); setChatError(null);
+    setLoadingChat(true); 
+    setChatError(null);
+    
     try {
-      const contextMsgs = [
-        { role: 'user', content: `Node Context Tree:\n${nodeContext.asciiTree}` },
-        { role: 'user', content: `Node Details:\n${nodeContext.nodeList.map(n => `${n.label}: ${n.content}`).join('\n')}` }
-      ];
+      // Get context data
+      const treeText = nodeContext.asciiTree || '';
+      const nodeDetails = nodeContext.nodeList || [];
+      const boardTitle = nodeContext.boardTitle || 'Untitled Board';
+      const currentNode = nodeContext.currentNode || { label: 'Unnamed Node' };
+      
+      // Structure context messages properly for the API
+      const contextMsgs = [];
+      
+      // 1. Add current node details
+      const currentNodeName = currentNode.label || 'Unnamed Node';
+      const currentNodeContent = typeof currentNode.content === 'object' && currentNode.content?.text 
+        ? currentNode.content.text 
+        : '';
+      
+      contextMsgs.push({ 
+        role: 'user', 
+        content: `Current node: ${currentNodeName}\nDetails: ${getPlainText(currentNodeContent)}` 
+      });
+      
+      // 2. Add board title
+      contextMsgs.push({ 
+        role: 'user', 
+        content: `Board title: ${boardTitle}` 
+      });
+      
+      // 3. Add the complete node tree
+      if (treeText.trim() !== '') {
+        contextMsgs.push({ 
+          role: 'user', 
+          content: `Node Context Tree:\n${treeText}` 
+        });
+      } else {
+        console.warn('ASCII tree is empty, using fallback structure');
+        contextMsgs.push({ 
+          role: 'user', 
+          content: `Node Context Tree: ${currentNodeName}` 
+        });
+      }
+      
+      // 4. Add all node details
+      if (nodeDetails.length > 0) {
+        const detailsText = nodeDetails
+          .map(n => `${n.label || 'Unnamed'}: ${n.content || 'No content'}`)
+          .join('\n');
+        contextMsgs.push({ 
+          role: 'user', 
+          content: `Node Details:\n${detailsText}` 
+        });
+      }
+      
+      // Log the context being sent
+      console.log('Sending context to API:', contextMsgs);
+      
+      // Send the request with structured context
       const resp = await axios.post(
         '/api/airequest',
-        { model, message: chatInput, context: contextMsgs, apiKey },
+        { 
+          model, 
+          message: chatInput, 
+          context: contextMsgs, 
+          apiKey,
+          provider: selectedProvider
+        },
         { headers: { 'Content-Type': 'application/json' } }
       );
-      setSuggestions(resp.data);
+      
+      // Handle the response
+      if (resp.data && Object.keys(resp.data).length > 0) {
+        setSuggestions(resp.data);
+      } else {
+        setChatError('Received empty response from AI');
+      }
     } catch (e: any) {
-      setChatError(e.message || 'Error generating suggestions');
-    } finally { setLoadingChat(false); }
+      console.error('Error generating suggestions:', e);
+      setChatError(e.response?.data?.error || e.message || 'Error generating suggestions');
+    } finally { 
+      setLoadingChat(false); 
+    }
   };
   
   // If no node is selected, don't render anything
