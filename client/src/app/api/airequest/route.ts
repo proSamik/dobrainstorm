@@ -37,27 +37,85 @@ function parseJSON(raw: string): any {
   // Log the raw response for debugging
   console.log('Raw AI response text to parse:', raw.substring(0, 200) + (raw.length > 200 ? '...' : ''));
   
+  // Try cleaning the string before parsing
+  const cleanRaw = (str: string) => {
+    // Remove any BOM, non-printable characters, and sanitize quotes
+    return str
+      .replace(/^\uFEFF/, '')  // Remove BOM
+      .replace(/[^\x20-\x7E\n\r\t]/g, '') // Remove non-printable chars except newlines/tabs
+      .replace(/[\u201C\u201D]/g, '"')  // Replace curly quotes with straight quotes
+      .replace(/[\u2018\u2019]/g, "'");  // Replace curly apostrophes
+  };
+
   try {
-    // First try direct parsing
-    return JSON.parse(raw);
+    // First try direct parsing with cleaned string
+    const cleaned = cleanRaw(raw);
+    return JSON.parse(cleaned);
   } catch (firstError) {
     console.log('Direct JSON.parse failed, attempting to extract JSON block');
     
     try {
-      // Try to find a JSON object block
-      const match = raw.match(/\{[\s\S]*\}/);
-      if (match) {
-        const extracted = match[0];
-        console.log('Extracted JSON block:', extracted.substring(0, 100) + (extracted.length > 100 ? '...' : ''));
-        return JSON.parse(extracted);
+      // Clean the raw string first
+      const cleaned = cleanRaw(raw);
+      
+      // Try to find a JSON object block with balanced braces
+      let match = null;
+      try {
+        // Look for the outermost {...} that contains valid JSON
+        const objMatches = cleaned.match(/\{(?:[^{}]|(?:\{[^{}]*\}))*\}/g) || [];
+        for (const potentialJson of objMatches) {
+          try {
+            const parsed = JSON.parse(potentialJson);
+            console.log('Found valid JSON object');
+            return parsed;
+          } catch (e) {
+            // Continue trying other matches
+          }
+        }
+      } catch (e) {
+        console.log('Complex regex matching failed, falling back to simpler approach');
       }
       
-      // If no object found, try to find a JSON array
-      const arrayMatch = raw.match(/\[[\s\S]*\]/);
-      if (arrayMatch) {
-        const extracted = arrayMatch[0];
-        console.log('Extracted JSON array:', extracted.substring(0, 100) + (extracted.length > 100 ? '...' : ''));
-        return JSON.parse(extracted);
+      // Simpler approach: find first { and last }
+      const firstBrace = cleaned.indexOf('{');
+      const lastBrace = cleaned.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1 && firstBrace < lastBrace) {
+        const extracted = cleaned.substring(firstBrace, lastBrace + 1);
+        try {
+          console.log('Extracted JSON block:', extracted.substring(0, 100) + (extracted.length > 100 ? '...' : ''));
+          return JSON.parse(extracted);
+        } catch (e) {
+          console.log('Simple extraction failed, continuing to array check');
+        }
+      }
+      
+      // If no object found, try to find a JSON array with balanced brackets
+      try {
+        const arrMatches = cleaned.match(/\[(?:[^\[\]]|(?:\[[^\[\]]*\]))*\]/g) || [];
+        for (const potentialArr of arrMatches) {
+          try {
+            const parsed = JSON.parse(potentialArr);
+            console.log('Found valid JSON array');
+            return parsed;
+          } catch (e) {
+            // Continue trying other matches
+          }
+        }
+      } catch (e) {
+        console.log('Complex regex array matching failed, falling back to simpler approach');
+      }
+      
+      // Simpler approach for arrays
+      const firstBracket = cleaned.indexOf('[');
+      const lastBracket = cleaned.lastIndexOf(']');
+      if (firstBracket !== -1 && lastBracket !== -1 && firstBracket < lastBracket) {
+        const extracted = cleaned.substring(firstBracket, lastBracket + 1);
+        try {
+          console.log('Extracted JSON array:', extracted.substring(0, 100) + (extracted.length > 100 ? '...' : ''));
+          return JSON.parse(extracted);
+        } catch (e) {
+          console.log('Simple array extraction failed, continuing to fallback');
+        }
       }
       
       // If still no JSON, fallback to manually extracting quoted items
@@ -65,21 +123,38 @@ function parseJSON(raw: string): any {
       
       // Attempt to infer category from key before array
       let category = 'suggestions';
-      const catMatch = raw.match(/"([^"']+)"\s*:\s*\[/);
+      const catMatch = cleaned.match(/"([^"']+)"\s*:\s*\[/);
       if (catMatch) {
         category = catMatch[1];
         console.log(`Inferred category: ${category}`);
       }
       
-      // Extract all quoted strings in the raw text
-      const itemMatches = Array.from(raw.matchAll(/"([^"']+)"/g)).map(m => m[1]);
-      // Remove any occurrence of the category name if it appears as first item
-      const items = itemMatches.filter((item, idx) => idx !== 0 || item !== category);
+      // Extract all quoted strings in the raw text, taking care to handle escaped quotes
+      const items: string[] = [];
+      const quoteRegex = /"((?:\\"|[^"])+?)"/g;
+      let quoteMatch;
+      while ((quoteMatch = quoteRegex.exec(cleaned)) !== null) {
+        if (quoteMatch[1] && quoteMatch[1] !== category) {
+          items.push(quoteMatch[1].replace(/\\"/g, '"'));
+        }
+      }
+      
       console.log(`Manually extracted ${items.length} items for category ${category}`);
-      return { [category]: items };
+      
+      // Return a simple structure if we found any items
+      if (items.length > 0) {
+        return { [category]: items };
+      }
+      
+      // Absolute last resort: return empty result
+      console.warn('Could not extract any valid items, returning empty response');
+      return { suggestions: [] };
     } catch (secondError) {
       console.error('Error parsing extracted JSON:', secondError);
-      throw new Error(`Unable to parse JSON from AI response: ${firstError instanceof Error ? firstError.message : firstError}`);
+      
+      // Absolute last resort: return empty result rather than throwing
+      console.warn('Returning empty fallback response');
+      return { suggestions: [] };
     }
   }
 }
