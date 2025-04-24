@@ -10,17 +10,24 @@ import { ParentNodeTrace } from './nodes/ParentNodeTrace'
 import { authService } from '@/services/auth'
 import axios from 'axios'
 import { Node, Edge, Position } from 'reactflow'
+import { getPlainText } from '@/lib/utils/text-helpers'
 
 // Define AI providers
 type ApiProvider = 'openai' | 'claude' | 'klusterai';
 const PROVIDERS: ApiProvider[] = ['openai', 'claude', 'klusterai'];
 
-// Helper function to get plain text from HTML
-const getPlainText = (html: string) => {
-  const tmp = document.createElement('div'); 
-  tmp.innerHTML = html; 
-  return tmp.textContent || '';
-};
+// Define interfaces for suggestion data structure
+interface SubBranchItem {
+  title: string;
+  reason: string;
+  sub_branches?: SubBranchItem[];
+}
+
+interface ConceptItem {
+  title: string;
+  reason: string;
+  sub_branches?: SubBranchItem[];
+}
 
 // First, update the currentNode's type to include content
 interface NodeContent {
@@ -403,7 +410,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
               title: item,
               reason: "No reason provided"
             };
-          } else if (typeof item === 'object' && item !== null) {
+          } else if (item && typeof item === 'object' && item !== null) {
             // New format - validate required fields
             if (!item.title) {
               console.warn(`Item at index ${index} in category "${key}" is missing title`);
@@ -422,7 +429,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
                 isValid = false;
               } else {
                 // Validate each sub-branch
-                item.sub_branches.forEach((subItem: any, subIndex: number) => {
+                item.sub_branches.forEach((subItem: SubBranchItem, subIndex: number) => {
                   if (typeof subItem !== 'object' || !subItem.title) {
                     console.warn(`Sub-branch at index ${subIndex} for item "${item.title}" is invalid`);
                     isValid = false;
@@ -824,7 +831,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     }
     
     // Calculate total height needed for all categories and their concepts
-    const getCategoryHeight = (categoryItems: any[]) => {
+    const getCategoryHeight = (categoryItems: ConceptItem[]) => {
       // Base height for the category and its direct concepts
       let height = NODE_HEIGHT + (categoryItems.length * NODE_HEIGHT);
       
@@ -837,7 +844,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
           let subBranchesHeight = subBranchCount * SUB_BRANCH_Y_OFFSET;
           
           // Check for sub-sub-branches and add their height
-          item.sub_branches.forEach((subItem: any) => {
+          item.sub_branches.forEach((subItem: SubBranchItem) => {
             if (subItem.sub_branches && Array.isArray(subItem.sub_branches)) {
               // For each sub-branch that has sub-sub-branches, add extra height
               const subSubBranchCount = subItem.sub_branches.length;
@@ -911,7 +918,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     let currentY = basePosition.y - totalHeight / 2;
     
     // For each category, create a section with its concepts
-    categories.forEach((category, categoryIndex) => {
+    categories.forEach((category) => {
       // Track nodes created for this category branch
       const categoryBranchNodes: Node[] = [];
       
@@ -1025,8 +1032,8 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
         console.log(`Processed concept node: "${conceptTitle}" with reason: "${conceptReason}"`);
         
         // Make sure we're not directly converting objects to strings in the HTML, which would display as [object Object]
-        let safeConceptTitle = typeof conceptTitle === 'string' ? conceptTitle : JSON.stringify(conceptTitle);
-        let safeConceptReason = typeof conceptReason === 'string' ? conceptReason : JSON.stringify(conceptReason);
+        const safeConceptTitle = typeof conceptTitle === 'string' ? conceptTitle : JSON.stringify(conceptTitle);
+        const safeConceptReason = typeof conceptReason === 'string' ? conceptReason : JSON.stringify(conceptReason);
         
         // Create HTML content with ONLY the reason (no title)
         let conceptContent = "";
@@ -1102,9 +1109,8 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
           
           // Track sub-branch nodes to handle potential sub-sub-branches
           const conceptBranchNodes: Node[] = [];
-          const conceptBranchEdges: Edge[] = [];
           
-          item.sub_branches.forEach((subItem: any, subIndex: number) => {
+          item.sub_branches.forEach((subItem: SubBranchItem, subIndex: number) => {
             // Create sub-branch node
             const subBranchTitle = typeof subItem === 'string' ? subItem : 
               (typeof subItem.title === 'string' ? subItem.title : `Sub-concept ${subIndex + 1}`);
@@ -1112,8 +1118,8 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
               (typeof subItem.reason === 'string' ? subItem.reason : '');
             
             // Make sure we're not directly converting objects to strings in the HTML
-            let safeSubBranchTitle = typeof subBranchTitle === 'string' ? subBranchTitle : JSON.stringify(subBranchTitle);
-            let safeSubBranchReason = typeof subBranchReason === 'string' ? subBranchReason : JSON.stringify(subBranchReason);
+            const safeSubBranchTitle = typeof subBranchTitle === 'string' ? subBranchTitle : JSON.stringify(subBranchTitle);
+            const safeSubBranchReason = typeof subBranchReason === 'string' ? subBranchReason : JSON.stringify(subBranchReason);
             
             // Create HTML content with ONLY the reason (no title)
             let subBranchContent = "";
@@ -1133,7 +1139,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
                                      Array.isArray(subItem.sub_branches) && 
                                      subItem.sub_branches.length > 0;
             
-            const subSubBranchCount = hasSubSubBranches ? subItem.sub_branches.length : 0;
+            const subSubBranchCount = hasSubSubBranches && subItem.sub_branches ? subItem.sub_branches.length : 0;
             
             // Calculate desired position for sub-branch node
             const desiredSubBranchPosition = {
@@ -1189,7 +1195,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
             conceptBranchNodes.push(subBranchNode);
             
             // Handle sub-sub-branches if present
-            if (hasSubSubBranches) {
+            if (hasSubSubBranches && subItem.sub_branches) {
               // Starting Y position for sub-sub-branches, centered on parent sub-branch
               let subSubBranchY = subBranchY - ((subSubBranchCount * SUB_SUB_BRANCH_Y_OFFSET) / 2);
               
@@ -1201,9 +1207,8 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
               
               // Track sub-sub-branch nodes
               const subSubBranchNodes: Node[] = [];
-              const subSubBranchEdges: Edge[] = [];
               
-              subItem.sub_branches.forEach((subSubItem: any, subSubIndex: number) => {
+              subItem.sub_branches.forEach((subSubItem: SubBranchItem, subSubIndex: number) => {
                 // Extract title and reason
                 const subSubBranchTitle = typeof subSubItem === 'string' ? subSubItem : 
                   (typeof subSubItem.title === 'string' ? subSubItem.title : `Sub-sub-concept ${subSubIndex + 1}`);
@@ -1211,9 +1216,9 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
                   (typeof subSubItem.reason === 'string' ? subSubItem.reason : '');
                 
                 // Make safe versions for HTML
-                let safeSubSubBranchTitle = typeof subSubBranchTitle === 'string' ? 
+                const safeSubSubBranchTitle = typeof subSubBranchTitle === 'string' ? 
                   subSubBranchTitle : JSON.stringify(subSubBranchTitle);
-                let safeSubSubBranchReason = typeof subSubBranchReason === 'string' ? 
+                const safeSubSubBranchReason = typeof subSubBranchReason === 'string' ? 
                   subSubBranchReason : JSON.stringify(subSubBranchReason);
                 
                 // Create HTML content for sub-sub-branch
