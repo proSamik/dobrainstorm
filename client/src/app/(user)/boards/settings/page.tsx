@@ -87,6 +87,22 @@ export default function BoardsSettings() {
       
       console.log(`Processing ${provider} data:`, data);
       
+      // Check for invalid key formats - if the key is masked or contains 
+      // invalid characters like bullets, we'll clear it to force re-entry
+      let keyToUse = data.key || '';
+      const isInvalidFormat = 
+        keyToUse.includes('•') || 
+        keyToUse.includes('●') || 
+        keyToUse.includes('Bearer') || 
+        keyToUse.length < 10;
+        
+      if (isInvalidFormat) {
+        console.log(`Found invalid key format for ${provider}, clearing key to force re-entry`);
+        keyToUse = '';
+        // Mark as invalid if format is bad
+        data.isValid = false;
+      }
+      
       // Ensure models is an array 
       let models: string[] = [];
       if (Array.isArray(data.models)) {
@@ -108,7 +124,7 @@ export default function BoardsSettings() {
       
       // Extract and normalize fields with proper defaults
       result[provider] = {
-        key: data.key || '',
+        key: keyToUse,
         isValid: data.isValid === true,
         models: models,
         selectedModel: selectedModel
@@ -546,7 +562,7 @@ export default function BoardsSettings() {
     
     // Render the saved key form (masked)
     const renderSavedKeyForm = () => {
-      console.log(`Rendering saved key form for ${provider} with key: ${apiKeyData.key}`);
+      console.log(`Rendering saved key form for ${provider} with key present: ${apiKeyData.key ? 'Yes' : 'No'}`);
       return (
         <form onSubmit={handleFormSubmit} className="relative">
           <div className="space-y-2">
@@ -554,7 +570,7 @@ export default function BoardsSettings() {
             <Input
               id={`${provider}-key`}
               type="password"
-              placeholder={`Enter ${provider.charAt(0).toUpperCase() + provider.slice(1)} API Key`}
+              placeholder={`● Saved ${provider.charAt(0).toUpperCase() + provider.slice(1)} API Key ●`}
               value={apiKeyData.key}
               readOnly
               className="border border-green-500 bg-gray-50 dark:bg-gray-800 pr-24"
@@ -623,7 +639,7 @@ export default function BoardsSettings() {
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 relative">
               {/* Check if we have a saved key (from the GET request) */}
-              {(apiKeyData.isValid && apiKeyData.key && apiKeyData.key.includes('•')) 
+              {(apiKeyData.isValid && apiKeyData.key) 
                 ? renderSavedKeyForm() 
                 : renderNewKeyForm()
               }
@@ -632,7 +648,7 @@ export default function BoardsSettings() {
           
           {apiKeyData.isValid && (
             <div className="mt-2 text-sm text-green-600 dark:text-green-400">
-              {apiKeyData.key && apiKeyData.key.includes('•') ? 'Using saved API key' : 'API key validated successfully'}
+              {apiKeyData.key ? 'Using saved API key' : 'API key validated successfully'}
             </div>
           )}
           
