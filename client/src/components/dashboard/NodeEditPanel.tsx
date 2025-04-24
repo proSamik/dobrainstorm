@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState } from '@/store'
 import Image from 'next/image'
-import { setEditingNode, NodeContent, updateNodes } from '@/store/boardSlice'
+import { setEditingNode, NodeContent, updateNodes, updateEdges } from '@/store/boardSlice'
 import { RichTextEditor } from './nodes/RichTextEditor'
 import { ParentNodeTrace } from './nodes/ParentNodeTrace'
 import { authService } from '@/services/auth'
@@ -409,6 +409,12 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
         });
       }
       
+      // 5. Add specific instruction for JSON format to enable branching
+      contextMsgs.push({
+        role: 'user',
+        content: `Please provide your response in a valid JSON format with categories as keys and arrays of ideas as values. For example: { "Category 1": ["Idea 1", "Idea 2"], "Category 2": ["Idea 3", "Idea 4"] }. This will be used to automatically create a mind map.`
+      });
+      
       // Log the context being sent
       console.log('Sending context to API:', contextMsgs);
       
@@ -438,6 +444,120 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
       setLoadingChat(false); 
     }
   };
+  
+  /**
+   * Create branch nodes from AI suggestions
+   * This will automatically create new nodes based on the AI response
+   * and connect them to the current node
+   */
+  const createBranchesFromSuggestions = useCallback(() => {
+    if (!suggestions || !selectedNode) return;
+    
+    // Get the categories and ideas from the suggestions
+    const categories = Object.keys(suggestions);
+    if (categories.length === 0) {
+      console.warn('No categories found in suggestions');
+      return;
+    }
+    
+    // Create a node for each category
+    categories.forEach((category, categoryIndex) => {
+      const ideas = suggestions[category];
+      if (!Array.isArray(ideas) || ideas.length === 0) return;
+      
+      // Calculate position for category node
+      // Position categories in a semi-circle around the parent node
+      const baseAngle = Math.PI / (categories.length + 1);
+      const angle = baseAngle * (categoryIndex + 1);
+      const radius = 250; // Distance from parent node
+      
+      const categoryNodeId = `node-${Date.now()}-${categoryIndex}`;
+      const categoryNodePosition = {
+        x: selectedNode.position.x + Math.cos(angle) * radius,
+        y: selectedNode.position.y + Math.sin(angle) * radius
+      };
+      
+      // Create the category node
+      const categoryNode: Node = {
+        id: categoryNodeId,
+        type: 'textNode',
+        position: categoryNodePosition,
+        data: {
+          label: category,
+          content: {
+            text: `<p>${category}</p>`,
+            images: []
+          }
+        },
+        draggable: true
+      };
+      
+      // Connect the category node to the parent node
+      const categoryEdge: Edge = {
+        id: `edge-${selectedNode.id}-${categoryNodeId}`,
+        source: selectedNode.id,
+        target: categoryNodeId,
+        type: 'default'
+      };
+      
+      // Create idea nodes as children of the category node
+      const ideaNodes: Node[] = [];
+      const ideaEdges: Edge[] = [];
+      
+      ideas.forEach((idea, ideaIndex) => {
+        // Calculate position for idea node
+        // Position ideas in a semi-circle around the category node
+        const ideaBaseAngle = Math.PI / (ideas.length + 1);
+        const ideaAngle = ideaBaseAngle * (ideaIndex + 1);
+        const ideaRadius = 150; // Distance from category node
+        
+        const ideaNodeId = `node-${Date.now()}-${categoryIndex}-${ideaIndex}`;
+        const ideaNodePosition = {
+          x: categoryNodePosition.x + Math.cos(ideaAngle) * ideaRadius,
+          y: categoryNodePosition.y + Math.sin(ideaAngle) * ideaRadius
+        };
+        
+        // Create the idea node
+        const ideaNode: Node = {
+          id: ideaNodeId,
+          type: 'textNode',
+          position: ideaNodePosition,
+          data: {
+            label: typeof idea === 'string' ? idea.split(' ').slice(0, 4).join(' ') : `Idea ${ideaIndex + 1}`,
+            content: {
+              text: `<p>${idea}</p>`,
+              images: []
+            }
+          },
+          draggable: true
+        };
+        
+        // Connect the idea node to the category node
+        const ideaEdge: Edge = {
+          id: `edge-${categoryNodeId}-${ideaNodeId}`,
+          source: categoryNodeId,
+          target: ideaNodeId,
+          type: 'default'
+        };
+        
+        ideaNodes.push(ideaNode);
+        ideaEdges.push(ideaEdge);
+      });
+      
+      // Add all nodes and edges to the board
+      // Create copies of the current nodes and edges arrays
+      const updatedNodes = [...nodes, categoryNode, ...ideaNodes];
+      const updatedEdges = [...edges, categoryEdge, ...ideaEdges];
+      
+      // Update the Redux store
+      dispatch(updateNodes(updatedNodes));
+      dispatch(updateEdges(updatedEdges));
+    });
+    
+    // Clear the suggestions
+    setSuggestions(null);
+    
+  }, [suggestions, selectedNode, nodes, edges, dispatch]);
   
   // If no node is selected, don't render anything
   if (!selectedNode) {
@@ -567,7 +687,19 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
           >{loadingChat ? 'Generating...' : 'Generate'}</button>
           {chatError && <p className="text-red-500">{chatError}</p>}
           {suggestions && (
-            <pre className="mt-2 p-2 bg-gray-100 rounded text-sm font-mono">{JSON.stringify(suggestions, null, 2)}</pre>
+            <div className="mt-4">
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="text-sm font-medium">AI Suggestions</h4>
+                <button
+                  onClick={createBranchesFromSuggestions}
+                  className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+                  title="Create a mind map from these suggestions"
+                >
+                  ✨ Create Mind Map
+                </button>
+              </div>
+              <pre className="mt-2 p-2 bg-gray-100 rounded text-sm font-mono overflow-auto max-h-40">{JSON.stringify(suggestions, null, 2)}</pre>
+            </div>
           )}
         </div>
 
