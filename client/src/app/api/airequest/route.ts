@@ -105,7 +105,6 @@ export async function POST(request: NextRequest) {
 
     // Determine which provider to use
     const provider = getProviderFromModel(model);
-    let aiResponse: any;
 
     if (provider === 'openai') {
       // Initialize OpenAI client
