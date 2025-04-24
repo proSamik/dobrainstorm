@@ -460,22 +460,38 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
       return;
     }
     
-    // Create a node for each category
+    // Define node size constants to help with collision detection
+    const NODE_WIDTH = 200;
+    const NODE_HEIGHT = 100;
+    const VERTICAL_SPACING = 180; // Vertical spacing between category nodes
+    const HORIZONTAL_SPACING = 250; // Horizontal spacing between parent and child nodes
+    const IDEA_HORIZONTAL_SPACING = 200; // Horizontal spacing between idea nodes
+    const IDEA_VERTICAL_SPACING = 120; // Vertical spacing between idea nodes
+    
+    // All nodes we've created so far in this operation plus existing nodes
+    const createdNodes = [...nodes];
+    const createdEdges = [...edges];
+    
+    // Starting position for the first category - to the right of selected node
+    const startX = selectedNode.position.x + HORIZONTAL_SPACING;
+    // Start from a position slightly above the middle to center the categories
+    const startY = selectedNode.position.y - (categories.length * VERTICAL_SPACING) / 2;
+    
+    // Create a node for each category in a vertical column
     categories.forEach((category, categoryIndex) => {
       const ideas = suggestions[category];
       if (!Array.isArray(ideas) || ideas.length === 0) return;
       
-      // Calculate position for category node
-      // Position categories in a semi-circle around the parent node
-      const baseAngle = Math.PI / (categories.length + 1);
-      const angle = baseAngle * (categoryIndex + 1);
-      const radius = 250; // Distance from parent node
+      // Calculate vertical position for this category
+      const categoryY = startY + (categoryIndex * VERTICAL_SPACING);
+      
+      // Position for the category node - aligned vertically
+      const categoryNodePosition = {
+        x: startX,
+        y: categoryY
+      };
       
       const categoryNodeId = `node-${Date.now()}-${categoryIndex}`;
-      const categoryNodePosition = {
-        x: selectedNode.position.x + Math.cos(angle) * radius,
-        y: selectedNode.position.y + Math.sin(angle) * radius
-      };
       
       // Create the category node
       const categoryNode: Node = {
@@ -500,28 +516,36 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
         type: 'default'
       };
       
-      // Create idea nodes as children of the category node
+      // Add category node to our created nodes list
+      createdNodes.push(categoryNode);
+      createdEdges.push(categoryEdge);
+      
+      // Create idea nodes as children of the category node in a horizontal row
       const ideaNodes: Node[] = [];
       const ideaEdges: Edge[] = [];
       
+      // Calculate how to distribute ideas
+      const maxIdeasPerRow = 3; // Maximum number of ideas per row
+      
       ideas.forEach((idea, ideaIndex) => {
-        // Calculate position for idea node
-        // Position ideas in a semi-circle around the category node
-        const ideaBaseAngle = Math.PI / (ideas.length + 1);
-        const ideaAngle = ideaBaseAngle * (ideaIndex + 1);
-        const ideaRadius = 150; // Distance from category node
+        // Calculate row and column for this idea
+        const row = Math.floor(ideaIndex / maxIdeasPerRow);
+        const col = ideaIndex % maxIdeasPerRow;
+        
+        // Calculate position for this idea
+        const ideaX = categoryNodePosition.x + HORIZONTAL_SPACING + (col * IDEA_HORIZONTAL_SPACING);
+        const ideaY = categoryY + (row * IDEA_VERTICAL_SPACING) - ((Math.min(ideas.length, maxIdeasPerRow) - 1) * IDEA_VERTICAL_SPACING / 4);
         
         const ideaNodeId = `node-${Date.now()}-${categoryIndex}-${ideaIndex}`;
-        const ideaNodePosition = {
-          x: categoryNodePosition.x + Math.cos(ideaAngle) * ideaRadius,
-          y: categoryNodePosition.y + Math.sin(ideaAngle) * ideaRadius
-        };
         
         // Create the idea node
         const ideaNode: Node = {
           id: ideaNodeId,
           type: 'textNode',
-          position: ideaNodePosition,
+          position: {
+            x: ideaX,
+            y: ideaY
+          },
           data: {
             label: typeof idea === 'string' ? idea.split(' ').slice(0, 4).join(' ') : `Idea ${ideaIndex + 1}`,
             content: {
@@ -540,19 +564,19 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
           type: 'default'
         };
         
+        // Add to our local arrays
         ideaNodes.push(ideaNode);
         ideaEdges.push(ideaEdge);
+        
+        // Also add to our created nodes list
+        createdNodes.push(ideaNode);
+        createdEdges.push(ideaEdge);
       });
-      
-      // Add all nodes and edges to the board
-      // Create copies of the current nodes and edges arrays
-      const updatedNodes = [...nodes, categoryNode, ...ideaNodes];
-      const updatedEdges = [...edges, categoryEdge, ...ideaEdges];
-      
-      // Update the Redux store
-      dispatch(updateNodes(updatedNodes));
-      dispatch(updateEdges(updatedEdges));
     });
+    
+    // Now update the Redux store with all created nodes and edges at once
+    dispatch(updateNodes(createdNodes));
+    dispatch(updateEdges(createdEdges));
     
     // Clear the suggestions
     setSuggestions(null);
