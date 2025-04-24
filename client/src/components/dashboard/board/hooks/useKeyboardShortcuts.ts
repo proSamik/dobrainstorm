@@ -12,6 +12,13 @@ export const useKeyboardShortcuts = () => {
      * Handle keyboard shortcut events
      */
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't interfere when typing in inputs, textareas, or contentEditable elements
+      const target = e.target as HTMLElement;
+      const tagName = target.tagName;
+      if (['INPUT', 'TEXTAREA'].includes(tagName) || target.isContentEditable) {
+        return;
+      }
+      
       // Undo: Cmd+Z (Mac) or Ctrl+Z (Windows)
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
