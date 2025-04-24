@@ -564,12 +564,12 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     }
   }, [dispatch, selectionBox.isActive, isPanningMode]);
   
-  // Fit view to ensure all nodes are visible
-  const handleFitView = useCallback(() => {
-    if (reactFlowInstance) {
-      reactFlowInstance.fitView({ padding: 0.2 });
-    }
-  }, [reactFlowInstance]);
+  // // Fit view to ensure all nodes are visible
+  // const handleFitView = useCallback(() => {
+  //   if (reactFlowInstance) {
+  //     reactFlowInstance.fitView({ padding: 0.2 });
+  //   }
+  // }, [reactFlowInstance]);
   
   return (
     <div className="h-[90vh] w-full flex flex-col">
