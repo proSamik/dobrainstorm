@@ -51,6 +51,27 @@ let subBranchCounter = 0;
 let subSubBranchCounter = 0;
 
 /**
+ * Format text with line breaks after every 3 words to make nodes more compact
+ * @param text The text to format
+ * @returns Formatted text with line breaks
+ */
+const formatCompactText = (text: string): string => {
+  if (!text) return '';
+  
+  // Split into words
+  const words = text.split(/\s+/);
+  
+  // Group into chunks of 3 words
+  const chunks: string[] = [];
+  for (let i = 0; i < words.length; i += 3) {
+    chunks.push(words.slice(i, i + 3).join(' '));
+  }
+  
+  // Join with line breaks and wrap in paragraph tag with styling
+  return `<p style="color: #4b5563; font-style: italic;">${chunks.join('<br />')}</p>`;
+};
+
+/**
  * Custom hook to build node context tree
  * IMPORTANT: This hook must be called in a React component at the top level,
  * we pass in boardTitle instead of using useSelector inside to avoid invalid hook calls.
@@ -630,22 +651,48 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
      * @returns Estimated width and height
      */
     const estimateNodeDimensions = (label: string, content: string = '') => {
-      // Estimate width based on the longer of label or first line of content
-      const contentFirstLine = content.split('</p>')[0]?.replace(/<[^>]*>/g, '') || '';
-      const longestText = label.length > contentFirstLine.length ? label : contentFirstLine;
+      // Since we're now formatting with max 3 words per line,
+      // calculate the max width needed for any line
+      const getLongestLine = (text: string): number => {
+        if (!text) return 0;
+        
+        const words = text.split(/\s+/);
+        let maxLength = 0;
+        
+        // Check length of each 3-word group
+        for (let i = 0; i < words.length; i += 3) {
+          const lineWords = words.slice(i, Math.min(i + 3, words.length));
+          const lineLength = lineWords.join(' ').length;
+          maxLength = Math.max(maxLength, lineLength);
+        }
+        
+        return maxLength;
+      };
+      
+      // Get the longest line from content, removing HTML tags first
+      const contentText = content.replace(/<[^>]*>/g, '');
+      const contentLongestLine = getLongestLine(contentText);
+      
+      // Get the longest line from label
+      const labelLongestLine = getLongestLine(label);
+      
+      // Calculate width based on the longer of label or content's longest line
+      const longestText = Math.max(labelLongestLine, contentLongestLine);
       
       // Calculate width (characters * estimation factor, with minimum width)
       const estimatedWidth = Math.max(
         MIN_NODE_WIDTH,
-        longestText.length * NODE_WIDTH_ESTIMATION_FACTOR
+        longestText * NODE_WIDTH_ESTIMATION_FACTOR
       );
       
       // Calculate height based on content complexity
-      // Start with base height, add more for each paragraph
       let estimatedHeight = NODE_HEIGHT;
-      const paragraphCount = (content.match(/<p/g) || []).length;
-      if (paragraphCount > 1) {
-        estimatedHeight += (paragraphCount - 1) * 30;
+      
+      // Count <br> tags to estimate lines
+      if (content) {
+        const lineCount = (content.match(/<br \/>/g) || []).length + 1;
+        // Add height for each line
+        estimatedHeight += lineCount * 20;
       }
       
       return { width: estimatedWidth, height: estimatedHeight };
@@ -985,7 +1032,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
         let conceptContent = "";
         if (safeConceptReason && safeConceptReason.trim() !== '') {
           // Display only the reason text, since title is already shown as node label
-          conceptContent = `<p style="color: #4b5563; font-style: italic;">${safeConceptReason}</p>`;
+          conceptContent = formatCompactText(safeConceptReason);
         } else {
           console.warn(`Missing reason for concept: ${safeConceptTitle}`);
           conceptContent = `<p class="text-gray-400 italic">No description provided</p>`;
@@ -1072,7 +1119,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
             let subBranchContent = "";
             if (safeSubBranchReason && safeSubBranchReason.trim() !== '') {
               // Display only the reason text, since title is already shown as node label
-              subBranchContent = `<p style="color: #4b5563; font-style: italic;">${safeSubBranchReason}</p>`;
+              subBranchContent = formatCompactText(safeSubBranchReason);
             } else {
               console.warn(`Missing reason for sub-branch: ${safeSubBranchTitle}`);
               subBranchContent = `<p class="text-gray-400 italic">No description provided</p>`;
@@ -1172,7 +1219,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
                 // Create HTML content for sub-sub-branch
                 let subSubBranchContent = "";
                 if (safeSubSubBranchReason && safeSubSubBranchReason.trim() !== '') {
-                  subSubBranchContent = `<p style="color: #4b5563; font-style: italic;">${safeSubSubBranchReason}</p>`;
+                  subSubBranchContent = formatCompactText(safeSubSubBranchReason);
                 } else {
                   subSubBranchContent = `<p class="text-gray-400 italic">No description provided</p>`;
                 }
