@@ -36,7 +36,7 @@ import { useKeyboardShortcuts } from './board/hooks/useKeyboardShortcuts'
 import NodeEditPanel from './NodeEditPanel'
 import NodeContextMenu from './NodeContextMenu'
 import { BoardTools } from './board/components/BoardTools'
-import { DebugPanel } from './board/components/DebugPanel'
+// import { DebugPanel } from './board/components/DebugPanel'
 import { NodeCountDisplay } from './board/components/NodeCountDisplay'
 
 // Define base node types outside component
