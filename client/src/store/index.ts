@@ -1,5 +1,6 @@
 import { configureStore } from '@reduxjs/toolkit'
 import boardReducer from './boardSlice'
+import settingsReducer from './settingsSlice'
 
 /**
  * Configure and create the Redux store with all reducers
@@ -7,6 +8,7 @@ import boardReducer from './boardSlice'
 export const store = configureStore({
   reducer: {
     board: boardReducer,
+    settings: settingsReducer,
   },
   // Disable SerializableStateInvariantMiddleware to improve performance
   middleware: (getDefaultMiddleware) =>

@@ -20,6 +20,10 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
   const { getNode, setNodes, setEdges } = useReactFlow()
   const allNodes = useSelector((state: RootState) => state.board.nodes)
   const allEdges = useSelector((state: RootState) => state.board.edges)
+  const selectedNodeIds = useSelector((state: RootState) => state.board.selectedNodeIds)
+  
+  // Check if this node is multi-selected
+  const isMultiSelected = selectedNodeIds.includes(id)
   
   // State for editing label
   const [isEditingLabel, setIsEditingLabel] = useState(false)
@@ -36,9 +40,9 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       return
     }
     
-    // Simply select the node, but don't open the edit panel
-    dispatch(setSelectedNode(id))
-  }, [dispatch, id, isEditingLabel])
+    // Selection is now handled in the parent component
+    // This handler remains for any TextNode-specific behaviors
+  }, [isEditingLabel])
   
   // Handle label edit
   const handleLabelDoubleClick = useCallback((e: React.MouseEvent) => {
@@ -217,15 +221,24 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
   return (
     <div
       className={`px-4 py-3 rounded-lg shadow-md ${
-        selected ? 'bg-blue-50 border-2 border-blue-500' : 'bg-white border border-gray-200'
+        selected 
+          ? 'bg-blue-50 border-2 border-blue-500' 
+          : isMultiSelected
+            ? 'bg-blue-50 border-2 border-blue-300' // Style for multi-selected nodes
+            : 'bg-white border border-gray-200'
       }`}
       style={{ 
         minWidth: 150,
         touchAction: 'none',
         userSelect: 'none',
+        // Add a light blue shadow for multi-selected nodes
+        boxShadow: isMultiSelected && !selected 
+          ? '0 0 0 2px rgba(59, 130, 246, 0.3), 0 4px 6px -1px rgba(0, 0, 0, 0.1)' 
+          : undefined
       }}
       onClick={handleClick}
       data-id={id}
+      data-multiselected={isMultiSelected ? 'true' : 'false'}
     >
       {/* Drag handle and editable label */}
       <div className="font-bold mb-1 text-sm border-b pb-1 flex items-center drag-handle">

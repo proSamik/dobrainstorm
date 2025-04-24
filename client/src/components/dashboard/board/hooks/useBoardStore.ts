@@ -11,7 +11,8 @@ import {
   redo,
   updateBoardName,
   setSelectedNode,
-  setEditingNode
+  setEditingNode,
+  setSelectedNodes
 } from '@/store/boardSlice';
 import { Node, Edge } from 'reactflow';
 
@@ -27,6 +28,7 @@ export const useBoardStore = () => {
     boardName,
     isDirty,
     selectedNodeId,
+    selectedNodeIds,
     editingNodeId,
     boardId
   } = useSelector((state: RootState) => state.board);
@@ -95,6 +97,13 @@ export const useBoardStore = () => {
   };
 
   /**
+   * Set multiple selected nodes
+   */
+  const selectNodes = (nodeIds: string[]) => {
+    dispatch(setSelectedNodes(nodeIds));
+  };
+
+  /**
    * Set the node being edited
    */
   const setNodeForEditing = (nodeId: string | null) => {
@@ -119,6 +128,7 @@ export const useBoardStore = () => {
     boardName,
     isDirty,
     selectedNodeId,
+    selectedNodeIds,
     editingNodeId,
     boardId,
     updateNodeState,
@@ -130,6 +140,7 @@ export const useBoardStore = () => {
     redoChange,
     updateName,
     selectNode,
+    selectNodes,
     setNodeForEditing,
     initializeBoard
   };

@@ -21,6 +21,7 @@ interface BoardState {
     future: { nodes: Node[], edges: Edge[] }[]
   }
   selectedNodeId: string | null
+  selectedNodeIds: string[] // Add multiple node selection support
   editingNodeId: string | null
   boardName: string
   boardId: string | null
@@ -39,6 +40,7 @@ const initialState: BoardState = {
     future: []
   },
   selectedNodeId: null,
+  selectedNodeIds: [], // Initialize empty array for multi-selection
   editingNodeId: null,
   boardName: 'Untitled Board',
   boardId: null,
@@ -248,6 +250,19 @@ const boardSlice = createSlice({
     // Set the selected node
     setSelectedNode: (state, action: PayloadAction<string | null>) => {
       state.selectedNodeId = action.payload
+      // When selecting a single node, update the selectedNodeIds array as well
+      if (action.payload) {
+        state.selectedNodeIds = [action.payload]
+      } else {
+        state.selectedNodeIds = []
+      }
+    },
+    
+    // Set multiple selected nodes
+    setSelectedNodes: (state, action: PayloadAction<string[]>) => {
+      state.selectedNodeIds = action.payload
+      // Set the primary selected node as the first one in the array or null
+      state.selectedNodeId = action.payload.length > 0 ? action.payload[0] : null
     },
     
     // Set the node being edited
@@ -324,6 +339,7 @@ export const {
   updateNodeContent,
   removeNode,
   setSelectedNode,
+  setSelectedNodes,
   setEditingNode,
   updateBoardName,
   markAsSaved,
