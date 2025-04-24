@@ -240,7 +240,7 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   }, [selectionBox.isActive, screenToFlowPosition]);
   
   // End selection process
-  const handleSelectionEnd = useCallback((event: React.MouseEvent) => {
+  const handleSelectionEnd = useCallback(() => {
     if (selectionBox.isActive) {
       // Reset cursor style
       document.body.style.cursor = 'default';
@@ -280,7 +280,7 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
         isActive: false
       }));
     }
-  }, [selectionBox.isActive, selectionBox.startX, selectionBox.startY, selectionBox.currentX, selectionBox.currentY, nodes, dispatch, screenToFlowPosition]);
+  }, [selectionBox.isActive, selectionBox.startX, selectionBox.startY, selectionBox.currentX, selectionBox.currentY, nodes, dispatch]);
   
   // Update node position after drag
   const handleNodeDragStart: NodeDragHandler = useCallback((event, node) => {
