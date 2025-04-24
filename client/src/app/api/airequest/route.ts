@@ -44,25 +44,57 @@ function parseJSON(raw: string): any {
       .replace(/^\uFEFF/, '')  // Remove BOM
       .replace(/[^\x20-\x7E\n\r\t]/g, '') // Remove non-printable chars except newlines/tabs
       .replace(/[\u201C\u201D]/g, '"')  // Replace curly quotes with straight quotes
-      .replace(/[\u2018\u2019]/g, "'");  // Replace curly apostrophes
+      .replace(/[\u2018\u2019]/g, "'")  // Replace curly apostrophes
+      .replace(/\\'/g, "'");  // Fix escaped single quotes which can cause issues
+  };
+
+  // Try to fix common JSON structural issues
+  const fixJsonStructure = (str: string) => {
+    let result = str;
+    
+    // Replace trailing commas before closing brackets (common AI error)
+    result = result.replace(/,(\s*[\}\]])/g, '$1');
+    
+    // Try to fix unescaped quotes in JSON strings
+    result = result.replace(/"([^"]*)(?<!\\)"([^"]*)"([^"]*)"(?!\s*:)/g, '"$1\\"$2\\"$3"');
+    
+    // Fix mismatched quotes
+    const openQuotes = (result.match(/"/g) || []).length;
+    if (openQuotes % 2 !== 0) {
+      console.warn(`Detected odd number of quotes (${openQuotes}), attempting to fix`);
+      // Close any unclosed string at the end of a property
+      result = result.replace(/("(?:\\.|[^"\\])*?)(?=,\s*")/g, '$1"');
+      result = result.replace(/("(?:\\.|[^"\\])*?)(?=})/g, '$1"');
+    }
+    
+    return result;
   };
 
   try {
-    // First try direct parsing with cleaned string
+    // First try direct parsing with cleaned and fixed string
     const cleaned = cleanRaw(raw);
-    return JSON.parse(cleaned);
+    const fixed = fixJsonStructure(cleaned);
+    
+    try {
+      return JSON.parse(fixed);
+    } catch (e) {
+      // If direct parsing with fixes failed, try the original cleaned version
+      return JSON.parse(cleaned);
+    }
   } catch (firstError) {
     console.log('Direct JSON.parse failed, attempting to extract JSON block');
+    console.error('Parse error:', firstError);
     
     try {
       // Clean the raw string first
       const cleaned = cleanRaw(raw);
+      const fixed = fixJsonStructure(cleaned);
       
       // Try to find a JSON object block with balanced braces
       let match = null;
       try {
         // Look for the outermost {...} that contains valid JSON
-        const objMatches = cleaned.match(/\{(?:[^{}]|(?:\{[^{}]*\}))*\}/g) || [];
+        const objMatches = fixed.match(/\{(?:[^{}]|(?:\{[^{}]*\}))*\}/g) || [];
         for (const potentialJson of objMatches) {
           try {
             const parsed = JSON.parse(potentialJson);
@@ -77,13 +109,14 @@ function parseJSON(raw: string): any {
       }
       
       // Simpler approach: find first { and last }
-      const firstBrace = cleaned.indexOf('{');
-      const lastBrace = cleaned.lastIndexOf('}');
+      const firstBrace = fixed.indexOf('{');
+      const lastBrace = fixed.lastIndexOf('}');
       if (firstBrace !== -1 && lastBrace !== -1 && firstBrace < lastBrace) {
-        const extracted = cleaned.substring(firstBrace, lastBrace + 1);
+        const extracted = fixed.substring(firstBrace, lastBrace + 1);
         try {
           console.log('Extracted JSON block:', extracted.substring(0, 100) + (extracted.length > 100 ? '...' : ''));
-          return JSON.parse(extracted);
+          const potentialFixed = fixJsonStructure(extracted);
+          return JSON.parse(potentialFixed);
         } catch (e) {
           console.log('Simple extraction failed, continuing to array check');
         }
@@ -91,7 +124,7 @@ function parseJSON(raw: string): any {
       
       // If no object found, try to find a JSON array with balanced brackets
       try {
-        const arrMatches = cleaned.match(/\[(?:[^\[\]]|(?:\[[^\[\]]*\]))*\]/g) || [];
+        const arrMatches = fixed.match(/\[(?:[^\[\]]|(?:\[[^\[\]]*\]))*\]/g) || [];
         for (const potentialArr of arrMatches) {
           try {
             const parsed = JSON.parse(potentialArr);
@@ -106,13 +139,14 @@ function parseJSON(raw: string): any {
       }
       
       // Simpler approach for arrays
-      const firstBracket = cleaned.indexOf('[');
-      const lastBracket = cleaned.lastIndexOf(']');
+      const firstBracket = fixed.indexOf('[');
+      const lastBracket = fixed.lastIndexOf(']');
       if (firstBracket !== -1 && lastBracket !== -1 && firstBracket < lastBracket) {
-        const extracted = cleaned.substring(firstBracket, lastBracket + 1);
+        const extracted = fixed.substring(firstBracket, lastBracket + 1);
         try {
           console.log('Extracted JSON array:', extracted.substring(0, 100) + (extracted.length > 100 ? '...' : ''));
-          return JSON.parse(extracted);
+          const potentialFixed = fixJsonStructure(extracted);
+          return JSON.parse(potentialFixed);
         } catch (e) {
           console.log('Simple array extraction failed, continuing to fallback');
         }
@@ -121,9 +155,40 @@ function parseJSON(raw: string): any {
       // If still no JSON, fallback to manually extracting quoted items
       console.warn('Falling back to manual extraction of items from response');
       
-      // Attempt to infer category from key before array
+      // Look for patterns like "category": [...] or "category": [...],
+      const categoryPattern = /"([^"]+)"\s*:\s*\[((?:[^[\]]|\[[^[\]]*\])*)\]/g;
+      const categories: Record<string, string[]> = {};
+      let categoryMatch;
+      
+      while ((categoryMatch = categoryPattern.exec(fixed)) !== null) {
+        const category = categoryMatch[1];
+        const itemsText = categoryMatch[2];
+        
+        // Extract items from the array portion
+        const items: string[] = [];
+        const itemRegex = /"((?:\\"|[^"])+?)"/g;
+        let itemMatch;
+        
+        while ((itemMatch = itemRegex.exec(itemsText)) !== null) {
+          if (itemMatch[1]) {
+            items.push(itemMatch[1].replace(/\\"/g, '"'));
+          }
+        }
+        
+        if (items.length > 0) {
+          categories[category] = items;
+        }
+      }
+      
+      // If we found any categories with items, return them
+      if (Object.keys(categories).length > 0) {
+        console.log(`Manually extracted categories: ${Object.keys(categories).join(', ')}`);
+        return categories;
+      }
+      
+      // Attempt to infer category from key before array as a last resort
       let category = 'suggestions';
-      const catMatch = cleaned.match(/"([^"']+)"\s*:\s*\[/);
+      const catMatch = fixed.match(/"([^"']+)"\s*:\s*\[/);
       if (catMatch) {
         category = catMatch[1];
         console.log(`Inferred category: ${category}`);
@@ -133,7 +198,7 @@ function parseJSON(raw: string): any {
       const items: string[] = [];
       const quoteRegex = /"((?:\\"|[^"])+?)"/g;
       let quoteMatch;
-      while ((quoteMatch = quoteRegex.exec(cleaned)) !== null) {
+      while ((quoteMatch = quoteRegex.exec(fixed)) !== null) {
         if (quoteMatch[1] && quoteMatch[1] !== category) {
           items.push(quoteMatch[1].replace(/\\"/g, '"'));
         }
