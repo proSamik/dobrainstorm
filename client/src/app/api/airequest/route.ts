@@ -29,14 +29,58 @@ const DEFAULT_TOP_P = 1.0;
  * @throws Error if parsing fails.
  */
 function parseJSON(raw: string): any {
+  if (!raw || typeof raw !== 'string') {
+    console.error('Invalid input to parseJSON, received:', raw);
+    throw new Error('Empty or invalid response received from AI service');
+  }
+  
+  // Log the raw response for debugging
+  console.log('Raw AI response text to parse:', raw.substring(0, 200) + (raw.length > 200 ? '...' : ''));
+  
   try {
+    // First try direct parsing
     return JSON.parse(raw);
-  } catch (error) {
-    const match = raw.match(/\{[\s\S]*\}/);
-    if (match) {
-      return JSON.parse(match[0]);
+  } catch (firstError) {
+    console.log('Direct JSON.parse failed, attempting to extract JSON block');
+    
+    try {
+      // Try to find a JSON object block
+      const match = raw.match(/\{[\s\S]*\}/);
+      if (match) {
+        const extracted = match[0];
+        console.log('Extracted JSON block:', extracted.substring(0, 100) + (extracted.length > 100 ? '...' : ''));
+        return JSON.parse(extracted);
+      }
+      
+      // If no object found, try to find a JSON array
+      const arrayMatch = raw.match(/\[[\s\S]*\]/);
+      if (arrayMatch) {
+        const extracted = arrayMatch[0];
+        console.log('Extracted JSON array:', extracted.substring(0, 100) + (extracted.length > 100 ? '...' : ''));
+        return JSON.parse(extracted);
+      }
+      
+      // If still no JSON, fallback to manually extracting quoted items
+      console.warn('Falling back to manual extraction of items from response');
+      
+      // Attempt to infer category from key before array
+      let category = 'suggestions';
+      const catMatch = raw.match(/"([^"']+)"\s*:\s*\[/);
+      if (catMatch) {
+        category = catMatch[1];
+        console.log(`Inferred category: ${category}`);
+      }
+      
+      // Extract all quoted strings in the raw text
+      const itemMatches = Array.from(raw.matchAll(/"([^"']+)"/g)).map(m => m[1]);
+      // Remove any occurrence of the category name if it appears as first item
+      const items = itemMatches.filter((item, idx) => idx !== 0 || item !== category);
+      console.log(`Manually extracted ${items.length} items for category ${category}`);
+      return { [category]: items };
+    } catch (secondError) {
+      console.error('Error parsing extracted JSON:', secondError);
+      throw new Error(`Unable to parse JSON from AI response: ${firstError instanceof Error ? firstError.message : firstError}`);
     }
-    throw new Error(`Unable to parse JSON from AI response: ${error instanceof Error ? error.message : error}`);
   }
 }
 
@@ -208,9 +252,29 @@ export async function POST(request: NextRequest) {
         temperature: DEFAULT_TEMPERATURE,
         top_p: DEFAULT_TOP_P,
       });
-      console.log('OpenAI response raw:', res);
+      
+      // Detailed logging of OpenAI response
+      try {
+        console.log('OpenAI response object:', {
+          id: res.id,
+          model: res.model,
+          created: res.created,
+          choices_length: res.choices?.length,
+          finish_reason: res.choices?.[0]?.finish_reason,
+          content_length: res.choices?.[0]?.message?.content?.length || 0,
+          content_preview: res.choices?.[0]?.message?.content?.substring(0, 100) || ''
+        });
+      } catch (logError) {
+        console.error('Error logging OpenAI response:', logError);
+      }
+      
       // Extract and parse the JSON output
       const raw = res.choices?.[0]?.message?.content ?? '';
+      if (!raw) {
+        console.error('Empty content received from OpenAI');
+        throw new Error('No content received from OpenAI');
+      }
+      
       const parsed = parseJSON(raw);
       aiResponse = parsed;
     }
@@ -235,11 +299,40 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Log the response received from AI
-      console.log('Response from Claude:', response.data);
+      // Detailed logging of Claude response
+      try {
+        console.log('Claude response details:', {
+          id: response.data.id,
+          model: response.data.model,
+          type: response.data.type,
+          role: response.data.content?.[0]?.type,
+          content_length: response.data.content?.[0]?.text?.length || 0,
+          content_preview: response.data.content?.[0]?.text?.substring(0, 100) || '',
+          stop_reason: response.data.stop_reason,
+        });
+      } catch (logError) {
+        console.error('Error logging Claude response:', logError);
+      }
 
       // Extract and parse the JSON output
-      const rawC = response.data.completion?.content ?? response.data.completion ?? '';
+      let rawC = '';
+      try {
+        // Modern Claude API format
+        if (response.data.content) {
+          rawC = response.data.content[0]?.text || '';
+        } else {
+          // Legacy format fallback
+          rawC = response.data.completion?.content || response.data.completion || '';
+        }
+        if (!rawC) {
+          console.error('Empty content received from Claude');
+          throw new Error('No content received from Claude');
+        }
+      } catch (extractError) {
+        console.error('Error extracting content from Claude response:', extractError);
+        throw new Error('Failed to extract Claude response content');
+      }
+      
       const parsedC = parseJSON(rawC);
 
       // Log the parsed response
@@ -275,11 +368,28 @@ export async function POST(request: NextRequest) {
         }
       );
 
-      // Log the response received from AI
-      console.log('Response from KlusterAI:', respK.data);
+      // Detailed logging of KlusterAI response
+      try {
+        console.log('KlusterAI response details:', {
+          id: respK.data.id,
+          model: respK.data.model,
+          created: respK.data.created,
+          choices_length: respK.data.choices?.length,
+          finish_reason: respK.data.choices?.[0]?.finish_reason,
+          content_length: respK.data.choices?.[0]?.message?.content?.length || 0,
+          content_preview: respK.data.choices?.[0]?.message?.content?.substring(0, 100) || ''
+        });
+      } catch (logError) {
+        console.error('Error logging KlusterAI response:', logError);
+      }
 
       // Extract and parse the JSON output
       const rawK = respK.data.choices?.[0]?.message?.content ?? '';
+      if (!rawK) {
+        console.error('Empty content received from KlusterAI');
+        throw new Error('No content received from KlusterAI');
+      }
+      
       const parsedK = parseJSON(rawK);
 
       // Log the parsed response
@@ -291,9 +401,36 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(aiResponse);
   } catch (error) {
     console.error('AI request error:', error);
+    
+    // Check if we can extract a meaningful error message
+    let errorMessage = 'Unknown error';
+    let statusCode = 500;
+    
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      
+      // Log the full error stack for debugging
+      console.error('Full error stack:', error.stack);
+      
+      // Check if it's an OpenAI API error
+      const openAiError = error as any;
+      if (openAiError.status) {
+        statusCode = openAiError.status;
+        console.log(`OpenAI API error status: ${openAiError.status}`);
+      }
+      
+      // Special handling for JSON parsing errors
+      if (errorMessage.includes('JSON')) {
+        errorMessage = 'The AI returned an invalid response format. Please try again or modify your prompt.';
+      }
+    }
+    
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+      { 
+        error: errorMessage,
+        details: process.env.NODE_ENV === 'development' ? String(error) : undefined 
+      },
+      { status: statusCode }
     );
   }
 } 
