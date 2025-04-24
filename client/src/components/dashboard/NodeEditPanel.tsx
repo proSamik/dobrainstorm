@@ -43,6 +43,13 @@ interface NodeContextData {
   currentNode: NodeData | null;
 }
 
+// Add counters for each type of ID to ensure uniqueness
+let nodeCounter = 0;
+let edgeCounter = 0;
+let conceptCounter = 0;
+let subBranchCounter = 0;
+let subSubBranchCounter = 0;
+
 /**
  * Custom hook to build node context tree
  * IMPORTANT: This hook must be called in a React component at the top level,
@@ -505,6 +512,35 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
   }, [setSuggestions, setEditableSuggestions, setChatError, setIsEditingSuggestions]);
 
   /**
+   * Generate a unique ID for nodes and edges
+   * Uses a combination of timestamp, counter, and random component to ensure uniqueness
+   */
+  const generateUniqueId = (prefix: string): string => {
+    let counter;
+    switch (prefix) {
+      case 'node':
+        counter = ++nodeCounter;
+        break;
+      case 'edge':
+        counter = ++edgeCounter;
+        break;
+      case 'node-concept':
+        counter = ++conceptCounter;
+        break;
+      case 'node-sub':
+        counter = ++subBranchCounter;
+        break;
+      case 'node-subsub':
+        counter = ++subSubBranchCounter;
+        break;
+      default:
+        counter = Math.floor(Math.random() * 10000);
+    }
+    
+    return `${prefix}-${Date.now()}-${counter}-${Math.random().toString(36).substring(2, 9)}`;
+  };
+
+  /**
    * Create branch nodes from AI suggestions
    * This will automatically create new nodes based on the AI response
    * and connect them to the current node
@@ -515,6 +551,28 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
       editableSuggestions, 
       suggestions 
     });
+    
+    // Reset counters for this new mind map
+    nodeCounter = 0;
+    edgeCounter = 0;
+    conceptCounter = 0;
+    subBranchCounter = 0;
+    subSubBranchCounter = 0;
+    
+    // Track IDs to ensure uniqueness
+    const idSet = new Set<string>();
+    
+    // Helper function to ensure unique IDs
+    const ensureUniqueId = (id: string): string => {
+      if (idSet.has(id)) {
+        const newId = `${id}-${Math.random().toString(36).substring(2, 9)}`;
+        console.warn(`Duplicate ID detected: ${id}. Created new ID: ${newId}`);
+        idSet.add(newId);
+        return newId;
+      }
+      idSet.add(id);
+      return id;
+    };
     
     // Always try to use the editableSuggestions first since it's the most up-to-date
     let currentSuggestions = null;
@@ -594,20 +652,29 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     };
     
     /**
-     * Check if a proposed node position would overlap with existing nodes
+     * Check if a proposed node position would overlap with existing nodes and newly created nodes
      * @param x Proposed X position
      * @param y Proposed Y position
      * @param width Node width
      * @param height Node height
+     * @param createdNodesInSession Array of nodes created in the current session
      * @returns True if position is clear, false if overlapping
      */
-    const isPositionClear = (x: number, y: number, width: number, height: number) => {
+    const isPositionClear = (
+      x: number, 
+      y: number, 
+      width: number, 
+      height: number, 
+      createdNodesInSession: Node[] = []
+    ) => {
       // Add safety margins to dimensions
       const safetyWidth = width + HORIZONTAL_SAFETY_MARGIN;
       const safetyHeight = height + VERTICAL_SAFETY_MARGIN;
       
       // Check against all existing nodes
-      for (const node of nodes) {
+      const allNodesToCheck = [...nodes, ...createdNodesInSession];
+      
+      for (const node of allNodesToCheck) {
         // Skip nodes without valid position
         if (!node.position) continue;
         
@@ -647,11 +714,18 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
      * @param baseY Desired Y position
      * @param width Node width
      * @param height Node height
+     * @param createdNodesInSession Array of nodes created in the current session
      * @returns Clear position coordinates
      */
-    const findClearPosition = (baseX: number, baseY: number, width: number, height: number) => {
+    const findClearPosition = (
+      baseX: number, 
+      baseY: number, 
+      width: number, 
+      height: number,
+      createdNodesInSession: Node[] = []
+    ) => {
       // Try the original position first
-      if (isPositionClear(baseX, baseY, width, height)) {
+      if (isPositionClear(baseX, baseY, width, height, createdNodesInSession)) {
         return { x: baseX, y: baseY };
       }
       
@@ -660,13 +734,13 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
       // Try increasing vertical offsets first
       for (let yOffset = 50; yOffset <= 500; yOffset += 50) {
         // Try below
-        if (isPositionClear(baseX, baseY + yOffset, width, height)) {
+        if (isPositionClear(baseX, baseY + yOffset, width, height, createdNodesInSession)) {
           console.log(`Found clear position below at (${baseX},${baseY + yOffset})`);
           return { x: baseX, y: baseY + yOffset };
         }
         
         // Try above
-        if (isPositionClear(baseX, baseY - yOffset, width, height)) {
+        if (isPositionClear(baseX, baseY - yOffset, width, height, createdNodesInSession)) {
           console.log(`Found clear position above at (${baseX},${baseY - yOffset})`);
           return { x: baseX, y: baseY - yOffset };
         }
@@ -674,15 +748,25 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
       
       // If vertical adjustments don't work, try increasing horizontal distance
       for (let xOffset = 50; xOffset <= 500; xOffset += 50) {
-        if (isPositionClear(baseX + xOffset, baseY, width, height)) {
+        if (isPositionClear(baseX + xOffset, baseY, width, height, createdNodesInSession)) {
           console.log(`Found clear position with extra horizontal offset at (${baseX + xOffset},${baseY})`);
           return { x: baseX + xOffset, y: baseY };
         }
       }
       
-      // Last resort: combine increased horizontal and vertical offsets
+      // Try a grid of positions with both horizontal and vertical offsets
+      for (let xOffset = 50; xOffset <= 500; xOffset += 50) {
+        for (let yOffset = 50; yOffset <= 500; yOffset += 50) {
+          if (isPositionClear(baseX + xOffset, baseY + yOffset, width, height, createdNodesInSession)) {
+            console.log(`Found clear position with combined offsets at (${baseX + xOffset},${baseY + yOffset})`);
+            return { x: baseX + xOffset, y: baseY + yOffset };
+          }
+        }
+      }
+      
+      // Last resort: place far away
       console.log(`Using last resort positioning with large offsets`);
-      return { x: baseX + 400, y: baseY + 200 };
+      return { x: baseX + 600, y: baseY + 300 };
     };
     
     // Make sure we're not creating the mind map if there's no selected node
@@ -768,6 +852,10 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     // Get base position for the mind map
     const basePosition = getBasePosition();
     
+    // Keep track of nodes created in this session
+    const sessionNodes: Node[] = [];
+    const sessionEdges: Edge[] = [];
+    
     // All nodes and edges including existing ones
     const createdNodes = [...nodes];
     const createdEdges = [...edges];
@@ -777,6 +865,9 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     
     // For each category, create a section with its concepts
     categories.forEach((category, categoryIndex) => {
+      // Track nodes created for this category branch
+      const categoryBranchNodes: Node[] = [];
+      
       const categoryItems = currentSuggestions[category];
       if (!Array.isArray(categoryItems) || categoryItems.length === 0) return;
       
@@ -797,11 +888,12 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
         desiredCategoryPosition.x, 
         desiredCategoryPosition.y, 
         categoryDimensions.width, 
-        categoryDimensions.height
+        categoryDimensions.height,
+        sessionNodes
       );
       
       // Create the category node
-      const categoryNodeId = `node-${Date.now()}-${categoryIndex}`;
+      const categoryNodeId = ensureUniqueId(generateUniqueId('node'));
       const categoryNode: Node = {
         id: categoryNodeId,
         type: 'textNode',
@@ -822,7 +914,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
       
       // Connect from the parent node to this category
       const categoryEdge: Edge = {
-        id: `edge-${selectedNode.id}-${categoryNodeId}`,
+        id: ensureUniqueId(generateUniqueId('edge')),
         source: selectedNode.id,
         target: categoryNodeId,
         type: 'default',
@@ -830,6 +922,12 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
         targetHandle: Position.Left
       };
       
+      // Add to session tracking arrays
+      sessionNodes.push(categoryNode);
+      sessionEdges.push(categoryEdge);
+      categoryBranchNodes.push(categoryNode);
+      
+      // Add to main creation arrays
       createdNodes.push(categoryNode);
       createdEdges.push(categoryEdge);
       
@@ -907,14 +1005,15 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
           desiredConceptPosition.x, 
           desiredConceptPosition.y, 
           conceptDimensions.width, 
-          conceptDimensions.height
+          conceptDimensions.height,
+          sessionNodes
         );
         
         // Debug node positions
         console.log(`Creating concept node "${safeConceptTitle}" with dimensions ${conceptDimensions.width}x${conceptDimensions.height}`);
         console.log(`Desired position: (${desiredConceptPosition.x},${desiredConceptPosition.y}), Actual clear position: (${conceptNodePosition.x},${conceptNodePosition.y})`);
         
-        const conceptNodeId = `node-concept-${Date.now()}-${categoryIndex}-${itemIndex}`;
+        const conceptNodeId = ensureUniqueId(generateUniqueId('node-concept'));
         const conceptNode: Node = {
           id: conceptNodeId,
           type: 'textNode',
@@ -936,7 +1035,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
         
         // Connect concept to category
         const conceptEdge: Edge = {
-          id: `edge-${categoryNodeId}-${conceptNodeId}`,
+          id: ensureUniqueId(generateUniqueId('edge')),
           source: categoryNodeId,
           target: conceptNodeId,
           type: 'default',
@@ -944,8 +1043,9 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
           targetHandle: Position.Left
         };
         
-        createdNodes.push(conceptNode);
-        createdEdges.push(conceptEdge);
+        sessionNodes.push(conceptNode);
+        sessionEdges.push(conceptEdge);
+        categoryBranchNodes.push(conceptNode);
         
         // Create sub-branches if present
         if (item.sub_branches && Array.isArray(item.sub_branches) && item.sub_branches.length > 0) {
@@ -954,8 +1054,8 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
           let previousSubBranchHeight = 0;
           
           // Track sub-branch nodes to handle potential sub-sub-branches
-          const subBranchNodes: Node[] = [];
-          const subBranchEdges: Edge[] = [];
+          const conceptBranchNodes: Node[] = [];
+          const conceptBranchEdges: Edge[] = [];
           
           item.sub_branches.forEach((subItem: any, subIndex: number) => {
             // Create sub-branch node
@@ -1002,14 +1102,15 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
               desiredSubBranchPosition.x, 
               desiredSubBranchPosition.y, 
               subBranchDimensions.width, 
-              subBranchDimensions.height
+              subBranchDimensions.height,
+              sessionNodes
             );
             
             // Debug node positions
             console.log(`Creating sub-branch node "${safeSubBranchTitle}" with dimensions ${subBranchDimensions.width}x${subBranchDimensions.height}`);
             console.log(`Desired position: (${desiredSubBranchPosition.x},${desiredSubBranchPosition.y}), Actual clear position: (${subBranchNodePosition.x},${subBranchNodePosition.y})`);
             
-            const subBranchNodeId = `node-sub-${Date.now()}-${categoryIndex}-${itemIndex}-${subIndex}`;
+            const subBranchNodeId = ensureUniqueId(generateUniqueId('node-sub'));
             const subBranchNode: Node = {
               id: subBranchNodeId,
               type: 'textNode',
@@ -1024,10 +1125,10 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
               },
               draggable: true
             };
-            
+
             // Connect sub-branch to concept
             const subBranchEdge: Edge = {
-              id: `edge-${conceptNodeId}-${subBranchNodeId}`,
+              id: ensureUniqueId(generateUniqueId('edge')),
               source: conceptNodeId,
               target: subBranchNodeId,
               type: 'default',
@@ -1035,8 +1136,10 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
               targetHandle: Position.Left
             };
             
-            subBranchNodes.push(subBranchNode);
-            subBranchEdges.push(subBranchEdge);
+            // Add to session tracking arrays
+            sessionNodes.push(subBranchNode);
+            sessionEdges.push(subBranchEdge);
+            conceptBranchNodes.push(subBranchNode);
             
             // Handle sub-sub-branches if present
             if (hasSubSubBranches) {
@@ -1048,6 +1151,10 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
                 SUB_BRANCH_Y_OFFSET * 1.5, // Ensure at least 1.5x normal spacing
                 subSubBranchCount * SUB_SUB_BRANCH_Y_OFFSET / 2 // Or half the space needed for sub-sub-branches
               );
+              
+              // Track sub-sub-branch nodes
+              const subSubBranchNodes: Node[] = [];
+              const subSubBranchEdges: Edge[] = [];
               
               subItem.sub_branches.forEach((subSubItem: any, subSubIndex: number) => {
                 // Extract title and reason
@@ -1084,13 +1191,14 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
                   desiredSubSubBranchPosition.x, 
                   desiredSubSubBranchPosition.y, 
                   subSubBranchDimensions.width, 
-                  subSubBranchDimensions.height
+                  subSubBranchDimensions.height,
+                  sessionNodes
                 );
                 
                 // Debug node positions
                 console.log(`Creating sub-sub-branch node "${safeSubSubBranchTitle}" with dimensions ${subSubBranchDimensions.width}x${subSubBranchDimensions.height}`);
                 
-                const subSubBranchNodeId = `node-subsub-${Date.now()}-${categoryIndex}-${itemIndex}-${subIndex}-${subSubIndex}`;
+                const subSubBranchNodeId = ensureUniqueId(generateUniqueId('node-subsub'));
                 const subSubBranchNode: Node = {
                   id: subSubBranchNodeId,
                   type: 'textNode',
@@ -1105,10 +1213,10 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
                   },
                   draggable: true
                 };
-                
+
                 // Connect to parent sub-branch
                 const subSubBranchEdge: Edge = {
-                  id: `edge-${subBranchNodeId}-${subSubBranchNodeId}`,
+                  id: ensureUniqueId(generateUniqueId('edge')),
                   source: subBranchNodeId,
                   target: subSubBranchNodeId,
                   type: 'default',
@@ -1116,21 +1224,21 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
                   targetHandle: Position.Left
                 };
                 
-                subBranchNodes.push(subSubBranchNode);
-                subBranchEdges.push(subSubBranchEdge);
+                // Add to tracking arrays
+                sessionNodes.push(subSubBranchNode);
+                sessionEdges.push(subSubBranchEdge);
+                subSubBranchNodes.push(subSubBranchNode);
+                conceptBranchNodes.push(subSubBranchNode);
                 
                 // Update Y position for next sub-sub-branch
                 subSubBranchY += SUB_SUB_BRANCH_Y_OFFSET;
               });
+              
             } else {
               // Regular sub-branch without children
               previousSubBranchHeight = SUB_BRANCH_Y_OFFSET;
             }
           });
-          
-          // Add all sub-branch nodes to the overall nodes collection
-          createdNodes.push(...subBranchNodes);
-          createdEdges.push(...subBranchEdges);
           
           // Update conceptY to account for sub-branches
           conceptY += Math.max(NODE_HEIGHT, previousSubBranchHeight * item.sub_branches.length);
@@ -1145,6 +1253,9 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
     });
     
     // Now update the Redux store with all created nodes and edges at once
+    createdNodes.push(...sessionNodes);
+    createdEdges.push(...sessionEdges);
+    
     dispatch(updateNodes(createdNodes));
     dispatch(updateEdges(createdEdges));
     
