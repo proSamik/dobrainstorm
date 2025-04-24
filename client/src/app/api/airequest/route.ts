@@ -404,10 +404,13 @@ export async function POST(request: NextRequest) {
           } else if (ctx.role === 'function' && ctx.name) {
             messages.push({ role: 'function', content: ctx.content, name: ctx.name });
           } else if (ctx.role === 'tool') {
-            // Note: OpenAI's tool messages have a different structure than our internal API
-            // For now, we'll create a user message with the content to avoid type errors
-            messages.push({ role: 'user', content: `Tool message: ${ctx.content}` });
-            console.warn('Tool message type converted to user message for OpenAI compatibility');
+            // OpenAI SDK expects tool responses to have specific structure
+            // Convert tool messages to assistant messages with content
+            messages.push({ 
+              role: 'assistant', 
+              content: `Tool result: ${ctx.content}` 
+            });
+            console.warn('Tool message type converted to assistant message for OpenAI compatibility');
           }
         });
       }
