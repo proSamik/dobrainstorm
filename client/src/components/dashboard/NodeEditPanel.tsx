@@ -520,7 +520,7 @@ const NodeEditPanel = ({ nodeId }: NodeEditPanelProps) => {
       
       // Position category node to the right of the parent node
       const categoryNodePosition = {
-        x: selectedNode.position.x + 300, // Horizontal distance from parent
+        x: selectedNode.position.x + 500, // Horizontal distance from parent
         y: categoryY - (ideas.length * NODE_HEIGHT) / 2 // Align with the center of this category's ideas
       };
       
