@@ -70,16 +70,8 @@ func (h *SettingsHandler) GetAPIKeys(w http.ResponseWriter, r *http.Request) {
 	// Create response with masked keys
 	maskedSettings := make(map[string]interface{})
 	for provider, data := range aiSettings {
-		// Decrypt the stored key
-		key, err := encryption.Decrypt(data.Key)
-		if err != nil {
-			log.Printf("[SettingsHandler] Error decrypting key: %v", err)
-			http.Error(w, "Failed to decrypt key", http.StatusInternalServerError)
-			return
-		}
-
-		// Mask the key, show only last 4 characters
-		maskedKey := maskAPIKey(key)
+		// Use the stored encrypted key directly (no decrypt/mask)
+		encryptedKey := data.Key
 
 		// Ensure models is not null
 		models := data.Models
@@ -119,12 +111,12 @@ func (h *SettingsHandler) GetAPIKeys(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Log the response being sent for debugging
-		log.Printf("[SettingsHandler] Sending response for provider %s: key=%s, isValid=true, models=%v, selectedModel=%s",
-			provider, maskedKey, models, selectedModel)
+		// Prepare response using encrypted key
+		log.Printf("[SettingsHandler] Sending response for provider %s: encryptedKey masked in log, isValid=true, models=%v, selectedModel=%s",
+			provider, models, selectedModel)
 
 		maskedSettings[provider] = map[string]interface{}{
-			"key":           maskedKey,
+			"key":           encryptedKey,
 			"isValid":       true,
 			"models":        models,
 			"selectedModel": selectedModel,
@@ -197,16 +189,4 @@ func (h *SettingsHandler) SaveKeys(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 		"message": "API keys saved successfully",
 	})
-}
-
-// maskAPIKey masks an API key, showing only the last 4 characters
-func maskAPIKey(key string) string {
-	if len(key) <= 4 {
-		return "•••••••"
-	}
-	maskedPart := ""
-	for i := 0; i < len(key)-4; i++ {
-		maskedPart += "•"
-	}
-	return maskedPart + key[len(key)-4:]
 }
