@@ -40,7 +40,8 @@ export default function WaitingListPageClient() {
    * @param e - Form submission event
    */
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
+    console.log("Form submission prevented, using fetch with POST method");
     
     if (!email) {
       toast.error('Please enter your email address')
@@ -56,7 +57,10 @@ export default function WaitingListPageClient() {
         .find(row => row.startsWith('referrer='))
         ?.split('=')[1] || 'direct'
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/early-access`, {
+      const apiUrl = `${process.env.NEXT_PUBLIC_API_URL || ''}/api/early-access`;
+      console.log("Making POST request to:", apiUrl);
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
