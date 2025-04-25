@@ -6,7 +6,7 @@ import { getApiUrl } from './config';
 interface ApiRequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   headers?: Record<string, string>;
-  body?: any;
+  body?: unknown; // Use 'unknown' instead of 'any' for better type safety
   credentials?: RequestCredentials;
 }
 
