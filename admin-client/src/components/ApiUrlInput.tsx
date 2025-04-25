@@ -85,7 +85,7 @@ export default function ApiUrlInput({ redirectPath = '/login' }: { redirectPath?
       }
 
       return true;
-    } catch (err) {
+    } catch {
       setError('Failed to connect to API. Please check the URL and try again.');
       return false;
     } finally {
