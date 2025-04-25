@@ -4,8 +4,8 @@ import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline'
-import { useAuth } from '@/contexts/AuthContext'
-import { authService } from '@/services/auth'
+// import { useAuth } from '@/contexts/AuthContext'
+// import { authService } from '@/services/auth'
 import { ThemeToggle } from './ThemeToggle'
 import Image from 'next/image'
 
@@ -16,8 +16,6 @@ import Image from 'next/image'
 const Navigation = () => {
   const router = useRouter()
   const pathname = usePathname()
-  // const { auth, logout: contextLogout } = useAuth()
-  const [isOpen, setIsOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -43,7 +41,7 @@ const Navigation = () => {
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
+        setIsMobileMenuOpen(false)
       }
     }
 
