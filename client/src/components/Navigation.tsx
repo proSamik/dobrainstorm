@@ -16,7 +16,7 @@ import Image from 'next/image'
 const Navigation = () => {
   const router = useRouter()
   const pathname = usePathname()
-  const { auth, logout: contextLogout } = useAuth()
+  // const { auth, logout: contextLogout } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -24,21 +24,22 @@ const Navigation = () => {
   /**
    * Handles user logout by clearing state and redirecting
    */
-  const handleLogout = async () => {
-    try {
-      // Call contextLogout first to clear React state immediately
-      contextLogout()
-      // Let authService handle the API call, error handling, and redirection
-      await authService.logout()
-      // No need for router.push here as authService will redirect
-    } catch (error: unknown) {
-      console.error('[Navigation] Catastrophic error during logout:', error instanceof Error ? error.message : String(error))
-      // Force redirect as last resort
-      window.location.href = '/'
-    }
-  }
+  // const handleLogout = async () => {
+  //   try {
+  //     // Call contextLogout first to clear React state immediately
+  //     contextLogout()
+  //     // Let authService handle the API call, error handling, and redirection
+  //     await authService.logout()
+  //     // No need for router.push here as authService will redirect
+  //   } catch (error: unknown) {
+  //     console.error('[Navigation] Catastrophic error during logout:', error instanceof Error ? error.message : String(error))
+  //     // Force redirect as last resort
+  //     window.location.href = '/'
+  //   }
+  // }
 
   // Close dropdown when clicking outside
+  
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
