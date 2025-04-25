@@ -30,6 +30,9 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /app/main .
 
+# Copy database directory with migrations
+COPY --from=builder /app/database /app/database
+
 # We don't copy .env file as environment variables will be provided by docker-compose
 # COPY --from=builder /app/.env .
 
