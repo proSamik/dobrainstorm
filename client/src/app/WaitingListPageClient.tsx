@@ -102,7 +102,7 @@ export default function WaitingListPageClient() {
                   <p className="mt-4 text-light-muted dark:text-dark-muted">
                     Be the first one to get a free first month access for free.
                   </p>
-                  <form className="mt-6" onSubmit={handleSubmit}>
+                  <form className="mt-6" onSubmit={handleSubmit} method="POST">
                     <div className="flex gap-x-4">
                       <label htmlFor="email-address" className="sr-only">
                         Email address
