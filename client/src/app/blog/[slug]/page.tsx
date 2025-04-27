@@ -102,7 +102,7 @@ export default async function BlogPost({ params }: PageProps) {
               fill
               sizes="(max-width: 768px) 100vw, 1200px"
               priority
-              unoptimized={post.imagePath?.startsWith('/blog/')}
+              unoptimized={true}
             />
           </div>
           <div className="p-6 md:p-8">
