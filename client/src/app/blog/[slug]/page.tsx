@@ -3,7 +3,7 @@ import { getAllPostSlugs } from '@/lib/blog-utils';
 import { fetchBlogPostBySlug } from '../actions';
 import type { Metadata } from 'next';
 import Image from 'next/image';
-import { DEFAULT_BLOG_IMAGE, formatDate } from '@/lib/image-utils';
+import { DEFAULT_BLOG_IMAGE, formatDate, ensureImagePath } from '@/lib/image-utils';
 import MarkdownContent from '@/components/MarkdownContent';
 
 // Define a proper interface for the page props
@@ -65,7 +65,7 @@ export default async function BlogPost({ params }: PageProps) {
     '@type': 'BlogPosting',
     headline: post.title,
     description: post.description,
-    image: post.imagePath || DEFAULT_BLOG_IMAGE,
+    image: ensureImagePath(post.imagePath || DEFAULT_BLOG_IMAGE),
     datePublished: post.date,
     author: {
       '@type': 'Organization',
@@ -96,12 +96,13 @@ export default async function BlogPost({ params }: PageProps) {
         <article className="bg-background border border-accent shadow-lg rounded-lg overflow-hidden max-w-4xl mx-auto">
           <div className="w-full h-64 md:h-96 overflow-hidden relative bg-accent/20">
             <Image
-              src={post.imagePath || DEFAULT_BLOG_IMAGE}
+              src={ensureImagePath(post.imagePath || DEFAULT_BLOG_IMAGE)}
               alt={post.title}
               className="object-cover"
               fill
               sizes="(max-width: 768px) 100vw, 1200px"
               priority
+              unoptimized={post.imagePath?.startsWith('/blog/')}
             />
           </div>
           <div className="p-6 md:p-8">
