@@ -6,7 +6,7 @@ import { DEFAULT_BLOG_IMAGE, ensureImagePath } from '@/lib/image-utils';
 
 interface BlogImageProps {
   src: string;
-  alt: string;
+  alt?: string;
   className?: string;
   width?: number;
   height?: number;
@@ -28,6 +28,17 @@ export default function BlogImage({
   const [error, setError] = React.useState(false);
   const processedSrc = ensureImagePath(src);
   
+  // Extract filename for fallback alt text
+  const getAltFromSrc = (path: string): string => {
+    // Extract filename from path
+    const filename = path.split('/').pop() || '';
+    // Remove extension and replace hyphens/underscores with spaces
+    return filename.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+  };
+  
+  // Use provided alt text or extract from filename
+  const altText = alt || getAltFromSrc(processedSrc);
+  
   // Handle image loading errors
   const handleError = () => {
     if (!error) {
@@ -38,7 +49,7 @@ export default function BlogImage({
   // Common props for both variants of the Image component
   const imageProps = {
     src: error ? DEFAULT_BLOG_IMAGE : processedSrc,
-    alt,
+    alt: error ? "Default image" : altText,
     className: `object-cover ${className}`,
     unoptimized: true, // Disable optimization for blog images to ensure they load directly
     onError: handleError
