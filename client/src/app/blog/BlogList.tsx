@@ -312,7 +312,7 @@ export default function BlogList({ posts }: BlogListProps) {
                     alt={post.title}
                     fill
                     className="object-cover transition-transform duration-300 group-hover:scale-105"
-                    unoptimized={post.imagePath?.startsWith('/blog/')}
+                    unoptimized={true}
                   />
                   <div className="absolute bottom-2 left-2">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-[#0A0F1C] dark:bg-dark-background text-white">
