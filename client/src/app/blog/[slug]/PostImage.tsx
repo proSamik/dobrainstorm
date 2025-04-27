@@ -31,7 +31,7 @@ const PostImage = ({ src, alt }: PostImageProps) => {
         className="object-cover"
         sizes="(max-width: 768px) 100vw, 1200px"
         onError={handleImageError}
-        unoptimized={isBlogImage}
+        unoptimized={true}
       />
     </div>
   );
