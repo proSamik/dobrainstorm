@@ -38,6 +38,7 @@ export default function BlogImage({
   
   // Use provided alt text or extract from filename
   const altText = alt || getAltFromSrc(processedSrc);
+  const finalAlt = error ? "Default image" : altText;
   
   // Handle image loading errors
   const handleError = () => {
@@ -46,20 +47,15 @@ export default function BlogImage({
     }
   };
   
-  // Common props for both variants of the Image component
-  const imageProps = {
-    src: error ? DEFAULT_BLOG_IMAGE : processedSrc,
-    alt: error ? "Default image" : altText,
-    className: `object-cover ${className}`,
-    unoptimized: true, // Disable optimization for blog images to ensure they load directly
-    onError: handleError
-  };
-  
   // Return the appropriate Image component based on whether fill mode is requested
   if (fill) {
     return (
       <Image
-        {...imageProps}
+        src={error ? DEFAULT_BLOG_IMAGE : processedSrc}
+        alt={finalAlt}
+        className={`object-cover ${className}`}
+        unoptimized={true}
+        onError={handleError}
         fill
         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
       />
@@ -68,7 +64,11 @@ export default function BlogImage({
   
   return (
     <Image
-      {...imageProps}
+      src={error ? DEFAULT_BLOG_IMAGE : processedSrc}
+      alt={finalAlt}
+      className={`object-cover ${className}`}
+      unoptimized={true}
+      onError={handleError}
       width={width}
       height={height}
     />
