@@ -10,7 +10,7 @@ image: /blog/posts/images/api-integration.jpg
 
 One of the most powerful features of n8n is its ability to connect with external APIs. This capability allows you to incorporate data and functionality from a wide range of services into your workflows. In this guide, we'll explore how to effectively integrate external APIs with n8n.
 
-![API Integration with n8n](/blog/posts/images/api-integration.jpg)
+![API Integration with n8n](../../api-integration.jpg)
 
 ## Understanding API Integration
 
@@ -25,7 +25,7 @@ APIs (Application Programming Interfaces) allow different software systems to co
 
 The primary way to interact with APIs in n8n is through the HTTP Request node. This versatile node allows you to make various types of HTTP requests (GET, POST, PUT, DELETE, etc.) to any API endpoint.
 
-![HTTP Request Node Configuration](/blog/posts/images/code-example.jpg)
+![HTTP Request Node Configuration](../../code-example.jpg)
 
 ### Basic API Request
 
@@ -70,7 +70,7 @@ Once you've made an API request, you'll need to process the response:
 3. **Data Extraction**: Use the Set node to extract specific fields from the response
 4. **Data Transformation**: Use Function nodes to transform the data as needed
 
-![Workflow Dashboard](/blog/posts/images/automation-dashboard.jpg)
+![Workflow Dashboard](../../automation-dashboard.jpg)
 
 ## Real-World Example: GitHub Integration
 
