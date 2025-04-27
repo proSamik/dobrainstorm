@@ -1,11 +1,12 @@
 'use client';
 
 import React from 'react';
-import BlogImage from '@/components/BlogImage';
+import Image from 'next/image';
+import { handleImageError } from '@/lib/image-utils';
 
 interface PostImageProps {
   src: string;
-  alt?: string;
+  alt: string;
 }
 
 /**
@@ -14,11 +15,13 @@ interface PostImageProps {
 const PostImage = ({ src, alt }: PostImageProps) => {
   return (
     <div className="w-full h-64 md:h-96 overflow-hidden relative bg-accent/20">
-      <BlogImage
+      <Image
         src={src}
         alt={alt}
         fill
         className="object-cover"
+        sizes="(max-width: 768px) 100vw, 1200px"
+        onError={handleImageError}
       />
     </div>
   );
