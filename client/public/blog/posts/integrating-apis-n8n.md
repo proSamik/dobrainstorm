@@ -3,7 +3,7 @@ title: Integrating External APIs with n8n
 description: How to connect and use external APIs within your n8n workflows
 date: 2023-11-30
 tags: ["API", "Integration", "n8n", "Tutorial"]
-image: /blog/posts/images/api-integration.jpg
+image: /api-integration.jpg
 ---
 
 # Integrating External APIs with n8n

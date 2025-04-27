@@ -3,7 +3,7 @@ title: Getting Started with Next.js and n8n
 description: Learn how to integrate Next.js with n8n for powerful workflow automation
 date: 2023-09-15
 tags: ["Next.js", "n8n", "Automation", "Tutorial"]
-image: /blog/posts/images/nextjs-n8n.jpg
+image: /nextjs-n8n.jpg
 ---
 
 # Getting Started with Next.js and n8n

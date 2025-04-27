@@ -3,7 +3,7 @@ title: Building Automated Workflows with n8n
 description: A comprehensive guide to creating and managing workflows with n8n
 date: 2023-10-22
 tags: ["n8n", "Workflow", "Automation", "API"]
-image: /blog/posts/images/workflow-automation.jpg
+image: /workflow-automation.jpg
 ---
 
 # Building Automated Workflows with n8n
