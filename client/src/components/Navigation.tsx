@@ -4,8 +4,8 @@ import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline'
-// import { useAuth } from '@/contexts/AuthContext'
-// import { authService } from '@/services/auth'
+import { useAuth } from '@/contexts/AuthContext'
+import { authService } from '@/services/auth'
 import { ThemeToggle } from './ThemeToggle'
 import Image from 'next/image'
 
@@ -16,32 +16,33 @@ import Image from 'next/image'
 const Navigation = () => {
   const router = useRouter()
   const pathname = usePathname()
+  const { auth, logout: contextLogout } = useAuth()
+  const [isOpen, setIsOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   /**
    * Handles user logout by clearing state and redirecting
    */
-  // const handleLogout = async () => {
-  //   try {
-  //     // Call contextLogout first to clear React state immediately
-  //     contextLogout()
-  //     // Let authService handle the API call, error handling, and redirection
-  //     await authService.logout()
-  //     // No need for router.push here as authService will redirect
-  //   } catch (error: unknown) {
-  //     console.error('[Navigation] Catastrophic error during logout:', error instanceof Error ? error.message : String(error))
-  //     // Force redirect as last resort
-  //     window.location.href = '/'
-  //   }
-  // }
+  const handleLogout = async () => {
+    try {
+      // Call contextLogout first to clear React state immediately
+      contextLogout()
+      // Let authService handle the API call, error handling, and redirection
+      await authService.logout()
+      // No need for router.push here as authService will redirect
+    } catch (error: unknown) {
+      console.error('[Navigation] Catastrophic error during logout:', error instanceof Error ? error.message : String(error))
+      // Force redirect as last resort
+      window.location.href = '/'
+    }
+  }
 
   // Close dropdown when clicking outside
-  
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsMobileMenuOpen(false)
+        setIsOpen(false)
       }
     }
 
@@ -65,7 +66,7 @@ const Navigation = () => {
 
             {/* Desktop Navigation Links */}
             <div className="hidden md:flex space-x-6">
-              {/* <button
+              <button
                 onClick={() => {
                   if (pathname === '/') {
                     document.querySelector('#pricing')?.scrollIntoView({ behavior: 'smooth' })
@@ -76,7 +77,7 @@ const Navigation = () => {
                 className="text-sm font-medium text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
               >
                 Pricing
-              </button> */}
+              </button>
               <button
                 onClick={() => {
                   if (pathname === '/') {
@@ -89,13 +90,13 @@ const Navigation = () => {
               >
                 Demo
               </button>
-              {/* <Link
+              <Link
                 href="/blog"
                 className="text-sm font-medium text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
               >
                 Blog
-              </Link> */}
-              {/* {auth && (
+              </Link>
+              {auth && (
                 <Link
                   href="/overview"
                   className="text-sm font-medium text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
@@ -110,7 +111,7 @@ const Navigation = () => {
                 >
                   Boards
                 </Link>
-              )} */}
+              )}
             </div>
           </div>
 
@@ -131,7 +132,7 @@ const Navigation = () => {
             </button>
             
             {/* Auth Section */}
-            {/* {auth ? (
+            {auth ? (
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setIsOpen(!isOpen)}
@@ -177,7 +178,7 @@ const Navigation = () => {
                   Sign in / up
                 </Link>
               </div>
-            )} */}
+            )}
           </div>
         </div>
 
@@ -185,7 +186,7 @@ const Navigation = () => {
         {isMobileMenuOpen && (
           <div className="md:hidden absolute top-16 left-0 right-0 bg-light-background dark:bg-dark-background border-b border-light-accent dark:border-dark-accent">
             <div className="space-y-1 px-4 py-2">
-              {/* <button
+              <button
                 onClick={() => {
                   if (pathname === '/') {
                     document.querySelector('#pricing')?.scrollIntoView({ behavior: 'smooth' })
@@ -197,7 +198,7 @@ const Navigation = () => {
                 className="block w-full text-left py-2 text-base font-medium text-light-muted dark:text-dark-muted hover:text-light-foreground dark:hover:text-dark-foreground"
               >
                 Pricing
-              </button> */}
+              </button>
               <button
                 onClick={() => {
                   if (pathname === '/') {
@@ -211,14 +212,14 @@ const Navigation = () => {
               >
                 Demo
               </button>
-              {/* <Link
+              <Link
                 href="/blog"
                 className="block py-2 text-base font-medium text-light-muted dark:text-dark-muted hover:text-light-foreground dark:hover:text-dark-foreground"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 Blog
-              </Link> */}
-              {/* {auth && (
+              </Link>
+              {auth && (
                 <Link
                   href="/overview"
                   className="block py-2 text-base font-medium text-light-muted dark:text-dark-muted hover:text-light-foreground dark:hover:text-dark-foreground"
@@ -235,9 +236,9 @@ const Navigation = () => {
                 >
                   Boards
                 </Link>
-              )} */}
+              )}
             </div>
-            {/* {!auth && (
+            {!auth && (
               <div className="border-t border-light-accent dark:border-dark-accent px-4 py-2">
                 <Link
                   href="/auth"
@@ -247,7 +248,7 @@ const Navigation = () => {
                   Sign in / up
                 </Link>
               </div>
-            )} */}
+            )}
           </div>
         )}
       </nav>
