@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { Post } from '@/types/blog';
-import { DEFAULT_BLOG_IMAGE, ensureImagePath } from '@/lib/image-utils';
+import { DEFAULT_BLOG_IMAGE } from '@/lib/image-utils';
+import BlogImage from '@/components/BlogImage';
 
 // Sort options
 const SORT_OPTIONS = ['Newest', 'Alphabetical'] as const;
@@ -307,12 +307,11 @@ export default function BlogList({ posts }: BlogListProps) {
                 className="group flex flex-col overflow-hidden rounded-2xl border border-light-accent dark:border-dark-accent bg-light-background dark:bg-dark-background shadow-sm transition-all hover:shadow-md"
               >
                 <div className="relative h-48 overflow-hidden bg-light-accent/10 dark:bg-dark-accent/10">
-                  <Image
-                    src={ensureImagePath(post.imagePath || DEFAULT_BLOG_IMAGE)}
+                  <BlogImage
+                    src={post.imagePath || DEFAULT_BLOG_IMAGE}
                     alt={post.title}
                     fill
-                    className="object-cover transition-transform duration-300 group-hover:scale-105"
-                    unoptimized={true}
+                    className="transition-transform duration-300 group-hover:scale-105"
                   />
                   <div className="absolute bottom-2 left-2">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-[#0A0F1C] dark:bg-dark-background text-white">
