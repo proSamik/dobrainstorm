@@ -2,9 +2,9 @@ import { notFound } from 'next/navigation';
 import { getAllPostSlugs } from '@/lib/blog-utils';
 import { fetchBlogPostBySlug } from '../actions';
 import type { Metadata } from 'next';
-import Image from 'next/image';
 import { DEFAULT_BLOG_IMAGE, formatDate, ensureImagePath } from '@/lib/image-utils';
 import MarkdownContent from '@/components/MarkdownContent';
+import BlogImage from '@/components/BlogImage';
 
 // Define a proper interface for the page props
 interface PageProps {
@@ -95,14 +95,11 @@ export default async function BlogPost({ params }: PageProps) {
       <main className="flex-grow container mx-auto px-4 py-8">
         <article className="bg-background border border-accent shadow-lg rounded-lg overflow-hidden max-w-4xl mx-auto">
           <div className="w-full h-64 md:h-96 overflow-hidden relative bg-accent/20">
-            <Image
-              src={ensureImagePath(post.imagePath || DEFAULT_BLOG_IMAGE)}
+            <BlogImage
+              src={post.imagePath || DEFAULT_BLOG_IMAGE}
               alt={post.title}
               className="object-cover"
               fill
-              sizes="(max-width: 768px) 100vw, 1200px"
-              priority
-              unoptimized={true}
             />
           </div>
           <div className="p-6 md:p-8">
