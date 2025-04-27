@@ -1,0 +1,23 @@
+{
+  "installCommand": "npm install",
+  "buildCommand": "npm run build",
+  "framework": "nextjs",
+  "outputDirectory": ".next",
+  "images": {
+    "sizes": [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    "remotePatterns": [
+      {
+        "protocol": "https",
+        "hostname": "mapyourideas.com"
+      },
+      {
+        "protocol": "https",
+        "hostname": "backendserver.mapyourideas.com"
+      },
+      {
+        "protocol": "https",
+        "hostname": "**"
+      }
+    ]
+  }
+} 
