@@ -252,12 +252,18 @@ export function optimizeImageSize(imagePath: string, maxWidth = 800, maxHeight =
 
 function fixImagePaths(content: string): string {
   // Fix markdown image syntax: ![alt](./images/file.png)
-  content = content.replace(/!\[(.*?)\]\(\.\/images\/(.*?)\)/g, '![$1](/blog/posts/images/$2)');
-  content = content.replace(/!\[(.*?)\]\(\.\.\/(images\/.*?)\)/g, '![$1](/blog/posts/$2)');
+  content = content.replace(/!\[(.*?)\]\(\.\/images\/(.*?)\)/g, '![$1](/$2)');
+  content = content.replace(/!\[(.*?)\]\(\.\.\/(images\/.*?)\)/g, '![$1](/$2)');
+  
+  // Fix the specific case with ../../ pattern (pointing to public root)
+  content = content.replace(/!\[(.*?)\]\(\.\.\/..\/(.*?)\)/g, '![$1](/$2)');
   
   // Fix HTML image tags: <img src="./images/file.png" />
-  content = content.replace(/src=["']\.\/images\/([^"']+)["']/g, 'src="/blog/posts/images/$1"');
-  content = content.replace(/src=["']\.\.\/(images\/[^"']+)["']/g, 'src="/blog/posts/$1"');
+  content = content.replace(/src=["']\.\/images\/([^"']+)["']/g, 'src="/$1"');
+  content = content.replace(/src=["']\.\.\/(images\/[^"']+)["']/g, 'src="/$1"');
+  
+  // Fix the specific case for HTML image tags with ../../ pattern
+  content = content.replace(/src=["']\.\.\/..\/(.*?)["']/g, 'src="/$1"');
   
   return content;
 }
