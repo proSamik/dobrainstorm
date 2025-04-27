@@ -10,12 +10,12 @@ export const DEFAULT_BLOG_IMAGE = '/blog/posts/images/default-post.jpg';
 export function ensureImagePath(imagePath: string): string {
   if (!imagePath) return DEFAULT_BLOG_IMAGE;
   
-  // If it's already a URL, return it
+  // If it's already a full URL, return it
   if (imagePath.startsWith('http')) {
     return imagePath;
   }
   
-  // Make sure path starts with a slash
+  // Make sure path starts with a slash for local paths
   if (!imagePath.startsWith('/')) {
     imagePath = `/${imagePath}`;
   }
@@ -23,6 +23,12 @@ export function ensureImagePath(imagePath: string): string {
   // Handle blog image paths specifically
   if (imagePath.includes('/posts/images/') && !imagePath.startsWith('/blog')) {
     return `/blog${imagePath}`;
+  }
+  
+  // For blog image paths, make sure they point to the public directory
+  if (imagePath.startsWith('/blog/posts/images/')) {
+    // This is already a valid public path, no need to modify
+    return imagePath;
   }
   
   return imagePath;
