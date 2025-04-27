@@ -3,14 +3,14 @@ title: Building Automated Workflows with n8n
 description: A comprehensive guide to creating and managing workflows with n8n
 date: 2023-10-22
 tags: ["n8n", "Workflow", "Automation", "API"]
-image: /blog/posts/images/workflow-automation.jpg
+image: /workflow-automation.jpg
 ---
 
 # Building Automated Workflows with n8n
 
 In today's fast-paced digital world, automation is key to efficiency. n8n is a powerful workflow automation tool that can help you connect various services and automate repetitive tasks. This guide will walk you through the process of building effective automated workflows with n8n.
 
-![Workflow Automation with n8n](/blog/posts/images/workflow-automation.jpg)
+![Workflow Automation with n8n](../../workflow-automation.jpg)
 
 ## Understanding n8n Workflows
 
@@ -22,7 +22,7 @@ The basic components of an n8n workflow include:
 - **Action nodes**: These perform operations (e.g., sending emails, creating records)
 - **Transform nodes**: These modify data between actions (e.g., mapping, filtering)
 
-![n8n Workflow Dashboard](/blog/posts/images/automation-dashboard.jpg)
+![n8n Workflow Dashboard](../../automation-dashboard.jpg)
 
 ## Getting Started with n8n
 
@@ -66,7 +66,7 @@ Let's create a simple workflow that monitors a website and sends an alert when i
    - Configure your email settings
    - Create an alert message
 
-![Code Implementation](/blog/posts/images/code-example.jpg)
+![Code Implementation](../../code-example.jpg)
 
 ## Advanced Workflow Patterns
 

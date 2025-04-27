@@ -3,14 +3,14 @@ title: Getting Started with Next.js and n8n
 description: Learn how to integrate Next.js with n8n for powerful workflow automation
 date: 2023-09-15
 tags: ["Next.js", "n8n", "Automation", "Tutorial"]
-image: /blog/posts/images/nextjs-n8n.jpg
+image: /nextjs-n8n.jpg
 ---
 
 # Getting Started with Next.js and n8n
 
 Next.js is a powerful React framework that enables developers to build server-rendered applications with ease. n8n, on the other hand, is a workflow automation tool that allows you to connect various services and automate workflows. In this tutorial, we'll explore how to integrate these two technologies to create a powerful, automated web application.
 
-![Next.js and n8n integration](/blog/posts/images/nextjs-n8n.jpg)
+![Next.js and n8n integration](../../nextjs-n8n.jpg)
 
 ## What is n8n?
 
@@ -28,7 +28,7 @@ n8n makes it easy to create workflows that connect different services and trigge
 3. Stores it in a database
 4. Sends a notification to your team
 
-![n8n Workflow Automation Dashboard](/blog/posts/images/automation-dashboard.jpg)
+![n8n Workflow Automation Dashboard](../../automation-dashboard.jpg)
 
 ## Why integrate Next.js with n8n?
 
@@ -86,7 +86,7 @@ npm install axios swr
 
 Now, let's create an API endpoint in our Next.js app that can trigger n8n workflows. Create a new file at `pages/api/trigger-workflow.js` with the following content:
 
-![Code Example](/posts/images/code-example.jpg)
+![Code Example](../../code-example.jpg)
 
 ```javascript
 import axios from 'axios';

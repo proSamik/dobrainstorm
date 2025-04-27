@@ -1,7 +1,7 @@
 /**
  * Default image to use when a blog post image is missing
  */
-export const DEFAULT_BLOG_IMAGE = '/blog/posts/images/default-post.jpg';
+export const DEFAULT_BLOG_IMAGE = '/default-post.jpg';
 
 /**
  * Optimize image sizing based on available dimensions for client-side usage
@@ -66,16 +66,14 @@ export function processContentImages(content: string): string {
   // Fix relative image paths in markdown-generated HTML
   let processedContent = content;
   
-  // Replace image src attributes that don't start with http or /
   processedContent = processedContent.replace(
     /<img\s+([^>]*?)src=['"](?!https?:\/\/)(?!\/)(.*?)['"]([^>]*?)>/gi,
-    '<img $1src="/blog/posts/images/$2"$3>'
+    '<img $1src="/$2"$3>'
   );
   
-  // Fix paths that use /posts/images/ instead of /blog/posts/images/
   processedContent = processedContent.replace(
     /<img\s+([^>]*?)src=['"](\/posts\/images\/.*?)['"]([^>]*?)>/gi,
-    '<img $1src="/blog/posts/images/$2"$3>'
+    '<img $1src="/$2"$3>'
   );
   
   return processedContent;
