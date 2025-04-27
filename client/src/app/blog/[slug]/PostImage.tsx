@@ -5,7 +5,7 @@ import BlogImage from '@/components/BlogImage';
 
 interface PostImageProps {
   src: string;
-  alt: string;
+  alt?: string;
 }
 
 /**
