@@ -4,6 +4,31 @@
 export const DEFAULT_BLOG_IMAGE = '/blog/posts/images/default-post.jpg';
 
 /**
+ * Ensure image path is fully qualified for use with next/image
+ * This helps fix image paths in production
+ */
+export function ensureImagePath(imagePath: string): string {
+  if (!imagePath) return DEFAULT_BLOG_IMAGE;
+  
+  // If it's already a URL, return it
+  if (imagePath.startsWith('http')) {
+    return imagePath;
+  }
+  
+  // Make sure path starts with a slash
+  if (!imagePath.startsWith('/')) {
+    imagePath = `/${imagePath}`;
+  }
+  
+  // Handle blog image paths specifically
+  if (imagePath.includes('/posts/images/') && !imagePath.startsWith('/blog')) {
+    return `/blog${imagePath}`;
+  }
+  
+  return imagePath;
+}
+
+/**
  * Optimize image sizing based on available dimensions for client-side usage
  * This is a client-safe version that doesn't rely on Node.js modules
  * 
@@ -14,6 +39,9 @@ export const DEFAULT_BLOG_IMAGE = '/blog/posts/images/default-post.jpg';
  */
 export function optimizeImageSize(imagePath: string, maxWidth = 800, maxHeight = 600): string {
   if (!imagePath) return DEFAULT_BLOG_IMAGE;
+  
+  // Ensure the path is properly formatted
+  imagePath = ensureImagePath(imagePath);
 
   // If it's an external URL with optimization params, return as is
   if (imagePath.includes('://') && 
