@@ -1,38 +1,7 @@
 /**
  * Default image to use when a blog post image is missing
  */
-export const DEFAULT_BLOG_IMAGE = '/blog/posts/images/default-post.jpg';
-
-/**
- * Ensure image path is fully qualified for use with next/image
- * This helps fix image paths in production
- */
-export function ensureImagePath(imagePath: string): string {
-  if (!imagePath) return DEFAULT_BLOG_IMAGE;
-  
-  // If it's already a full URL, return it
-  if (imagePath.startsWith('http')) {
-    return imagePath;
-  }
-  
-  // Make sure path starts with a slash for local paths
-  if (!imagePath.startsWith('/')) {
-    imagePath = `/${imagePath}`;
-  }
-  
-  // Handle blog image paths specifically
-  if (imagePath.includes('/posts/images/') && !imagePath.startsWith('/blog')) {
-    return `/blog${imagePath}`;
-  }
-  
-  // For blog image paths, make sure they point to the public directory
-  if (imagePath.startsWith('/blog/posts/images/')) {
-    // This is already a valid public path, no need to modify
-    return imagePath;
-  }
-  
-  return imagePath;
-}
+export const DEFAULT_BLOG_IMAGE = '/default-post.jpg';
 
 /**
  * Optimize image sizing based on available dimensions for client-side usage
@@ -45,9 +14,6 @@ export function ensureImagePath(imagePath: string): string {
  */
 export function optimizeImageSize(imagePath: string, maxWidth = 800, maxHeight = 600): string {
   if (!imagePath) return DEFAULT_BLOG_IMAGE;
-  
-  // Ensure the path is properly formatted
-  imagePath = ensureImagePath(imagePath);
 
   // If it's an external URL with optimization params, return as is
   if (imagePath.includes('://') && 
@@ -100,16 +66,14 @@ export function processContentImages(content: string): string {
   // Fix relative image paths in markdown-generated HTML
   let processedContent = content;
   
-  // Replace image src attributes that don't start with http or /
   processedContent = processedContent.replace(
     /<img\s+([^>]*?)src=['"](?!https?:\/\/)(?!\/)(.*?)['"]([^>]*?)>/gi,
-    '<img $1src="/blog/posts/images/$2"$3>'
+    '<img $1src="/$2"$3>'
   );
   
-  // Fix paths that use /posts/images/ instead of /blog/posts/images/
   processedContent = processedContent.replace(
     /<img\s+([^>]*?)src=['"](\/posts\/images\/.*?)['"]([^>]*?)>/gi,
-    '<img $1src="/blog/posts/images/$2"$3>'
+    '<img $1src="/$2"$3>'
   );
   
   return processedContent;
