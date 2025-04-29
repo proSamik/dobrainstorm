@@ -141,7 +141,7 @@ func (h *AuthHandler) setAuthCookies(w http.ResponseWriter, tokens *TokenPair) {
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteNoneMode,
 		Expires:  tokens.ExpiresAt,
 	})
 
@@ -152,7 +152,7 @@ func (h *AuthHandler) setAuthCookies(w http.ResponseWriter, tokens *TokenPair) {
 		Path:     "/auth/refresh",
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteNoneMode,
 		Expires:  tokens.ExpiresAt,
 	})
 
@@ -164,7 +164,7 @@ func (h *AuthHandler) setAuthCookies(w http.ResponseWriter, tokens *TokenPair) {
 		Path:     "/",
 		HttpOnly: false,
 		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteNoneMode,
 		Expires:  tokens.ExpiresAt,
 	})
 }
@@ -179,7 +179,7 @@ func (h *AuthHandler) clearAuthCookies(w http.ResponseWriter) {
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteNoneMode,
 		Expires:  expiredTime,
 	})
 
@@ -189,7 +189,7 @@ func (h *AuthHandler) clearAuthCookies(w http.ResponseWriter) {
 		Path:     "/auth/refresh",
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteNoneMode,
 		Expires:  expiredTime,
 	})
 
@@ -199,7 +199,7 @@ func (h *AuthHandler) clearAuthCookies(w http.ResponseWriter) {
 		Path:     "/",
 		HttpOnly: false,
 		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteNoneMode,
 		Expires:  expiredTime,
 	})
 }
@@ -416,15 +416,15 @@ func trackUserSignup(email string, name string) error {
 	}
 
 	type TrackRequest struct {
-		Event     string   `json:"event"`
-		Email     string   `json:"email"`
+		Event      string   `json:"event"`
+		Email      string   `json:"email"`
 		Subscribed bool     `json:"subscribed"` // Added subscribed field
-		Data      UserData `json:"data"`
+		Data       UserData `json:"data"`
 	}
 
 	trackReq := TrackRequest{
-		Event:     "user-signup",
-		Email:     email,
+		Event:      "user-signup",
+		Email:      email,
 		Subscribed: true, // Set subscribed to true
 		Data: UserData{
 			Name: name,
