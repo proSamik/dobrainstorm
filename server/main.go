@@ -207,6 +207,7 @@ func main() {
 		AllowedOrigins: []string{
 			os.Getenv("ADMIN_CLIENT_URL"),
 			os.Getenv("FRONTEND_URL"),
+			os.Getenv("BETA_CLIENT_URL"),
 		},
 		AllowedMethods:      []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:      []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Requested-With"},
