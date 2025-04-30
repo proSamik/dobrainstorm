@@ -113,6 +113,13 @@ func main() {
 	mux.Handle("/api/user/subscription", authMiddleware.RequireAuth(http.HandlerFunc(userDataHandler.GetUserSubscription)))
 	mux.Handle("/api/user/subscription/billing", authMiddleware.RequireAuth(http.HandlerFunc(userDataHandler.GetBillingPortal)))
 
+	// Creem payment routes
+	creemHandler := handlers.NewCreemHandler(db)
+	mux.Handle("/creem-checkout", authMiddleware.RequireAuth(http.HandlerFunc(creemHandler.HandleCheckout)))
+	mux.Handle("/creem-customer-portal", authMiddleware.RequireAuth(http.HandlerFunc(creemHandler.HandleCustomerPortal)))
+	mux.HandleFunc("/creem-webhook", creemHandler.HandleWebhook)
+	mux.HandleFunc("/creem-verify-return-url", creemHandler.HandleVerifyReturnURL)
+
 	// Board API routes (protected with auth, subscription check, and rate limiting)
 	boardHandler := handlers.NewBoardHandler(db)
 	subscriptionMiddleware := middleware.NewSubscriptionMiddleware(db)
