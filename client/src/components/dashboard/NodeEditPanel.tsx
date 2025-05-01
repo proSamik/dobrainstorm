@@ -1588,7 +1588,7 @@ This structure will be used to automatically create a mind map with meaningful c
   return (
     <div 
       ref={panelRef}
-      className="absolute right-0 top-0 bottom-0 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 shadow-lg z-10 flex flex-col"
+      className="absolute right-0 top-0 bottom-0 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 shadow-lg z-10 flex flex-col"
       style={{ width: panelWidth }}
     >
       {/* Resize handle */}
@@ -1599,7 +1599,7 @@ This structure will be used to automatically create a mind map with meaningful c
       
       <div className="flex-none p-4">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold">Edit Node</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Edit Node</h3>
         </div>
         
         {/* Node label (title) */}
@@ -1611,7 +1611,7 @@ This structure will be used to automatically create a mind map with meaningful c
             type="text"
             value={label}
             onChange={handleLabelChange}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
             placeholder="Enter node label..."
           />
         </div>
@@ -1624,7 +1624,7 @@ This structure will be used to automatically create a mind map with meaningful c
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Content
           </label>
-          <div className="border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden">
+          <div className="border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden cursor-text">
             <RichTextEditor
               content={text}
               onChange={handleTextChange}
@@ -1641,7 +1641,7 @@ This structure will be used to automatically create a mind map with meaningful c
             </label>
             <button
               onClick={handleAddImage}
-              className="text-sm px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="text-sm px-2 py-1 bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 text-white rounded"
             >
               Add Image
             </button>
@@ -1677,10 +1677,10 @@ This structure will be used to automatically create a mind map with meaningful c
 
         {/* Chat window */}
         <div className="mb-4">
-          <label className="block text-sm font-medium">Ask AI</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Ask AI</label>
           {/* Provider selector */}
           <select
-            className="block mt-1 mb-2 border rounded p-1"
+            className="block mt-1 mb-2 border border-gray-300 dark:border-gray-600 rounded p-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
             value={selectedProvider}
             onChange={(e) => {
               const p = e.target.value as ApiProvider;
@@ -1698,26 +1698,26 @@ This structure will be used to automatically create a mind map with meaningful c
           <textarea
             value={chatInput}
             onChange={e => setChatInput(e.target.value)}
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
             placeholder="Type your request, e.g. 'suggest me 10 domain name ideas'"
           />
           <button
             onClick={handleGenerate}
             disabled={loadingChat || !chatInput}
-            className="mt-2 px-3 py-1 bg-blue-600 text-white rounded disabled:opacity-50"
+            className="mt-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 text-white rounded disabled:opacity-50"
           >{loadingChat ? 'Generating...' : 'Generate'}</button>
-          {chatError && <p className="text-red-500">{chatError}</p>}
+          {chatError && <p className="text-red-500 dark:text-red-400">{chatError}</p>}
           
           {/* Editable AI Suggestions */}
           {editableSuggestions && (
-            <div className="mt-4 border border-gray-300 rounded p-2">
+            <div className="mt-4 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-800">
               <div className="flex justify-between items-center mb-2">
-                <h4 className="text-sm font-medium">AI Suggestions</h4>
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">AI Suggestions</h4>
                 <div className="flex gap-2">
                   {isEditingSuggestions && (
                     <button
                       onClick={formatJSON}
-                      className="px-2 py-1 text-gray-600 text-xs rounded hover:bg-gray-100"
+                      className="px-2 py-1 text-gray-600 dark:text-gray-400 text-xs rounded hover:bg-gray-100 dark:hover:bg-gray-700"
                       title="Format JSON"
                     >
                       📋 Format
@@ -1725,21 +1725,21 @@ This structure will be used to automatically create a mind map with meaningful c
                   )}
                   <button
                     onClick={clearSuggestions}
-                    className="px-2 py-1 text-gray-600 text-xs rounded hover:bg-gray-100"
+                    className="px-2 py-1 text-gray-600 dark:text-gray-400 text-xs rounded hover:bg-gray-100 dark:hover:bg-gray-700"
                     title="Clear suggestions"
                   >
                     🗑️ Clear
                   </button>
                   <button
                     onClick={toggleEditMode}
-                    className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                    className="px-2 py-1 bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 text-white text-xs rounded"
                     title={isEditingSuggestions ? "Save changes" : "Edit suggestions"}
                   >
                     {isEditingSuggestions ? "✓ Done" : "✎ Edit"}
                   </button>
                   <button
                     onClick={createBranchesFromSuggestions}
-                    className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                    className="px-2 py-1 bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800 text-white text-xs rounded"
                     title="Create a mind map from these suggestions"
                     disabled={isEditingSuggestions && chatError?.includes('Invalid JSON')}
                   >
@@ -1752,20 +1752,20 @@ This structure will be used to automatically create a mind map with meaningful c
                 <textarea 
                   value={editableSuggestions}
                   onChange={handleEditSuggestions}
-                  className="w-full h-64 p-2 bg-gray-50 font-mono text-sm border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full h-64 p-2 bg-gray-50 dark:bg-gray-700 font-mono text-sm border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
                   placeholder='{
   "Category 1": ["Idea 1", "Idea 2"],
   "Category 2": ["Idea 3", "Idea 4"]
 }'
                 />
               ) : (
-                <div className="bg-gray-50 p-2 rounded-b h-64 overflow-auto">
-                  <pre className="text-sm font-mono text-gray-800">{editableSuggestions}</pre>
+                <div className="bg-gray-50 dark:bg-gray-700 p-2 rounded-b h-64 overflow-auto">
+                  <pre className="text-sm font-mono text-gray-800 dark:text-gray-200">{editableSuggestions}</pre>
                 </div>
               )}
               
               {isEditingSuggestions && (
-                <div className="mt-2 text-xs text-gray-500">
+                <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                   <p>Edit the JSON above to customize your mind map. Make sure to maintain the correct JSON format.</p>
                   <ul className="list-disc ml-4 mt-1">
                     <li>Each key becomes a category node</li>
@@ -1783,8 +1783,8 @@ This structure will be used to automatically create a mind map with meaningful c
               onClick={handleSave}
               className={`px-3 py-1 rounded text-sm font-medium ${
                 isDirty
-                  ? 'bg-blue-600 text-white hover:bg-blue-700'
-                  : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-300'
+                  ? 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 text-white'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-300'
               }`}
               disabled={!isDirty}
             >
@@ -1792,7 +1792,7 @@ This structure will be used to automatically create a mind map with meaningful c
             </button>
             <button
               onClick={handleClose}
-              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
               title="Close (ESC)"
             >
               &times;
