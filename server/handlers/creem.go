@@ -4,7 +4,6 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"saas-server/database"
@@ -29,8 +28,8 @@ func NewCreemHandler(db *database.DB) *CreemHandler {
 
 // HandleCheckout creates a new checkout session
 func (h *CreemHandler) HandleCheckout(w http.ResponseWriter, r *http.Request) {
-	// Only allow POST method
-	if r.Method != http.MethodPost {
+	// Only allow GET method
+	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -63,38 +62,20 @@ func (h *CreemHandler) HandleCheckout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse request body
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		log.Printf("Error reading request body: %v", err)
-		http.Error(w, "Error reading request body", http.StatusBadRequest)
-		return
-	}
-	defer r.Body.Close()
-
-	// Parse JSON
-	var requestData struct {
-		ProductID    string `json:"product_id"`
-		RequestID    string `json:"request_id,omitempty"`
-		DiscountCode string `json:"discount_code,omitempty"`
-	}
-	if err := json.Unmarshal(body, &requestData); err != nil {
-		log.Printf("Error parsing request body: %v", err)
-		http.Error(w, "Error parsing request body", http.StatusBadRequest)
-		return
-	}
+	// Get query parameters
+	productID := r.URL.Query().Get("product_id")
+	discountCode := r.URL.Query().Get("discount_code") // Optional
 
 	// Validate required fields
-	if requestData.ProductID == "" {
+	if productID == "" {
 		http.Error(w, "Product ID is required", http.StatusBadRequest)
 		return
 	}
 
 	// Prepare checkout request
 	checkoutRequest := creem.CheckoutRequest{
-		ProductID:    requestData.ProductID,
-		RequestID:    requestData.RequestID,
-		DiscountCode: requestData.DiscountCode,
+		ProductID:    productID,
+		DiscountCode: discountCode,
 		Customer: &creem.CustomerInfo{
 			Email: user.Email,
 		},
@@ -116,51 +97,7 @@ func (h *CreemHandler) HandleCheckout(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
-// HandleCustomerPortal retrieves the customer portal URL
-func (h *CreemHandler) HandleCustomerPortal(w http.ResponseWriter, r *http.Request) {
-	// Only allow GET method
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Get user ID from context
-	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	// Get user subscription to retrieve customer_id
-	subscription, err := h.DB.GetSubscriptionByUserID(userID)
-	if err != nil {
-		log.Printf("Error getting subscription: %v", err)
-		http.Error(w, "Error getting subscription information", http.StatusInternalServerError)
-		return
-	}
-
-	if subscription == nil || subscription.CustomerID == 0 {
-		http.Error(w, "No active subscription or customer ID found", http.StatusBadRequest)
-		return
-	}
-
-	// Convert CustomerID to string for API call
-	customerID := fmt.Sprintf("%d", subscription.CustomerID)
-
-	// Get customer portal
-	result, err := h.Client.GetCustomerPortal(customerID)
-	if err != nil {
-		log.Printf("Error getting customer portal: %v", err)
-		http.Error(w, "Error getting customer portal", http.StatusInternalServerError)
-		return
-	}
-
-	// Return response
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
-}
-
-// HandleVerifyReturnURL verifies the signature in the return URL
+// Extend it later to handle single order payment- HandleVerifyReturnURL verifies the signature in the return URL
 func (h *CreemHandler) HandleVerifyReturnURL(w http.ResponseWriter, r *http.Request) {
 	// Only allow GET method
 	if r.Method != http.MethodGet {
@@ -215,19 +152,55 @@ func (h *CreemHandler) HandleVerifyReturnURL(w http.ResponseWriter, r *http.Requ
 	}
 
 	// If we reached here, the signature is valid
-	// Return success response with the validated parameters
+	// Return simple success response
 	response := map[string]interface{}{
 		"valid": true,
-		"params": map[string]string{
-			"checkout_id":     params["checkout_id"],
-			"order_id":        params["order_id"],
-			"customer_id":     params["customer_id"],
-			"subscription_id": params["subscription_id"],
-			"product_id":      params["product_id"],
-			"request_id":      params["request_id"],
-		},
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// HandleCustomerPortal retrieves the customer portal URL
+func (h *CreemHandler) HandleCustomerPortal(w http.ResponseWriter, r *http.Request) {
+	// Only allow GET method
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get user ID from context
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Get user subscription to retrieve customer_id
+	subscription, err := h.DB.GetSubscriptionByUserID(userID)
+	if err != nil {
+		log.Printf("Error getting subscription: %v", err)
+		http.Error(w, "Error getting subscription information", http.StatusInternalServerError)
+		return
+	}
+
+	if subscription == nil {
+		http.Error(w, "No active subscription or customer ID found", http.StatusBadRequest)
+		return
+	}
+
+	// Convert CustomerID to string for API call
+	customerID := subscription.CustomerID
+
+	// Get customer portal
+	result, err := h.Client.GetCustomerPortal(customerID)
+	if err != nil {
+		log.Printf("Error getting customer portal: %v", err)
+		http.Error(w, "Error getting customer portal", http.StatusInternalServerError)
+		return
+	}
+
+	// Return response
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
