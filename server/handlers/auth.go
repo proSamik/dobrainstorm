@@ -89,7 +89,7 @@ type ResetPasswordRequest struct {
 
 // Cache for subscription status to reduce database load
 var (
-	subscriptionCache = make(map[string]*models.UserSubscriptionStatus)
+	subscriptionCache = make(map[string]*models.CreemSubscriptionStatus)
 	cacheMutex        sync.RWMutex
 	cacheExpiry       = 5 * time.Minute
 )
@@ -610,12 +610,12 @@ func (h *AuthHandler) VerifyUser(w http.ResponseWriter, r *http.Request) {
 	cacheMutex.RUnlock()
 
 	// Create a channel for the database response
-	statusChan := make(chan *models.UserSubscriptionStatus, 1)
+	statusChan := make(chan *models.CreemSubscriptionStatus, 1)
 	errChan := make(chan error, 1)
 
 	// Query database in a goroutine
 	go func() {
-		status, err := h.db.GetUserSubscriptionStatus(userID)
+		status, err := h.db.GetUserCreemSubscriptionStatus(userID)
 		if err != nil {
 			errChan <- err
 			return
