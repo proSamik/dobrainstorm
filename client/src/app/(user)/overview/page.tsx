@@ -38,7 +38,6 @@ export default function UserOverview() {
       subscription: {
         status: contextData.subscription.status,
         productId: contextData.subscription.productId,
-        variantId: contextData.subscription.productId // Use productId as variantId for backward compatibility
       },
       timestamp: contextData.timestamp
     };
