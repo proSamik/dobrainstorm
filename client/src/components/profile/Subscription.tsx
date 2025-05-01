@@ -24,7 +24,7 @@ interface SubscriptionData {
 interface UserDataWithSubscription {
   subscription?: {
     status: string | null;
-    productId: number | null;
+    productId: string | null;
   };
 }
 
