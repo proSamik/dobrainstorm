@@ -256,7 +256,7 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
             onBlur={handleLabelBlur}
             onKeyDown={handleLabelKeyDown}
             autoFocus
-            className="flex-1 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 no-drag"
+            className="flex-1 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 no-drag dark:text-gray-900"
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
