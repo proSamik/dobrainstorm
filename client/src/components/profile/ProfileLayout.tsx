@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/contexts/AuthContext'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 type Tab = 'profile' | 'subscription' | 'settings'
 
@@ -16,18 +16,21 @@ export default function ProfileLayout({
   subscription: React.ReactNode
   settings: React.ReactNode
 }) {
-  const [activeTab, setActiveTab] = useState<Tab>(() => {
-    if (typeof window !== 'undefined') {
-      const savedTab = sessionStorage.getItem('activeProfileTab')
-      if (savedTab === 'subscription') {
-        sessionStorage.removeItem('activeProfileTab')
-        return 'subscription'
-      }
-    }
-    return 'profile'
-  })
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get('tab') as Tab || 'profile';
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const { auth } = useAuth()
   const router = useRouter()
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedTab = sessionStorage.getItem('activeProfileTab')
+      if (savedTab) {
+        setActiveTab(savedTab as Tab)
+        sessionStorage.removeItem('activeProfileTab')
+      }
+    }
+  }, [])
 
   if (!auth) {
     router.push('/auth')
