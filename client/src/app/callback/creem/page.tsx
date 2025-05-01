@@ -10,7 +10,7 @@ import toast from 'react-hot-toast';
 export default function CreemCallback() {
   const router = useRouter();
   const { auth } = useAuth();
-  const { userData, refreshUserData, clearUserData } = useUserData();
+  const { refreshUserData } = useUserData();
   const [isProcessing, setIsProcessing] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,7 +45,7 @@ export default function CreemCallback() {
             const newUserData = {
               subscription: {
                 status: 'active',
-                productId: response.product_id || null
+                productId:productId
               },
               timestamp: Date.now()
             };
