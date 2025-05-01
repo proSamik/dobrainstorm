@@ -7,14 +7,13 @@ import { useEffect, useState } from 'react'
 import { hasActiveSubscription, PRICING_PLANS } from '@/lib/pricing'
 import { PriceCard } from '@/components/landing/PriceCard'
 
-interface UserSubscription {
+interface LayoutUserSubscription {
   status: string | null;
-  productId: number | null;
-  variantId: number | null;
+  productId: string | null;
 }
 
-interface UserData {
-  subscription: UserSubscription;
+interface LayoutUserData {
+  subscription: LayoutUserSubscription;
   timestamp?: number;
 }
 
@@ -24,7 +23,7 @@ interface UserData {
  */
 function BlurredContentView({ children, userData }: { 
   children: React.ReactNode; 
-  userData: UserData; 
+  userData: LayoutUserData; 
 }) {
   return (
     <div className="flex flex-col min-h-screen bg-light-background dark:bg-dark-background mt-10">
@@ -49,7 +48,7 @@ function BlurredContentView({ children, userData }: {
             {/* Pricing Grid - responsive layout */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
               {PRICING_PLANS.map((plan) => (
-                <div key={plan.variantId} className={`${plan.popular ? 'order-first md:order-none scale-105 md:transform' : ''}`}>
+                <div key={plan.productId} className={`${plan.popular ? 'order-first md:order-none scale-105 md:transform' : ''}`}>
                   <PriceCard
                     name={plan.name}
                     description={plan.description}
@@ -60,7 +59,6 @@ function BlurredContentView({ children, userData }: {
                     }))}
                     popular={plan.popular}
                     productId={plan.productId}
-                    variantId={plan.variantId}
                   />
                 </div>
               ))}
@@ -71,7 +69,7 @@ function BlurredContentView({ children, userData }: {
               <div className="mt-6 md:mt-8 text-xs text-left bg-light-accent/20 dark:bg-dark-accent/20 p-3 rounded mx-auto max-w-lg">
                 <p className="font-semibold mb-1">Debug Information:</p>
                 <p>Subscription Status: {userData?.subscription?.status || 'None'}</p>
-                <p>Variant ID: {userData?.subscription?.variantId || 'None'}</p>
+                <p>Product ID: {userData?.subscription?.productId || 'None'}</p>
               </div>
             )}
           </div>
@@ -152,7 +150,7 @@ function UserLayoutContent({ children }: { children: React.ReactNode }) {
   const subscriptionData = {
     subscription: userData ? {
       status: userData.subscription?.status === null ? undefined : userData.subscription?.status,
-      variantId: userData.subscription?.variantId === null ? undefined : userData.subscription?.variantId
+      productId: userData.subscription?.productId === null ? undefined : String(userData.subscription?.productId)
     } : undefined
   };
   
@@ -160,7 +158,16 @@ function UserLayoutContent({ children }: { children: React.ReactNode }) {
 
   // If the user doesn't have an active subscription, show the blurred content view
   if (!isSubscribed) {
-    return <BlurredContentView userData={userData}>
+    // Convert userData to LayoutUserData format
+    const layoutUserData: LayoutUserData = {
+      subscription: {
+        status: userData.subscription?.status || null,
+        productId: userData.subscription?.productId ? String(userData.subscription.productId) : null
+      },
+      timestamp: userData.timestamp
+    };
+    
+    return <BlurredContentView userData={layoutUserData}>
       {children}
     </BlurredContentView>
   }
