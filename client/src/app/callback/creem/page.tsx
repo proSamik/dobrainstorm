@@ -4,10 +4,13 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authService } from '@/services/auth';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUserData } from '@/contexts/UserDataContext';
 import toast from 'react-hot-toast';
 
 export default function CreemCallback() {
   const router = useRouter();
+  const { auth } = useAuth();
+  const { userData, refreshUserData, clearUserData } = useUserData();
   const [isProcessing, setIsProcessing] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,6 +23,10 @@ export default function CreemCallback() {
         const fullUrl = window.location.href;
         const queryParams = fullUrl.split('?')[1] || '';
         
+        // Extract product_id from query parameters
+        const urlParams = new URLSearchParams(queryParams);
+        const productId = urlParams.get('product_id');
+        
         // Log the endpoint being called for debugging
         const endpoint = `/creem/verify-return-url?${queryParams}`;
         console.log('Calling verify endpoint:', endpoint);
@@ -31,11 +38,29 @@ export default function CreemCallback() {
         console.log('Verify endpoint response:', response);
         
         if (response?.valid) {
-          // Verification successful - don't try to refresh user data here
+          // Verification successful
+          
+          // Manually update the user data by storing it in a cookie for the context to pick up
+          if (auth?.id) {
+            const newUserData = {
+              subscription: {
+                status: 'active',
+                productId: response.product_id || null
+              },
+              timestamp: Date.now()
+            };
+            
+            // Set the cookie that UserDataContext reads from
+            document.cookie = `userData_${auth.id}=${JSON.stringify(newUserData)}; path=/; max-age=3600; secure; samesite=strict`;
+            
+            // Force a refresh to pick up the cookie change
+            refreshUserData();
+          }
+          
           // Show success message
           toast.success('Subscription activated successfully!');
           
-          // Redirect to boards page - user data will be loaded on the next page
+          // Redirect to boards page
           router.push('/boards');
         } else {
           console.error('Verification failed, response:', response);
@@ -59,7 +84,7 @@ export default function CreemCallback() {
 
     // Otherwise proceed with verification
     verifyCallback();
-  }, [router, error]);
+  }, [router, error, auth, refreshUserData]);
 
   if (isProcessing) {
     return (
