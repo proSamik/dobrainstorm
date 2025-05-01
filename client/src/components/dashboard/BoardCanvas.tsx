@@ -12,7 +12,8 @@ import ReactFlow, {
   Edge,
   useReactFlow,
   BackgroundVariant,
-  ReactFlowInstance
+  ReactFlowInstance,
+  Panel
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { useDispatch } from 'react-redux'
@@ -32,12 +33,17 @@ import { useBoardSync } from './board/hooks/useBoardSync'
 import { useFileOperations } from './board/hooks/useFileOperations'
 import { useKeyboardShortcuts } from './board/hooks/useKeyboardShortcuts'
 import { useTheme } from '@/components/ThemeProvider'
+import { useAutoLayout } from './board/hooks/useAutoLayout'
 
 // Import components
 import NodeEditPanel from './NodeEditPanel'
 import NodeContextMenu from './NodeContextMenu'
 import { BoardTools } from './board/components/BoardTools'
 import { NodeCountDisplay } from './board/components/NodeCountDisplay'
+import ShortcutHelp from './board/components/ShortcutHelp'
+
+// Import utilities
+import { autoLayout } from '@/lib/utils/layoutUtils'
 
 // Define base node types outside component
 const baseNodeTypes = {
@@ -84,6 +90,9 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   // Track current viewport size for responsive behavior
   const [isMobile, setIsMobile] = useState(false);
   
+  // ShortcutHelp modal state
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
     id: string
@@ -114,6 +123,9 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   
   // File operations (save, export, import)
   const { handleSave, handleExport, handleImportFile } = useFileOperations(boardId);
+  
+  // Get auto-layout functionality
+  const { applyAutoLayout, createNodeWithLayout } = useAutoLayout();
   
   // Node operations
   const { createNode } = useNodeOperations(reactFlowWrapper, nodes);
@@ -400,23 +412,68 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     };
   }, [nodes, edges, selectedNodeIds, editingNodeId, dispatch, setNodes, setEdges]);
   
+  // Listen for keyboard shortcut to apply auto-layout
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts when typing in input or textarea
+      if (
+        e.target instanceof HTMLInputElement || 
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+      
+      // L key for auto-layout
+      if (e.key === 'l' || e.key === 'L') {
+        applyAutoLayout('TB');
+      }
+      
+      // H key for horizontal layout
+      if (e.key === 'h' || e.key === 'H') {
+        applyAutoLayout('LR');
+      }
+      
+      // ? key for keyboard shortcuts
+      if (e.key === '?') {
+        setShowShortcuts(true);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [applyAutoLayout]);
+  
+  // Enhanced createNode function that uses auto-layout
+  const handleCreateNode = useCallback(() => {
+    return createNodeWithLayout(() => createNode());
+  }, [createNodeWithLayout, createNode]);
+  
+  // Handle selection change
+  const handleSelectionChange = useCallback(({ nodes: selectedNodes }: { nodes: Node[] }) => {
+    if (selectedNodes.length > 0) {
+      const selectedIds = selectedNodes.map((node: Node) => node.id);
+      dispatch(setSelectedNodes(selectedIds));
+    } else {
+      dispatch(setSelectedNodes([]));
+    }
+  }, [dispatch]);
+  
   // Render the canvas with theme-aware styling
   return (
     <div className="w-full h-full flex flex-col" data-theme={theme}>
       <BoardTools
-        onAddNode={createNode}
+        onAddNode={handleCreateNode}
         onExport={handleExport}
         onImport={handleImportFile}
         onSave={handleSave}
       />
-      
-      {editingNodeId && (
-        <NodeEditPanel 
-          nodeId={editingNodeId}
-        />
-      )}
-      
-      <div className="flex-grow relative" ref={reactFlowWrapper}>
+      <div 
+        className="flex-grow relative border rounded-md shadow-sm overflow-hidden"
+        ref={reactFlowWrapper}
+      >
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -424,84 +481,68 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onEdgeUpdate={onEdgeUpdate}
-          onNodeClick={(_, node) => dispatch(setSelectedNode(node.id))}
+          onInit={(instance) => {
+            reactFlowInstanceRef.current = instance;
+            if (instance) {
+              instance.fitView({ padding: 0.2 });
+            }
+          }}
+          nodeTypes={nodeTypes}
+          connectionMode={ConnectionMode.Loose}
+          selectNodesOnDrag={false}
+          panOnDrag={isPanningMode}
+          panOnScroll={isPanningMode}
+          zoomOnScroll={!isPanningMode}
+          onPaneClick={handleBackgroundClick}
           onNodeContextMenu={handleNodeContextMenu}
           onEdgeContextMenu={handleEdgeContextMenu}
-          onPaneClick={handleBackgroundClick}
-          nodeTypes={nodeTypes}
-          defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-          minZoom={0.1}
-          maxZoom={2}
-          onlyRenderVisibleElements
-          deleteKeyCode={['Backspace', 'Delete']}
-          multiSelectionKeyCode={['Control', 'Meta']}
-          selectionKeyCode={['Shift']}
-          panOnDrag={isPanningMode}
-          selectionOnDrag={!isPanningMode}
-          panOnScroll={isPanningMode}
-          zoomOnScroll={!isMobile}
-          zoomOnPinch={true}
-          snapToGrid={false}
-          snapGrid={[15, 15]}
-          connectionMode={ConnectionMode.Loose}
-          fitView
-          fitViewOptions={{ padding: 0.2 }}
-          onInit={onInit}
+          onSelectionChange={handleSelectionChange}
+          proOptions={{ hideAttribution: true }}
           style={{ background: bgColor }}
-          className="touch-manipulation"
         >
-          {/* Background with theme-aware colors */}
           <Background
             variant={BackgroundVariant.Dots}
-            gap={20}
+            gap={24}
             size={1}
             color={gridColor}
-            style={{ backgroundColor: bgColor }}
+          />
+          <Controls showInteractive={false} />
+          <MiniMap 
+            nodeStrokeWidth={3} 
+            zoomable 
+            pannable 
+            maskColor={theme === 'light' ? 'rgba(248, 250, 252, 0.6)' : 'rgba(26, 26, 26, 0.7)'}
           />
           
-          {/* Controls with theme-aware styling */}
-          <Controls
-            showInteractive={!isMobile}
-            style={{
-              border: theme === 'light' ? '1px solid #e2e8f0' : '1px solid #334155',
-              borderRadius: '8px',
-              backgroundColor: theme === 'light' ? 'white' : '#1e293b',
-              boxShadow: theme === 'light' 
-                ? '0 1px 3px rgba(0, 0, 0, 0.1)' 
-                : '0 1px 3px rgba(0, 0, 0, 0.5)',
-            }}
-            position={isMobile ? 'bottom-right' : 'bottom-left'}
-            showZoom={true}
-            showFitView={true}
-          />
+          {/* Add Panel buttons */}
+          <Panel position="top-right" className="flex items-center gap-2">
+            <button 
+              onClick={() => setShowShortcuts(true)}
+              className="bg-white/90 dark:bg-gray-800/90 p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors"
+              title="Keyboard Shortcuts"
+            >
+              ?
+            </button>
+            <button 
+              onClick={() => applyAutoLayout('TB')}
+              className="bg-white/90 dark:bg-gray-800/90 p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
+              title="Auto-layout (Vertical)"
+            >
+              Layout ↕
+            </button>
+            <button 
+              onClick={() => applyAutoLayout('LR')}
+              className="bg-white/90 dark:bg-gray-800/90 p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
+              title="Auto-layout (Horizontal)"
+            >
+              Layout ↔
+            </button>
+          </Panel>
           
-          {/* Minimap with theme-aware styling */}
-          {!isMobile && (
-            <MiniMap
-              nodeStrokeWidth={3}
-              nodeColor={(node) => {
-                if (selectedNodeIds.includes(node.id)) {
-                  return nodeSelectedBorder;
-                }
-                return theme === 'light' ? '#e2e8f0' : '#475569';
-              }}
-              nodeBorderRadius={4}
-              style={{
-                backgroundColor: theme === 'light' ? 'rgba(255, 255, 255, 0.9)' : 'rgba(30, 41, 59, 0.9)',
-                border: theme === 'light' ? '1px solid #e2e8f0' : '1px solid #334155',
-                borderRadius: '8px',
-                boxShadow: theme === 'light' 
-                  ? '0 1px 3px rgba(0, 0, 0, 0.1)' 
-                  : '0 1px 3px rgba(0, 0, 0, 0.5)',
-              }}
-            />
-          )}
-          
-          {/* Node count display */}
           <NodeCountDisplay count={nodes.length} />
         </ReactFlow>
         
-        {/* Render the context menu if needed */}
+        {/* Conditional elements */}
         {contextMenu && (
           <NodeContextMenu
             nodeId={contextMenu.id}
@@ -510,7 +551,16 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
             onClose={() => setContextMenu(null)}
           />
         )}
+        
+        {editingNodeId && (
+          <NodeEditPanel nodeId={editingNodeId} />
+        )}
       </div>
+      
+      {/* Keyboard shortcuts help */}
+      {showShortcuts && (
+        <ShortcutHelp onClose={() => setShowShortcuts(false)} />
+      )}
     </div>
   );
 };
