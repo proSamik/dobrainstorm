@@ -1,18 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { authService } from '@/services/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 export default function CreemCallback() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { isAuthenticated } = useAuth();
   const [isProcessing, setIsProcessing] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Single useEffect for both error handling and verification
   useEffect(() => {
     const verifyCallback = async () => {
       // Make sure user is authenticated
@@ -53,8 +53,15 @@ export default function CreemCallback() {
       }
     };
 
+    // Check for error state first
+    if (error) {
+      router.push('/profile');
+      return;
+    }
+
+    // Otherwise proceed with verification
     verifyCallback();
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, router, error]);
 
   if (isProcessing) {
     return (
@@ -69,13 +76,6 @@ export default function CreemCallback() {
       </div>
     );
   }
-
-  // Redirect to profile page on error
-  useEffect(() => {
-    if (error) {
-      router.push('/profile');
-    }
-  }, [error, router]);
 
   return null;
 } 
