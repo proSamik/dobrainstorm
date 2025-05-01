@@ -339,7 +339,7 @@ func (db *DB) CheckCreemActiveSubscription(userID string) (bool, error) {
 			SELECT 1
 			FROM creem_subscriptions
 			WHERE user_id = $1
-			AND status IN ('active', 'trialing')
+			AND status IN ('active', 'trialing', 'past_due', 'canceled')
 		) as has_subscription
 	`
 
