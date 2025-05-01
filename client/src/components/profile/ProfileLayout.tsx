@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 
-type Tab = 'profile' | 'subscription' | 'settings' | 'orders'
+type Tab = 'profile' | 'subscription' | 'settings'
 
 export default function ProfileLayout({
   children,
@@ -53,12 +53,6 @@ export default function ProfileLayout({
               Subscription
             </button>
             <button
-              onClick={() => setActiveTab('orders')}
-              className={`px-4 py-3 text-sm font-medium rounded-md transition-colors ${activeTab === 'orders' ? 'bg-light-accent dark:bg-dark-accent dark:text-white' : 'text-light-foreground dark:text-dark-foreground'}`}
-            >
-              Lifetime Deals
-            </button>
-            <button
               onClick={() => setActiveTab('settings')}
               className={`px-4 py-3 text-sm font-medium rounded-md transition-colors ${activeTab === 'settings' ? 'bg-light-accent dark:bg-dark-accent dark:text-white' : 'text-light-foreground dark:text-dark-foreground'}`}
             >
@@ -83,12 +77,6 @@ export default function ProfileLayout({
                   className={`w-full text-left px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'subscription' ? 'bg-light-accent dark:bg-dark-accent dark:text-white' : 'hover:bg-light-hover dark:hover:bg-dark-hover text-light-foreground dark:text-dark-foreground'}`}
                 >
                   Subscription
-                </button>
-                <button
-                  onClick={() => setActiveTab('orders')}
-                  className={`w-full text-left px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'orders' ? 'bg-light-accent dark:bg-dark-accent dark:text-white' : 'hover:bg-light-hover dark:hover:bg-dark-hover text-light-foreground dark:text-dark-foreground'}`}
-                >
-                  Lifetime Deals
                 </button>
                 <button
                   onClick={() => setActiveTab('settings')}
