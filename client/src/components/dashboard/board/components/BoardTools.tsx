@@ -42,8 +42,8 @@ export const BoardTools: React.FC<BoardToolsProps> = ({
   };
 
   return (
-    <div className="flex items-center justify-between px-4 py-2 bg-light-background dark:bg-dark-background border-b border-light-accent dark:border-dark-accent z-10">
-      <div className="flex items-center space-x-2">
+    <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-2 bg-light-background dark:bg-dark-background border-b border-light-accent dark:border-dark-accent z-10">
+      <div className="flex items-center space-x-2 w-full sm:w-auto mb-2 sm:mb-0">
         <button
           onClick={() => router.push('/boards')}
           className="px-3 py-1 text-sm rounded text-light-foreground dark:text-dark-foreground hover:bg-light-accent/20 dark:hover:bg-dark-accent/20"
@@ -54,11 +54,11 @@ export const BoardTools: React.FC<BoardToolsProps> = ({
           type="text"
           value={boardName}
           onChange={handleBoardNameChange}
-          className="px-2 py-1 border-b border-transparent hover:border-light-accent dark:hover:border-dark-accent focus:border-primary-500 focus:outline-none bg-transparent font-semibold text-light-foreground dark:text-dark-foreground"
+          className="px-2 py-1 border-b border-transparent hover:border-light-accent dark:hover:border-dark-accent focus:border-primary-500 focus:outline-none bg-transparent font-semibold text-light-foreground dark:text-dark-foreground w-full"
         />
       </div>
       
-      <div className="flex items-center space-x-3">
+      <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
         {onToggleCursorMode && (
           <button
             onClick={onToggleCursorMode}
