@@ -3,11 +3,11 @@
  * Following the DRY principle by centralizing pricing data
  */
 
-// Define variant IDs from environment variables
-export const VARIANT_IDS = {
-  BASIC: process.env.NEXT_PUBLIC_LEMON_SQUEEZY_VARIANT_ID_1 || '',
-  PLUS: process.env.NEXT_PUBLIC_LEMON_SQUEEZY_VARIANT_ID_2 || '',
-  PRO: process.env.NEXT_PUBLIC_LEMON_SQUEEZY_VARIANT_ID_3 || '',
+// Define product IDs from environment variables
+export const PRODUCT_IDS = {
+  BASIC: process.env.NEXT_PUBLIC_CREEM_PRODUCT_ID_1 || '',
+  PLUS: process.env.NEXT_PUBLIC_CREEM_PRODUCT_ID_2 || '',
+  PRO: process.env.NEXT_PUBLIC_CREEM_PRODUCT_ID_3 || '',
 }
 
 // Define the type for a pricing plan
@@ -21,7 +21,6 @@ export interface PricingPlan {
   }>
   popular?: boolean
   productId: string
-  variantId: string
 }
 
 // Define pricing plans
@@ -37,8 +36,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       { included: false, text: 'Additional AI Features' },
       { included: false, text: 'Priority Support' },
     ],
-    productId: process.env.NEXT_PUBLIC_LEMON_SQUEEZY_PRODUCT_ID || '',
-    variantId: VARIANT_IDS.BASIC,
+    productId: PRODUCT_IDS.BASIC,
   },
   {
     name: 'Plus',
@@ -52,8 +50,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       { included: false, text: 'Priority Support' },
     ],
     popular: true,
-    productId: process.env.NEXT_PUBLIC_LEMON_SQUEEZY_PRODUCT_ID || '',
-    variantId: VARIANT_IDS.PLUS,
+    productId: PRODUCT_IDS.PLUS,
   },
   {
     name: 'Pro',
@@ -66,26 +63,24 @@ export const PRICING_PLANS: PricingPlan[] = [
       { included: true, text: '500 free AI Requests/month' },
       { included: true, text: 'Priority Support' },
     ],
-    productId: process.env.NEXT_PUBLIC_LEMON_SQUEEZY_PRODUCT_ID || '',
-    variantId: VARIANT_IDS.PRO,
+    productId: PRODUCT_IDS.PRO,
   },
 ]
 
 /**
- * Gets the plan name based on the variant ID
- * @param variantId The variant ID to look up
+ * Gets the plan name based on the product ID
+ * @param productId The product ID to look up
  * @returns The plan name as a string
  */
-export const getPlanName = (variantId: string | number | null): string => {
-  if (!variantId) return 'No Plan'
+export const getPlanName = (productId: string | null): string => {
+  if (!productId) return 'No Plan'
   
-  const variantStr = variantId.toString()
-  switch (variantStr) {
-    case VARIANT_IDS.BASIC:
+  switch (productId) {
+    case PRODUCT_IDS.BASIC:
       return 'Basic Plan'
-    case VARIANT_IDS.PLUS:
+    case PRODUCT_IDS.PLUS:
       return 'Plus Plan'
-    case VARIANT_IDS.PRO:
+    case PRODUCT_IDS.PRO:
       return 'Pro Plan'
     default:
       return 'Unknown Plan'
@@ -103,10 +98,12 @@ export const getStatusColor = (status: string | null | undefined): string => {
   switch (status.toLowerCase()) {
     case 'active':
       return 'text-green-500'
-    case 'cancelled':
+    case 'canceled': // Creem uses "canceled" instead of "cancelled"
       return 'text-yellow-500'
     case 'expired':
       return 'text-red-500'
+    case 'trialing':
+      return 'text-blue-500'
     default:
       return 'text-gray-500'
   }
@@ -117,14 +114,14 @@ export const getStatusColor = (status: string | null | undefined): string => {
  * @param userData The user data object
  * @returns Boolean indicating if the user has an active subscription
  */
-export const hasActiveSubscription = (userData: { subscription?: { status?: string; variantId?: string | number } }): boolean => {
+export const hasActiveSubscription = (userData: { subscription?: { status?: string; productId?: string } }): boolean => {
   // Check for required properties with explicit null handling
   const status = userData?.subscription?.status;
   
-  // Fast path - if status is explicitly 'active', return true as long as it has a variantId
-  if (status?.toLowerCase() === 'active') {
-    const variantId = userData?.subscription?.variantId;
-    return variantId !== undefined && variantId !== null;
+  // Active and trialing statuses are both considered active subscriptions
+  if (status?.toLowerCase() === 'active' || status?.toLowerCase() === 'trialing') {
+    const productId = userData?.subscription?.productId;
+    return productId !== undefined && productId !== null;
   }
   
   // Explicit check for 'none' status which means no subscription
@@ -132,6 +129,6 @@ export const hasActiveSubscription = (userData: { subscription?: { status?: stri
     return false;
   }
   
-  // Other statuses that are not 'active' or 'none' should return false
+  // Other statuses that are not 'active', 'trialing' or 'none' should return false
   return false;
 } 
