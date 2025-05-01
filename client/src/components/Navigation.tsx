@@ -141,9 +141,6 @@ const Navigation = () => {
                   <div className="h-8 w-8 rounded-full bg-primary-500 flex items-center justify-center text-white">
                     {auth.name?.[0]?.toUpperCase() || auth.email[0].toUpperCase()}
                   </div>
-                  <span className="text-light-foreground dark:text-dark-foreground">
-                    {auth.name || 'User'}
-                  </span>
                 </button>
 
                 {isOpen && (
