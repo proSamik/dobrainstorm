@@ -7,7 +7,7 @@ import { authService } from '@/services/auth'
 interface UserData {
   subscription: {
     status: string | null
-    productId: number | null
+    productId: string | null
   }
   timestamp?: number // Add timestamp for freshness check
 }
