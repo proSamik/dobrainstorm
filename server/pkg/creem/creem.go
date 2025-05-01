@@ -3,6 +3,7 @@ package creem
 
 import (
 	"bytes"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -101,7 +102,38 @@ func (c *Client) CreateCheckout(request CheckoutRequest) (map[string]interface{}
 		return nil, fmt.Errorf("error parsing response body: %v", err)
 	}
 
-	return result, nil
+	// Return only the checkout_url from the result
+	checkoutURL, ok := result["checkout_url"].(string)
+	if !ok {
+		return nil, fmt.Errorf("checkout_url not found in response")
+	}
+	return map[string]interface{}{"checkout_url": checkoutURL}, nil
+}
+
+// VerifyReturnURL verifies the signature in the return URL- Beneficial for single order payment
+func (c *Client) VerifyReturnURL(params map[string]string, signature string) (bool, error) {
+	// Create a list of key=value pairs
+	var pairs []string
+	for key, value := range params {
+		// Skip any empty values
+		if value != "" {
+			pairs = append(pairs, fmt.Sprintf("%s=%s", key, value))
+		}
+	}
+
+	// Add the API key as a salt parameter
+	pairs = append(pairs, fmt.Sprintf("salt=%s", c.apiKey))
+
+	// Join pairs with pipe character to form data string
+	data := strings.Join(pairs, "|")
+
+	// Generate SHA-256 hash
+	hash := sha256.Sum256([]byte(data))
+	// Convert hash to lowercase hex string
+	calculatedSignature := fmt.Sprintf("%x", hash)
+
+	// Compare the generated signature with the provided one
+	return calculatedSignature == signature, nil
 }
 
 // GetCustomerPortal retrieves the customer portal URL
@@ -153,28 +185,26 @@ func (c *Client) GetCustomerPortal(customerID string) (map[string]interface{}, e
 	return result, nil
 }
 
-// VerifyReturnURL verifies the signature in the return URL
-func (c *Client) VerifyReturnURL(params map[string]string, signature string) (bool, error) {
-	// Create a list of key=value pairs
-	var pairs []string
-	for key, value := range params {
-		// Skip any empty values
-		if value != "" {
-			pairs = append(pairs, fmt.Sprintf("%s=%s", key, value))
-		}
+// VerifyWebhookSignature verifies the signature of a webhook
+func (c *Client) VerifyWebhookSignature(payload []byte, signature string) (bool, error) {
+	webhookSecret := os.Getenv("CREEM_WEBHOOK_SECRET")
+	if webhookSecret == "" {
+		return false, fmt.Errorf("CREEM_WEBHOOK_SECRET not set")
 	}
 
-	// Add the API key as a salt parameter
-	pairs = append(pairs, fmt.Sprintf("salt=%s", c.apiKey))
+	// Create a new HMAC by defining the hash type and the key (as byte array)
+	h := hmac.New(sha256.New, []byte(webhookSecret))
 
-	// Join pairs with pipe character to form data string
-	data := strings.Join(pairs, "|")
+	// Write payload to the HMAC
+	h.Write(payload)
 
-	// Generate SHA-256 hash
-	hash := sha256.Sum256([]byte(data))
-	// Convert hash to lowercase hex string
-	calculatedSignature := fmt.Sprintf("%x", hash)
+	// Get result and encode as hexadecimal string
+	expectedSignature := fmt.Sprintf("%x", h.Sum(nil))
 
-	// Compare the generated signature with the provided one
-	return calculatedSignature == signature, nil
+	// Log signature info for debugging
+	fmt.Printf("Expected signature: %s\n", expectedSignature)
+	fmt.Printf("Received signature: %s\n", signature)
+
+	// Compare signatures using constant-time comparison to prevent timing attacks
+	return expectedSignature == signature, nil
 }
