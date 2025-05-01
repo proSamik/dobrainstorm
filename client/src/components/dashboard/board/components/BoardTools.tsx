@@ -18,8 +18,6 @@ export const BoardTools: React.FC<BoardToolsProps> = ({
   onExport,
   onImport,
   onSave,
-  cursorMode = 'grab',
-  onToggleCursorMode
 }) => {
   const router = useRouter();
   const { boardName, isDirty, updateName, undoChange, redoChange } = useBoardStore();
@@ -59,23 +57,6 @@ export const BoardTools: React.FC<BoardToolsProps> = ({
       </div>
       
       <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
-        {onToggleCursorMode && (
-          <button
-            onClick={onToggleCursorMode}
-            className={`flex items-center px-3 py-1 rounded text-sm ${
-              cursorMode === 'grab' 
-                ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border border-primary-300 dark:border-primary-700' 
-                : 'bg-light-accent/20 dark:bg-dark-accent/20 text-light-foreground dark:text-dark-foreground border border-light-accent dark:border-dark-accent'
-            }`}
-            title={`Click to switch to ${cursorMode === 'grab' ? 'pointer' : 'grab'} mode`}
-          >
-            <span className="mr-1">
-              {cursorMode === 'grab' ? '✋' : '👆'}
-            </span>
-            {cursorMode === 'grab' ? 'Grab Mode' : 'Pointer Mode'}
-          </button>
-        )}
-        
         <button
           onClick={undoChange}
           className="p-2 rounded text-light-foreground dark:text-dark-foreground hover:bg-light-accent/20 dark:hover:bg-dark-accent/20"
