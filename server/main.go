@@ -97,8 +97,8 @@ func main() {
 	// Creem payment routes
 	creemHandler := handlers.NewCreemHandler(db)
 	mux.Handle("/creem/checkout", authMiddleware.RequireAuth(http.HandlerFunc(creemHandler.HandleCheckout)))
-	mux.Handle("/creem/customerportal", authMiddleware.RequireAuth(http.HandlerFunc(creemHandler.HandleCustomerPortal)))
 	mux.Handle("/creem/verify-return-url", authMiddleware.RequireAuth(http.HandlerFunc(creemHandler.HandleVerifyReturnURL)))
+	mux.Handle("/creem/customerportal", authMiddleware.RequireAuth(http.HandlerFunc(creemHandler.HandleCustomerPortal)))
 	mux.HandleFunc("/creem-webhook", creemHandler.HandleWebhook)
 
 	// Board API routes (protected with auth, subscription check, and rate limiting)
