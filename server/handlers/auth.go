@@ -620,10 +620,29 @@ func (h *AuthHandler) VerifyUser(w http.ResponseWriter, r *http.Request) {
 			errChan <- err
 			return
 		}
+
+		// For canceled subscriptions, check if they still have access
+		if status != nil && status.Status != nil && strings.ToLower(*status.Status) == "canceled" {
+			// Get the full subscription details to check current_period_end_date
+			subscription, err := h.db.GetCreemSubscriptionByUserID(userID)
+			if err == nil && subscription != nil && subscription.CurrentPeriodEnd != nil {
+				// If current period hasn't ended yet, user still has access
+				if subscription.CurrentPeriodEnd.After(time.Now()) {
+					log.Printf("[Auth] Canceled subscription still active until: %s for user: %s",
+						subscription.CurrentPeriodEnd.Format(time.RFC3339), userID)
+
+					// Modify status to show as active instead of canceled
+					activeStatus := "active"
+					status.Status = &activeStatus
+				}
+			}
+		}
+
 		statusChan <- status
 
-		// Only cache status if it's active
-		if status != nil && status.Status != nil && strings.ToLower(*status.Status) == "active" {
+		// Only cache status if it's active or effectively active (canceled but still in current period)
+		if status != nil && status.Status != nil &&
+			(strings.ToLower(*status.Status) == "active" || strings.ToLower(*status.Status) == "trialing") {
 			// Update cache in background
 			cacheMutex.Lock()
 			subscriptionCache[userID] = status
