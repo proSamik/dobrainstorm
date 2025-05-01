@@ -56,36 +56,12 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
     }
   };
   
-  // Handle node selection
-  const handleClick = useCallback((e: React.MouseEvent) => {
-    // Don't trigger selection when clicking on label input
-    if (isEditingLabel) {
-      e.stopPropagation()
-      return
-    }
-    
-    // Selection is now handled in the parent component
-    // This handler remains for any TextNode-specific behaviors
-  }, [isEditingLabel])
-  
   // Handle label edit
   const handleLabelDoubleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation() // Prevent selection change
     setEditedLabel(data?.label || '')
     setIsEditingLabel(true)
   }, [data?.label])
-  
-  // Handle content double-click to open edit panel
-  const handleContentDoubleClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent other events
-    console.log('Content double-clicked (callback), node ID:', id)
-    
-    // First select the node
-    dispatch(setSelectedNode(id))
-    
-    // Then set it as the node being edited
-    dispatch(setEditingNode(id))
-  }, [dispatch, id])
   
   // Save label after editing
   const handleLabelSave = () => {
@@ -314,7 +290,7 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       {data.content?.text ? (
         <div className="relative">
           <div 
-            className="text-sm mt-1 cursor-text prose max-w-none px-1 border border-transparent hover:border-gray-200 dark:hover:border-gray-700 rounded"
+            className="text-sm mt-1 cursor-text prose dark:prose-invert dark:text-white max-w-none px-1 border border-transparent hover:border-gray-200 dark:hover:border-gray-700 rounded"
             dangerouslySetInnerHTML={{ __html: data.content.text }}
           />
         </div>
