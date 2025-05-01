@@ -262,7 +262,7 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
         ) : (
           <span 
             onDoubleClick={handleLabelDoubleClick}
-            className="cursor-text"
+            className="cursor-text dark:text-gray-900"
             title="Double-click to edit label"
           >
             {data.label}
