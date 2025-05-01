@@ -17,12 +17,14 @@ func (db *DB) GetUsers(page int, limit int, search string) ([]models.User, int, 
 			u.email, 
 			u.name, 
 			u.email_verified,
-			COALESCE(u.latest_status, '') as latest_status,
-			u.latest_product_id,
-			u.latest_variant_id,
-			u.latest_subscription_id,
-			u.latest_renewal_date,
-			u.latest_end_date,
+			u.access_level,
+			COALESCE(u.creem_subscription_status, '') as creem_subscription_status,
+			u.creem_product_id,
+			u.creem_subscription_id,
+			u.creem_customer_id,
+			u.creem_current_period_start,
+			u.creem_current_period_end,
+			u.creem_is_trial,
 			u.created_at,
 			u.updated_at
 		FROM users u`
@@ -61,24 +63,28 @@ func (db *DB) GetUsers(page int, limit int, search string) ([]models.User, int, 
 	var users []models.User
 	for rows.Next() {
 		var user models.User
-		var latestStatus sql.NullString
-		var latestProductID sql.NullInt64
-		var latestVariantID sql.NullInt64
-		var latestSubscriptionID sql.NullInt64
-		var latestRenewalDate sql.NullTime
-		var latestEndDate sql.NullTime
+		var accessLevel sql.NullInt64
+		var creemStatus sql.NullString
+		var creemProductID sql.NullString
+		var creemSubscriptionID sql.NullString
+		var creemCustomerID sql.NullString
+		var creemCurrentPeriodStart sql.NullTime
+		var creemCurrentPeriodEnd sql.NullTime
+		var creemIsTrial sql.NullBool
 
 		err := rows.Scan(
 			&user.ID,
 			&user.Email,
 			&user.Name,
 			&user.EmailVerified,
-			&latestStatus,
-			&latestProductID,
-			&latestVariantID,
-			&latestSubscriptionID,
-			&latestRenewalDate,
-			&latestEndDate,
+			&accessLevel,
+			&creemStatus,
+			&creemProductID,
+			&creemSubscriptionID,
+			&creemCustomerID,
+			&creemCurrentPeriodStart,
+			&creemCurrentPeriodEnd,
+			&creemIsTrial,
 			&user.CreatedAt,
 			&user.UpdatedAt,
 		)
@@ -86,22 +92,30 @@ func (db *DB) GetUsers(page int, limit int, search string) ([]models.User, int, 
 			return nil, 0, fmt.Errorf("error scanning user: %v", err)
 		}
 
-		// Always set the fields, even if they're null
-		user.LatestStatus = latestStatus.String
-		if latestProductID.Valid {
-			user.LatestProductID = int(latestProductID.Int64)
+		// Set access level if valid
+		if accessLevel.Valid {
+			user.AccessLevel = int(accessLevel.Int64)
 		}
-		if latestVariantID.Valid {
-			user.LatestVariantID = int(latestVariantID.Int64)
+
+		// Set Creem fields from database
+		user.CreemSubscriptionStatus = creemStatus.String
+		if creemProductID.Valid {
+			user.CreemProductID = creemProductID.String
 		}
-		if latestSubscriptionID.Valid {
-			user.LatestSubscriptionID = int(latestSubscriptionID.Int64)
+		if creemSubscriptionID.Valid {
+			user.CreemSubscriptionID = creemSubscriptionID.String
 		}
-		if latestRenewalDate.Valid {
-			user.LatestRenewalDate = &latestRenewalDate.Time
+		if creemCustomerID.Valid {
+			user.CreemCustomerID = creemCustomerID.String
 		}
-		if latestEndDate.Valid {
-			user.LatestEndDate = &latestEndDate.Time
+		if creemCurrentPeriodStart.Valid {
+			user.CreemCurrentPeriodStart = &creemCurrentPeriodStart.Time
+		}
+		if creemCurrentPeriodEnd.Valid {
+			user.CreemCurrentPeriodEnd = &creemCurrentPeriodEnd.Time
+		}
+		if creemIsTrial.Valid {
+			user.CreemIsTrial = creemIsTrial.Bool
 		}
 
 		users = append(users, user)
