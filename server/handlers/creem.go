@@ -98,22 +98,30 @@ func (h *CreemHandler) HandleCheckout(w http.ResponseWriter, r *http.Request) {
 }
 
 // Extend it later to handle single order payment- HandleVerifyReturnURL verifies the signature in the return URL
+// HandleVerifyReturnURL verifies the signature in the return URL
 func (h *CreemHandler) HandleVerifyReturnURL(w http.ResponseWriter, r *http.Request) {
+	log.Println("HandleVerifyReturnURL: Request received")
+
 	// Only allow GET method
 	if r.Method != http.MethodGet {
+		log.Println("HandleVerifyReturnURL: Method not allowed")
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	log.Println("HandleVerifyReturnURL: Method is GET")
 
 	// Get all query parameters
 	queryParams := r.URL.Query()
+	log.Printf("HandleVerifyReturnURL: Query parameters received: %v", queryParams)
 
 	// Get signature from query parameter
 	signature := queryParams.Get("signature")
 	if signature == "" {
+		log.Println("HandleVerifyReturnURL: Signature is required")
 		http.Error(w, "Signature is required", http.StatusBadRequest)
 		return
 	}
+	log.Printf("HandleVerifyReturnURL: Signature received: %s", signature)
 
 	// Extract parameters from query (excluding signature)
 	params := make(map[string]string)
@@ -122,6 +130,7 @@ func (h *CreemHandler) HandleVerifyReturnURL(w http.ResponseWriter, r *http.Requ
 			params[key] = values[0]
 		}
 	}
+	log.Printf("HandleVerifyReturnURL: Parameters extracted: %v", params)
 
 	// Check required parameters
 	requiredParams := []string{"checkout_id", "order_id", "customer_id", "product_id"}
@@ -134,31 +143,37 @@ func (h *CreemHandler) HandleVerifyReturnURL(w http.ResponseWriter, r *http.Requ
 
 	if len(missingParams) > 0 {
 		errorMsg := fmt.Sprintf("Missing required parameters: %s", strings.Join(missingParams, ", "))
+		log.Printf("HandleVerifyReturnURL: %s", errorMsg)
 		http.Error(w, errorMsg, http.StatusBadRequest)
 		return
 	}
+	log.Println("HandleVerifyReturnURL: All required parameters are present")
 
 	// Verify signature
 	valid, err := h.Client.VerifyReturnURL(params, signature)
 	if err != nil {
-		log.Printf("Error verifying signature: %v", err)
+		log.Printf("HandleVerifyReturnURL: Error verifying signature: %v", err)
 		http.Error(w, "Error verifying signature", http.StatusInternalServerError)
 		return
 	}
 
 	if !valid {
+		log.Println("HandleVerifyReturnURL: Invalid signature")
 		http.Error(w, "Invalid signature", http.StatusBadRequest)
 		return
 	}
+	log.Println("HandleVerifyReturnURL: Signature verified successfully")
 
 	// If we reached here, the signature is valid
 	// Return simple success response
 	response := map[string]interface{}{
 		"valid": true,
 	}
+	log.Println("HandleVerifyReturnURL: Sending success response")
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+	log.Println("HandleVerifyReturnURL: Response sent")
 }
 
 // HandleCustomerPortal retrieves the customer portal URL
