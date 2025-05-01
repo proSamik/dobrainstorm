@@ -17,6 +17,23 @@ type DB struct {
 	*sql.DB
 }
 
+// Exec implements DBInterface.
+// Subtle: this method shadows the method (*DB).Exec of DB.DB.
+func (db *DB) Exec(query string, args ...interface{}) (sql.Result, error) {
+	return db.DB.Exec(query, args...)
+}
+
+// InvalidateUserCache implements DBInterface.
+func (db *DB) InvalidateUserCache(userID string) {
+	panic("unimplemented")
+}
+
+// QueryRow implements DBInterface.
+// Subtle: this method shadows the method (*DB).QueryRow of DB.DB.
+func (db *DB) QueryRow(query string, args ...interface{}) *sql.Row {
+	return db.DB.QueryRow(query, args...)
+}
+
 // New creates a new database connection and verifies it with a ping
 func New(dataSourceName string) (*DB, error) {
 	db, err := sql.Open("postgres", dataSourceName)
@@ -35,4 +52,3 @@ func New(dataSourceName string) (*DB, error) {
 	}
 	return &DB{db}, nil
 }
-
