@@ -309,7 +309,35 @@ func (h *CreemHandler) handleSubscriptionUpdate(objectData json.RawMessage) erro
 	nextTransactionDate := creem.ParseTime(subscription.NextTransactionDate)
 	canceledAt := creem.ParseTime(subscription.CanceledAt)
 
-	// Update subscription with the current information
+	// Get the existing subscription to check for product_id changes
+	existingSub, err := h.DB.GetCreemSubscriptionByID(subscription.ID)
+	if err != nil {
+		log.Printf("Error getting existing subscription: %v", err)
+		// Continue with update even if we can't get the existing subscription
+	}
+
+	// Check if product_id has changed
+	if existingSub != nil && existingSub.ProductID != subscription.Product.ID {
+		log.Printf("Product ID changed for subscription %s: from %s to %s",
+			subscription.ID, existingSub.ProductID, subscription.Product.ID)
+
+		// Update the database schema to include a way to update product_id
+		// For now, we'll use a modified query that handles product_id changes
+		return h.DB.UpdateCreemSubscriptionWithProductChange(
+			subscription.ID,
+			subscription.Status,
+			subscription.Product.ID, // Include the updated product ID
+			subscription.LastTransactionID,
+			lastTransactionDate,
+			nextTransactionDate,
+			currentPeriodStart,
+			currentPeriodEnd,
+			canceledAt,
+			subscription.Metadata,
+		)
+	}
+
+	// If no product change, use the regular update method
 	return h.DB.UpdateCreemSubscription(
 		subscription.ID,
 		subscription.Status,
