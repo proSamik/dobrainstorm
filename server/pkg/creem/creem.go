@@ -110,27 +110,45 @@ func (c *Client) CreateCheckout(request CheckoutRequest) (map[string]interface{}
 	return map[string]interface{}{"checkout_url": checkoutURL}, nil
 }
 
-// VerifyReturnURL verifies the signature in the return URL- Beneficial for single order payment
+// VerifyReturnURL verifies the signature in the return URL
 func (c *Client) VerifyReturnURL(params map[string]string, signature string) (bool, error) {
+	// Debug logging
+	fmt.Println("VerifyReturnURL: Input parameters:", params)
+	fmt.Println("VerifyReturnURL: Signature to verify:", signature)
+
 	// Create a list of key=value pairs
 	var pairs []string
-	for key, value := range params {
-		// Skip any empty values
-		if value != "" {
-			pairs = append(pairs, fmt.Sprintf("%s=%s", key, value))
+
+	// Fixed order based on URL observation (exactly as they appear in the URL)
+	keyOrder := []string{"checkout_id", "order_id", "customer_id", "subscription_id", "product_id"}
+
+	// Build parameter pairs in exact URL order
+	for _, key := range keyOrder {
+		value, exists := params[key]
+		if exists && value != "" {
+			pair := fmt.Sprintf("%s=%s", key, value)
+			pairs = append(pairs, pair)
+			fmt.Printf("VerifyReturnURL: Including parameter: %s\n", pair)
 		}
 	}
 
 	// Add the API key as a salt parameter
-	pairs = append(pairs, fmt.Sprintf("salt=%s", c.apiKey))
+	saltParam := fmt.Sprintf("salt=%s", c.apiKey)
+	pairs = append(pairs, saltParam)
+	fmt.Println("VerifyReturnURL: Including salt parameter (hidden value)")
 
 	// Join pairs with pipe character to form data string
 	data := strings.Join(pairs, "|")
+	fmt.Printf("VerifyReturnURL: Data string format (with values hidden): %s\n",
+		strings.ReplaceAll(data, c.apiKey, "[API_KEY_HIDDEN]"))
 
 	// Generate SHA-256 hash
 	hash := sha256.Sum256([]byte(data))
 	// Convert hash to lowercase hex string
 	calculatedSignature := fmt.Sprintf("%x", hash)
+	fmt.Printf("VerifyReturnURL: Calculated signature: %s\n", calculatedSignature)
+	fmt.Printf("VerifyReturnURL: Provided signature:   %s\n", signature)
+	fmt.Printf("VerifyReturnURL: Signatures match: %v\n", calculatedSignature == signature)
 
 	// Compare the generated signature with the provided one
 	return calculatedSignature == signature, nil
