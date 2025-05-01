@@ -28,7 +28,7 @@ export const RichTextEditor = ({ content, onChange, placeholder = 'Start typing.
     },
     editorProps: {
       attributes: {
-        class: 'prose dark:prose-invert max-w-none min-h-[100px] focus:outline-none px-3 py-2',
+        class: 'prose dark:prose-invert max-w-none min-h-[100px] focus:outline-none px-3 py-2 dark:text-white',
       },
     },
     parseOptions: {
