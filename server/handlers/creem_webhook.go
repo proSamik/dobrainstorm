@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -158,7 +159,50 @@ func (h *CreemHandler) handleSubscriptionPaid(objectData json.RawMessage) error 
 	nextTransactionDate := creem.ParseTime(subscription.NextTransactionDate)
 	canceledAt := creem.ParseTime(subscription.CanceledAt)
 
-	// Update subscription in database
+	// Check if this subscription already exists
+	existingSub, err := h.DB.GetCreemSubscriptionByID(subscription.ID)
+	if err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("error checking if subscription exists: %v", err)
+	}
+
+	// If subscription doesn't exist yet (common with trials), create it
+	if existingSub == nil {
+		log.Printf("Subscription %s not found in database, creating new record (likely from trial)", subscription.ID)
+
+		// Extract user ID from metadata if available
+		var userID string
+		if subscription.Metadata != nil {
+			if uid, ok := subscription.Metadata["userID"].(string); ok {
+				userID = uid
+			}
+		}
+
+		if userID == "" {
+			return fmt.Errorf("no user ID found in metadata for subscription %s", subscription.ID)
+		}
+
+		// Create new subscription record
+		return h.DB.CreateCreemSubscription(
+			userID,
+			subscription.ID,
+			subscription.Customer.ID,
+			subscription.Product.ID,
+			"", // checkout_id not provided in this event
+			"", // order_id not provided in this event
+			subscription.Status,
+			subscription.CollectionMethod,
+			subscription.LastTransactionID,
+			lastTransactionDate,
+			nextTransactionDate,
+			currentPeriodStart,
+			currentPeriodEnd,
+			canceledAt,
+			nil, // trial ends at is not directly provided
+			subscription.Metadata,
+		)
+	}
+
+	// Update existing subscription in database
 	return h.DB.UpdateCreemSubscription(
 		subscription.ID,
 		subscription.Status,
