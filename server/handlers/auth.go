@@ -591,115 +591,6 @@ func (h *AuthHandler) AccountPasswordReset(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-// VerifyUser returns the user's subscription status and product details
-func (h *AuthHandler) VerifyUser(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	// Try to get status from cache first
-	cacheMutex.RLock()
-	if status, exists := subscriptionCache[userID]; exists {
-		cacheMutex.RUnlock()
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(status)
-		return
-	}
-	cacheMutex.RUnlock()
-
-	// Create a channel for the database response
-	statusChan := make(chan *models.CreemSubscriptionStatus, 1)
-	errChan := make(chan error, 1)
-
-	// Query database in a goroutine
-	go func() {
-		status, err := h.db.GetUserCreemSubscriptionStatus(userID)
-		if err != nil {
-			errChan <- err
-			return
-		}
-
-		// For non-standard subscription statuses, check if they still have access
-		if status != nil && status.Status != nil {
-			lowerStatus := strings.ToLower(*status.Status)
-
-			// Get the full subscription details if we need period end checks
-			if lowerStatus == "canceled" || lowerStatus == "paused" || lowerStatus == "unpaid" {
-				subscription, err := h.db.GetCreemSubscriptionByUserID(userID)
-				if err == nil && subscription != nil && subscription.CurrentPeriodEnd != nil {
-					now := time.Now()
-					periodEnd := *subscription.CurrentPeriodEnd
-
-					// For canceled or paused: still active if period hasn't ended
-					if (lowerStatus == "canceled" || lowerStatus == "paused") && periodEnd.After(now) {
-						log.Printf("[Auth] %s subscription still active until: %s for user: %s",
-							*status.Status, periodEnd.Format(time.RFC3339), userID)
-
-						// Modify status to show as active
-						activeStatus := "active"
-						status.Status = &activeStatus
-					}
-
-					// For unpaid: give 2 days grace period
-					if lowerStatus == "unpaid" {
-						gracePeriod := periodEnd.Add(48 * time.Hour) // 2 days grace period
-						if now.Before(gracePeriod) {
-							log.Printf("[Auth] Unpaid subscription in grace period until: %s for user: %s",
-								gracePeriod.Format(time.RFC3339), userID)
-
-							// Modify status to show as active during grace period
-							activeStatus := "active"
-							status.Status = &activeStatus
-						}
-					}
-				}
-			}
-		}
-
-		statusChan <- status
-
-		// Only cache status if it's active
-		if status != nil && status.Status != nil &&
-			(strings.ToLower(*status.Status) == "active" || strings.ToLower(*status.Status) == "trialing") {
-			// Update cache in background
-			cacheMutex.Lock()
-			subscriptionCache[userID] = status
-			cacheMutex.Unlock()
-
-			// Set up cache expiry
-			time.AfterFunc(cacheExpiry, func() {
-				cacheMutex.Lock()
-				delete(subscriptionCache, userID)
-				cacheMutex.Unlock()
-			})
-
-			log.Printf("[Auth] Cached active subscription for user: %s", userID)
-		} else {
-			statusValue := "nil"
-			if status != nil && status.Status != nil {
-				statusValue = *status.Status
-			}
-			log.Printf("[Auth] Not caching non-active subscription for user: %s (status: %s)",
-				userID, statusValue)
-		}
-	}()
-
-	// Wait for result with timeout
-	select {
-	case status := <-statusChan:
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(status)
-	case err := <-errChan:
-		log.Printf("[Auth] Error getting subscription status: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-	case <-time.After(5 * time.Second):
-		log.Printf("[Auth] Timeout getting subscription status for user: %s", userID)
-		http.Error(w, "Request timeout", http.StatusGatewayTimeout)
-	}
-}
-
 func (h *AuthHandler) GithubAuth(w http.ResponseWriter, r *http.Request) {
 	var req GithubAuthRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -860,5 +751,114 @@ func (h *AuthHandler) GithubAuth(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[Auth] Error generating auth response: %v", err)
 		sendErrorResponse(w, http.StatusInternalServerError, "Error processing GitHub authentication")
 		return
+	}
+}
+
+// VerifyUser returns the user's subscription status and product details
+func (h *AuthHandler) VerifyUser(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Try to get status from cache first
+	cacheMutex.RLock()
+	if status, exists := subscriptionCache[userID]; exists {
+		cacheMutex.RUnlock()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(status)
+		return
+	}
+	cacheMutex.RUnlock()
+
+	// Create a channel for the database response
+	statusChan := make(chan *models.CreemSubscriptionStatus, 1)
+	errChan := make(chan error, 1)
+
+	// Query database in a goroutine
+	go func() {
+		status, err := h.db.GetUserCreemSubscriptionStatus(userID)
+		if err != nil {
+			errChan <- err
+			return
+		}
+
+		// For non-standard subscription statuses, check if they still have access
+		if status != nil && status.Status != nil {
+			lowerStatus := strings.ToLower(*status.Status)
+
+			// Get the full subscription details if we need period end checks
+			if lowerStatus == "canceled" || lowerStatus == "paused" || lowerStatus == "unpaid" {
+				subscription, err := h.db.GetCreemSubscriptionByUserID(userID)
+				if err == nil && subscription != nil && subscription.CurrentPeriodEnd != nil {
+					now := time.Now()
+					periodEnd := *subscription.CurrentPeriodEnd
+
+					// For canceled or paused: still active if period hasn't ended
+					if (lowerStatus == "canceled" || lowerStatus == "paused") && periodEnd.After(now) {
+						log.Printf("[Auth] %s subscription still active until: %s for user: %s",
+							*status.Status, periodEnd.Format(time.RFC3339), userID)
+
+						// Modify status to show as active
+						activeStatus := "active"
+						status.Status = &activeStatus
+					}
+
+					// For unpaid: give 2 days grace period
+					if lowerStatus == "unpaid" {
+						gracePeriod := periodEnd.Add(48 * time.Hour) // 2 days grace period
+						if now.Before(gracePeriod) {
+							log.Printf("[Auth] Unpaid subscription in grace period until: %s for user: %s",
+								gracePeriod.Format(time.RFC3339), userID)
+
+							// Modify status to show as active during grace period
+							activeStatus := "active"
+							status.Status = &activeStatus
+						}
+					}
+				}
+			}
+		}
+
+		statusChan <- status
+
+		// Only cache status if it's active
+		if status != nil && status.Status != nil &&
+			(strings.ToLower(*status.Status) == "active" || strings.ToLower(*status.Status) == "trialing") {
+			// Update cache in background
+			cacheMutex.Lock()
+			subscriptionCache[userID] = status
+			cacheMutex.Unlock()
+
+			// Set up cache expiry
+			time.AfterFunc(cacheExpiry, func() {
+				cacheMutex.Lock()
+				delete(subscriptionCache, userID)
+				cacheMutex.Unlock()
+			})
+
+			log.Printf("[Auth] Cached active subscription for user: %s", userID)
+		} else {
+			statusValue := "nil"
+			if status != nil && status.Status != nil {
+				statusValue = *status.Status
+			}
+			log.Printf("[Auth] Not caching non-active subscription for user: %s (status: %s)",
+				userID, statusValue)
+		}
+	}()
+
+	// Wait for result with timeout
+	select {
+	case status := <-statusChan:
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(status)
+	case err := <-errChan:
+		log.Printf("[Auth] Error getting subscription status: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	case <-time.After(5 * time.Second):
+		log.Printf("[Auth] Timeout getting subscription status for user: %s", userID)
+		http.Error(w, "Request timeout", http.StatusGatewayTimeout)
 	}
 }
