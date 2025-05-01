@@ -391,3 +391,94 @@ func (db *DB) GetUserCreemSubscriptionStatus(userID string) (*models.CreemSubscr
 
 	return result, nil
 }
+
+// UpdateCreemSubscriptionWithProductChange updates an existing Creem subscription including product_id changes
+func (db *DB) UpdateCreemSubscriptionWithProductChange(
+	subscriptionID string,
+	status string,
+	productID string,
+	lastTransactionID string,
+	lastTransactionDate *time.Time,
+	nextTransactionDate *time.Time,
+	currentPeriodStart *time.Time,
+	currentPeriodEnd *time.Time,
+	canceledAt *time.Time,
+	metadata map[string]interface{}) error {
+
+	// Convert metadata to JSON
+	var metadataJSON []byte
+	var err error
+	if metadata != nil {
+		metadataJSON, err = json.Marshal(metadata)
+		if err != nil {
+			return err
+		}
+	}
+
+	query := `
+		UPDATE creem_subscriptions 
+		SET status = $1,
+		    product_id = $2,
+		    last_transaction_id = $3,
+		    last_transaction_date = $4,
+		    next_transaction_date = $5,
+		    current_period_start_date = $6,
+		    current_period_end_date = $7,
+		    canceled_at = $8,
+		    metadata = CASE WHEN $9::jsonb IS NULL THEN metadata ELSE $9::jsonb END,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE subscription_id = $10
+	`
+
+	result, err := db.Exec(query,
+		status,
+		productID,
+		lastTransactionID,
+		lastTransactionDate,
+		nextTransactionDate,
+		currentPeriodStart,
+		currentPeriodEnd,
+		canceledAt,
+		metadataJSON,
+		subscriptionID)
+
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+
+	// Get the user ID for this subscription to update user record
+	var userID string
+	var isTrial bool
+
+	queryUser := `
+		SELECT user_id, (trial_ends_at IS NOT NULL AND trial_ends_at > CURRENT_TIMESTAMP) as is_trial
+		FROM creem_subscriptions
+		WHERE subscription_id = $1
+	`
+
+	err = db.QueryRow(queryUser, subscriptionID).Scan(&userID, &isTrial)
+	if err != nil {
+		return err
+	}
+
+	// Update the user's subscription information, including the new product ID
+	return db.UpdateUserCreemSubscription(
+		userID,
+		"", // don't update customer ID
+		subscriptionID,
+		productID, // Pass the new product ID
+		status,
+		currentPeriodStart,
+		currentPeriodEnd,
+		isTrial,
+	)
+}
