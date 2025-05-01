@@ -32,6 +32,30 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
   // State for connecting mode
   const [isConnectingMode, setIsConnectingMode] = useState(false)
   
+  // Custom double-click tracking
+  const [lastClickTime, setLastClickTime] = useState<number>(0)
+  
+  // Function to handle node clicks with double-click detection
+  const handleNodeClick = (e: React.MouseEvent) => {
+    const currentTime = new Date().getTime();
+    const timeSinceLastClick = currentTime - lastClickTime;
+    
+    // Select the node on all clicks
+    dispatch(setSelectedNode(id));
+    
+    // Check if this is a double click (within 300ms)
+    if (timeSinceLastClick < 300) {
+      console.log('Double click detected on node', id);
+      // Open edit panel on double click
+      dispatch(setEditingNode(id));
+      // Reset click time to prevent triple-click being detected as another double-click
+      setLastClickTime(0);
+    } else {
+      // Update last click time for single clicks
+      setLastClickTime(currentTime);
+    }
+  };
+  
   // Handle node selection
   const handleClick = useCallback((e: React.MouseEvent) => {
     // Don't trigger selection when clicking on label input
@@ -54,6 +78,7 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
   // Handle content double-click to open edit panel
   const handleContentDoubleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation() // Prevent other events
+    console.log('Content double-clicked (callback), node ID:', id)
     
     // First select the node
     dispatch(setSelectedNode(id))
@@ -222,10 +247,10 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
     <div
       className={`px-4 py-3 rounded-lg shadow-md ${
         selected 
-          ? 'bg-blue-50 border-2 border-blue-500' // Primary selected node - strong blue border
+          ? 'bg-blue-50 dark:bg-blue-900 border-2 border-blue-500' // Primary selected node - strong blue border
           : isMultiSelected
-            ? 'bg-blue-50 border-2 border-blue-300' // Multi-selected but not primary - lighter blue border
-            : 'bg-white border border-gray-200'    // Not selected - regular styling
+            ? 'bg-blue-50 dark:bg-blue-900 border-2 border-blue-300 dark:border-blue-700' // Multi-selected but not primary - lighter blue border
+            : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700'    // Not selected - regular styling
       }`}
       style={{ 
         minWidth: 150,
@@ -238,7 +263,7 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
             ? '0 0 0 2px rgba(59, 130, 246, 0.3), 0 4px 6px -1px rgba(0, 0, 0, 0.1)' // Lighter shadow for multi-selection
             : '0 1px 3px rgba(0, 0, 0, 0.1)'
       }}
-      onClick={handleClick}
+      onClick={handleNodeClick}
       data-id={id}
       data-selected={selected ? 'true' : 'false'}
       data-multiselected={isMultiSelected ? 'true' : 'false'}
@@ -287,19 +312,21 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       
       {/* Content area */}
       {data.content?.text ? (
-        <div 
-          className="text-sm mt-1 cursor-text prose dark:prose-invert max-w-none px-1"
-          onDoubleClick={handleContentDoubleClick}
-          title="Double-click to edit content"
-          dangerouslySetInnerHTML={{ __html: data.content.text }}
-        />
+        <div className="relative">
+          <div 
+            className="text-sm mt-1 cursor-text prose dark:prose-invert max-w-none px-1 border border-transparent hover:border-gray-200 dark:hover:border-gray-700 rounded"
+            title="Double-click to edit content"
+            dangerouslySetInnerHTML={{ __html: data.content.text }}
+          />
+        </div>
       ) : (
-        <div 
-          className="text-sm mt-1 cursor-text prose dark:prose-invert max-w-none px-1"
-          onDoubleClick={handleContentDoubleClick}
-          title="Double-click to edit content"
-        >
-          <span className="text-gray-400 italic">Double-click to edit content</span>
+        <div className="relative">
+          <div 
+            className="text-sm mt-1 cursor-text prose dark:prose-invert max-w-none px-1 border border-transparent hover:border-gray-200 dark:hover:border-gray-700 rounded min-h-[30px]"
+            title="Double-click to edit content"
+          >
+            <span className="text-gray-400 dark:text-gray-500 italic">Double-click to edit content</span>
+          </div>
         </div>
       )}
       
