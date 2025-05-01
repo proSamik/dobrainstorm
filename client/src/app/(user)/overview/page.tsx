@@ -7,6 +7,8 @@ import { ActiveSubscriptionView } from '@/components/user/overview/ActiveSubscri
 import { PricingView } from '@/components/user/overview/PricingView'
 import { LoadingView } from '@/components/user/overview/LoadingView'
 import { ErrorView } from '@/components/user/overview/ErrorView'
+import { UserData as ComponentUserData } from '@/types/user'
+
 /**
  * Main UserOverview component that conditionally renders the appropriate view
  * based on the user's subscription status
@@ -28,6 +30,23 @@ export default function UserOverview() {
     }
   }, [forceRefreshUserData, initialRefreshDone])
 
+  // Convert userData from UserDataContext to format expected by components
+  const convertUserData = (contextData: typeof userData): ComponentUserData | null => {
+    if (!contextData) return null;
+    
+    return {
+      subscription: {
+        status: contextData.subscription.status,
+        productId: contextData.subscription.productId,
+        variantId: contextData.subscription.productId // Use productId as variantId for backward compatibility
+      },
+      timestamp: contextData.timestamp
+    };
+  };
+  
+  // Create component-compatible user data
+  const componentUserData = convertUserData(userData);
+
   if (!mounted || loading) {
     return <LoadingView />
   }
@@ -38,37 +57,35 @@ export default function UserOverview() {
   
   // Check for the 'none' status that represents no subscription
   if (userData?.subscription?.status === 'none') {
-    return <PricingView userData={userData} />
+    return <PricingView userData={componentUserData} />
   }
   
   // Check direct status first - if status is 'active', show the subscription view
   // This ensures even if hasActiveSubscription has issues, we fallback to the direct status check
   if (userData?.subscription?.status?.toLowerCase() === 'active') {
-    if (userData) {
-      return <ActiveSubscriptionView userData={userData} />
+    if (componentUserData) {
+      return <ActiveSubscriptionView userData={componentUserData} />
     }
   }
   
   // Create a safe version of userData for hasActiveSubscription function
-  // The function expects { subscription?: { status?: string; variantId?: string | number } }
   const subscriptionData = {
     subscription: userData ? {
       status: userData.subscription.status === null ? undefined : userData.subscription.status,
-      variantId: userData.subscription.variantId === null ? undefined : userData.subscription.variantId
+      productId: userData.subscription.productId === null ? undefined : String(userData.subscription.productId)
     } : undefined
   };
   
   const isSubscribed = hasActiveSubscription(subscriptionData);
   
-  // The original override logic is redundant now, since we're doing the direct check first
   // When the user doesn't have an active subscription, show pricing
   if (!isSubscribed) {
-    return <PricingView userData={userData} />
+    return <PricingView userData={componentUserData} />
   }
 
   // Make sure userData is not null before passing to ActiveSubscriptionView
-  if (userData) {
-    return <ActiveSubscriptionView userData={userData} />
+  if (componentUserData) {
+    return <ActiveSubscriptionView userData={componentUserData} />
   }
   
   // Fallback if userData is null but somehow we got here
