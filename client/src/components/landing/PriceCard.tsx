@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { authService } from '@/services/auth';
 import toast from 'react-hot-toast';
+import { useUserData } from '@/contexts/UserDataContext'
 
 interface PriceCardProps {
   name: string;
@@ -29,6 +30,7 @@ export function PriceCard({
   const { isAuthenticated } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const { userData } = useUserData()
 
   // Debug product ID on component mount
   useEffect(() => {
@@ -41,6 +43,13 @@ export function PriceCard({
     
     if (!productId) {
       toast.error(`This product (${name}) is currently unavailable for purchase. Missing product ID.`);
+      return;
+    }
+
+    // If the user already has an active subscription, redirect to subscription page
+    if (isAuthenticated && userData?.subscription?.status === 'active') {
+      toast('You already have an active subscription');
+      router.push('/profile?tab=subscription');
       return;
     }
 
