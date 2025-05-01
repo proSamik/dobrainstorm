@@ -1624,7 +1624,7 @@ This structure will be used to automatically create a mind map with meaningful c
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Content
           </label>
-          <div className="border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden cursor-text">
+          <div className="border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden cursor-text bg-white dark:bg-gray-800">
             <RichTextEditor
               content={text}
               onChange={handleTextChange}
@@ -1752,7 +1752,7 @@ This structure will be used to automatically create a mind map with meaningful c
                 <textarea 
                   value={editableSuggestions}
                   onChange={handleEditSuggestions}
-                  className="w-full h-64 p-2 bg-gray-50 dark:bg-gray-700 font-mono text-sm border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
+                  className="w-full h-64 p-2 bg-gray-50 dark:bg-gray-700 font-mono text-sm border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
                   placeholder='{
   "Category 1": ["Idea 1", "Idea 2"],
   "Category 2": ["Idea 3", "Idea 4"]
