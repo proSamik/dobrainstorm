@@ -281,13 +281,13 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
             onBlur={handleLabelBlur}
             onKeyDown={handleLabelKeyDown}
             autoFocus
-            className="flex-1 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 no-drag dark:text-gray-900"
+            className="flex-1 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 no-drag "
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
           <span 
             onDoubleClick={handleLabelDoubleClick}
-            className="cursor-text dark:text-gray-900"
+            className="cursor-text"
             title="Double-click to edit label"
           >
             {data.label}
@@ -314,18 +314,17 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       {data.content?.text ? (
         <div className="relative">
           <div 
-            className="text-sm mt-1 cursor-text prose dark:prose-invert max-w-none px-1 border border-transparent hover:border-gray-200 dark:hover:border-gray-700 rounded"
-            title="Double-click to edit content"
+            className="text-sm mt-1 cursor-text prose max-w-none px-1 border border-transparent hover:border-gray-200 dark:hover:border-gray-700 rounded"
             dangerouslySetInnerHTML={{ __html: data.content.text }}
           />
         </div>
       ) : (
         <div className="relative">
           <div 
-            className="text-sm mt-1 cursor-text prose dark:prose-invert max-w-none px-1 border border-transparent hover:border-gray-200 dark:hover:border-gray-700 rounded min-h-[30px]"
+            className="text-sm mt-1 cursor-text prose dark:prose-invert dark:text-white max-w-none px-1 border border-transparent hover:border-gray-200 dark:hover:border-gray-700 rounded min-h-[30px]"
             title="Double-click to edit content"
           >
-            <span className="text-gray-400 dark:text-gray-500 italic">Double-click to edit content</span>
+            <span className="text-gray-400 dark:text-white italic">Double-click to edit content</span>
           </div>
         </div>
       )}
