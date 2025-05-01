@@ -11,12 +11,10 @@ export default function ProfileLayout({
   children,
   subscription,
   settings,
-  orders,
 }: {
   children: React.ReactNode
   subscription: React.ReactNode
   settings: React.ReactNode
-  orders: React.ReactNode
 }) {
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     if (typeof window !== 'undefined') {
@@ -115,8 +113,7 @@ export default function ProfileLayout({
                   className="h-full"
                 >
                   {activeTab === 'profile' ? children :
-                   activeTab === 'subscription' ? subscription :
-                   activeTab === 'orders' ? orders : settings}
+                   activeTab === 'subscription' ? subscription : settings}
                 </motion.div>
               </AnimatePresence>
             </div>

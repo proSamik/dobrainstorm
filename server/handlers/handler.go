@@ -7,6 +7,5 @@ import "saas-server/database"
 // for all handler types. It provides access to the database connection
 // and other shared resources that may be needed across different handlers.
 type Handler struct {
-	*WebhookHandler
 	DB database.DBInterface
 }

@@ -89,7 +89,7 @@ type ResetPasswordRequest struct {
 
 // Cache for subscription status to reduce database load
 var (
-	subscriptionCache = make(map[string]*models.UserSubscriptionStatus)
+	subscriptionCache = make(map[string]*models.CreemSubscriptionStatus)
 	cacheMutex        sync.RWMutex
 	cacheExpiry       = 5 * time.Minute
 )
@@ -610,20 +610,59 @@ func (h *AuthHandler) VerifyUser(w http.ResponseWriter, r *http.Request) {
 	cacheMutex.RUnlock()
 
 	// Create a channel for the database response
-	statusChan := make(chan *models.UserSubscriptionStatus, 1)
+	statusChan := make(chan *models.CreemSubscriptionStatus, 1)
 	errChan := make(chan error, 1)
 
 	// Query database in a goroutine
 	go func() {
-		status, err := h.db.GetUserSubscriptionStatus(userID)
+		status, err := h.db.GetUserCreemSubscriptionStatus(userID)
 		if err != nil {
 			errChan <- err
 			return
 		}
+
+		// For non-standard subscription statuses, check if they still have access
+		if status != nil && status.Status != nil {
+			lowerStatus := strings.ToLower(*status.Status)
+
+			// Get the full subscription details if we need period end checks
+			if lowerStatus == "canceled" || lowerStatus == "paused" || lowerStatus == "unpaid" {
+				subscription, err := h.db.GetCreemSubscriptionByUserID(userID)
+				if err == nil && subscription != nil && subscription.CurrentPeriodEnd != nil {
+					now := time.Now()
+					periodEnd := *subscription.CurrentPeriodEnd
+
+					// For canceled or paused: still active if period hasn't ended
+					if (lowerStatus == "canceled" || lowerStatus == "paused") && periodEnd.After(now) {
+						log.Printf("[Auth] %s subscription still active until: %s for user: %s",
+							*status.Status, periodEnd.Format(time.RFC3339), userID)
+
+						// Modify status to show as active
+						activeStatus := "active"
+						status.Status = &activeStatus
+					}
+
+					// For unpaid: give 2 days grace period
+					if lowerStatus == "unpaid" {
+						gracePeriod := periodEnd.Add(48 * time.Hour) // 2 days grace period
+						if now.Before(gracePeriod) {
+							log.Printf("[Auth] Unpaid subscription in grace period until: %s for user: %s",
+								gracePeriod.Format(time.RFC3339), userID)
+
+							// Modify status to show as active during grace period
+							activeStatus := "active"
+							status.Status = &activeStatus
+						}
+					}
+				}
+			}
+		}
+
 		statusChan <- status
 
 		// Only cache status if it's active
-		if status != nil && status.Status != nil && strings.ToLower(*status.Status) == "active" {
+		if status != nil && status.Status != nil &&
+			(strings.ToLower(*status.Status) == "active" || strings.ToLower(*status.Status) == "trialing") {
 			// Update cache in background
 			cacheMutex.Lock()
 			subscriptionCache[userID] = status

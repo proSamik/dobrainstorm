@@ -93,25 +93,13 @@ func main() {
 	mux.Handle("/user/profile/update", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.UpdateProfile)))
 	mux.Handle("/user/verify-user", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.VerifyUser)))
 
-	// Payment webhook routes - initialize handler once for better resource management
-	webhookHandler := &handlers.WebhookHandler{DB: db}
-	mux.HandleFunc("/payment/webhook", webhookHandler.HandleWebhook)
 
-	// Product routes
-	productsHandler := handlers.NewProductsHandler()
-	mux.HandleFunc("/api/products", productsHandler.GetProducts)
-	mux.HandleFunc("/api/products/", productsHandler.GetProduct)
-	mux.HandleFunc("/api/products/store/", productsHandler.GetProductsByStore)
-
-	// Checkout routes
-	checkoutHandler := handlers.NewCheckoutHandler(db)
-	mux.HandleFunc("/api/checkout", checkoutHandler.CreateCheckout)
-
-	// User data routes (protected)
-	userDataHandler := handlers.NewUserDataHandler(db)
-	mux.Handle("/api/user/orders", authMiddleware.RequireAuth(http.HandlerFunc(userDataHandler.GetUserOrders)))
-	mux.Handle("/api/user/subscription", authMiddleware.RequireAuth(http.HandlerFunc(userDataHandler.GetUserSubscription)))
-	mux.Handle("/api/user/subscription/billing", authMiddleware.RequireAuth(http.HandlerFunc(userDataHandler.GetBillingPortal)))
+	// Creem payment routes
+	creemHandler := handlers.NewCreemHandler(db)
+	mux.Handle("/creem/checkout", authMiddleware.RequireAuth(http.HandlerFunc(creemHandler.HandleCheckout)))
+	mux.Handle("/creem/verify-return-url", authMiddleware.RequireAuth(http.HandlerFunc(creemHandler.HandleVerifyReturnURL)))
+	mux.Handle("/creem/customerportal", authMiddleware.RequireAuth(http.HandlerFunc(creemHandler.HandleCustomerPortal)))
+	mux.HandleFunc("/creem-webhook", creemHandler.HandleWebhook)
 
 	// Board API routes (protected with auth, subscription check, and rate limiting)
 	boardHandler := handlers.NewBoardHandler(db)

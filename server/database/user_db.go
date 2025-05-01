@@ -79,16 +79,18 @@ func (db *DB) GetUserByEmail(email string) (*models.User, error) {
 // GetUserByID retrieves all user details by their unique identifier
 func (db *DB) GetUserByID(id string) (*models.User, error) {
 	var user models.User
-	var latestStatus sql.NullString
-	var latestProductID sql.NullInt64
-	var latestVariantID sql.NullInt64
-	var latestRenewalDate sql.NullTime
-	var latestEndDate sql.NullTime
+	var creemStatus sql.NullString
+	var creemProductID sql.NullString
+	var creemSubscriptionID sql.NullString
+	var creemCustomerID sql.NullString
+	var creemCurrentPeriodStart sql.NullTime
+	var creemCurrentPeriodEnd sql.NullTime
+	var creemIsTrial sql.NullBool
 
 	query := `
 		SELECT id, email, password, name, email_verified,
-			latest_status, latest_product_id, latest_variant_id,
-			latest_renewal_date, latest_end_date,
+			creem_subscription_status, creem_product_id, creem_subscription_id, creem_customer_id,
+			creem_current_period_start, creem_current_period_end, creem_is_trial,
 			created_at, updated_at
 		FROM users
 		WHERE id = $1`
@@ -99,11 +101,13 @@ func (db *DB) GetUserByID(id string) (*models.User, error) {
 		&user.Password,
 		&user.Name,
 		&user.EmailVerified,
-		&latestStatus,
-		&latestProductID,
-		&latestVariantID,
-		&latestRenewalDate,
-		&latestEndDate,
+		&creemStatus,
+		&creemProductID,
+		&creemSubscriptionID,
+		&creemCustomerID,
+		&creemCurrentPeriodStart,
+		&creemCurrentPeriodEnd,
+		&creemIsTrial,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -113,22 +117,26 @@ func (db *DB) GetUserByID(id string) (*models.User, error) {
 	}
 
 	// Convert NULL values to their appropriate types
-	if latestStatus.Valid {
-		user.LatestStatus = latestStatus.String
+	if creemStatus.Valid {
+		user.CreemSubscriptionStatus = creemStatus.String
 	}
-	if latestProductID.Valid {
-		user.LatestProductID = int(latestProductID.Int64)
+	if creemProductID.Valid {
+		user.CreemProductID = creemProductID.String
 	}
-	if latestVariantID.Valid {
-		user.LatestVariantID = int(latestVariantID.Int64)
+	if creemSubscriptionID.Valid {
+		user.CreemSubscriptionID = creemSubscriptionID.String
 	}
-	if latestRenewalDate.Valid {
-		t := latestRenewalDate.Time
-		user.LatestRenewalDate = &t
+	if creemCustomerID.Valid {
+		user.CreemCustomerID = creemCustomerID.String
 	}
-	if latestEndDate.Valid {
-		t := latestEndDate.Time
-		user.LatestEndDate = &t
+	if creemCurrentPeriodStart.Valid {
+		user.CreemCurrentPeriodStart = &creemCurrentPeriodStart.Time
+	}
+	if creemCurrentPeriodEnd.Valid {
+		user.CreemCurrentPeriodEnd = &creemCurrentPeriodEnd.Time
+	}
+	if creemIsTrial.Valid {
+		user.CreemIsTrial = creemIsTrial.Bool
 	}
 
 	return &user, nil

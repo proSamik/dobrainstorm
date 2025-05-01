@@ -19,7 +19,7 @@ type DBInterface interface {
 	UpdateUser(id, name, email string) error
 	UpdatePassword(id, hashedPassword string) error
 	UserExists(email string) (bool, error)
-	GetUserSubscriptionStatus(id string) (*models.UserSubscriptionStatus, error)
+	GetUserCreemSubscriptionStatus(id string) (*models.CreemSubscriptionStatus, error)
 	InvalidateUserCache(userID string)
 
 	// Admin operations
@@ -33,7 +33,7 @@ type DBInterface interface {
 	// Token blacklist operations
 	AddToBlacklist(jti string, userID string, expiresAt time.Time) error
 	IsTokenBlacklisted(jti string) (bool, error)
-	CleanupExpiredBlacklistedTokens() error //TODO: Implement this
+	CleanupExpiredBlacklistedTokens() error
 
 	// Password reset operations
 	CreatePasswordResetToken(userID string, token string, expiresAt time.Time) error
@@ -44,18 +44,15 @@ type DBInterface interface {
 	GetUserSettings(userID string) (*models.UserSettings, error)
 	SaveUserSettings(userID string, aiSettings []byte) error
 
-	// Order operations
-	GetUserOrders(userID string) ([]models.Orders, error)
+	// Creem subscription operations
+	CreateCreemSubscription(userID, subscriptionID, customerID, productID, checkoutID, orderID, status, collectionMethod, lastTransactionID string, lastTransactionDate, nextTransactionDate, currentPeriodStart, currentPeriodEnd, canceledAt, trialEndsAt *time.Time, metadata map[string]interface{}) error
+	UpdateCreemSubscription(subscriptionID, status, lastTransactionID string, lastTransactionDate, nextTransactionDate, currentPeriodStart, currentPeriodEnd, canceledAt *time.Time, metadata map[string]interface{}) error
+	UpdateUserCreemSubscription(userID, customerID, subscriptionID, productID, status string, currentPeriodStart, currentPeriodEnd *time.Time, isTrial bool) error
+	GetCreemSubscriptionByUserID(userID string) (*models.CreemSubscription, error)
+	GetCreemSubscriptionByID(subscriptionID string) (*models.CreemSubscription, error)
+	CheckCreemActiveSubscription(userID string) (bool, error)
 
-	// Subscription operations
-	GetSubscriptionByUserID(userID string) (*models.Subscription, error)
-
-	// Additional operations
-	CreateOrder(userID string, orderID int, customerID int, productID int, variantID int, status string, subtotalFormatted string, taxFormatted string, totalFormatted string, taxInclusive bool) error
-	UpdateOrderRefund(orderID int, refundedAt *time.Time, refundedAmountFormatted string) error
-	CreateSubscription(userID string, subscriptionID int, orderID int, customerID int, productID int, variantID int, status string, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
-	UpdateSubscription(subscriptionID int, status string, cancelled bool, productID int, variantID int, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
-	UpdateUserSubscription(userID string, subscriptionID int, status string, productID int, variantID int, renewalDate *time.Time, endDate *time.Time) error
+	// Email verification operations
 	StoreEmailVerificationToken(token, userID, email string, expiresAt time.Time) error
 	VerifyEmail(token string) error
 }

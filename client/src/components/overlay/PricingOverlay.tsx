@@ -61,8 +61,13 @@ const PricingOverlay = ({
             <div className="grid grid-cols-1 gap-8 md:grid-cols-3 justify-items-center">
               {PRICING_PLANS.map((plan) => (
                 <PriceCard
-                  key={plan.variantId}
-                  {...plan}
+                  key={plan.productId}
+                  name={plan.name}
+                  description={plan.description}
+                  price={plan.price}
+                  features={plan.features}
+                  popular={plan.popular}
+                  productId={plan.productId}
                 />
               ))}
             </div>

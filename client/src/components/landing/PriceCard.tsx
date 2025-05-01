@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { authService } from '@/services/auth';
 import toast from 'react-hot-toast';
 
@@ -16,7 +16,6 @@ interface PriceCardProps {
   }>;
   popular?: boolean;
   productId: string;
-  variantId: string;
 }
 
 export function PriceCard({
@@ -25,21 +24,28 @@ export function PriceCard({
   price,
   features,
   popular,
-  productId,
-  variantId
+  productId
 }: PriceCardProps) {
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
+  // Debug product ID on component mount
+  useEffect(() => {
+    console.log(`PriceCard ${name} productId:`, productId || 'empty');
+  }, [name, productId]);
+
   const handlePurchase = async () => {
-    if (!variantId) {
-      toast.error('This product is currently unavailable for purchase');
+    // Debug product ID on purchase
+    console.log(`Purchase attempt for ${name}:`, { productId });
+    
+    if (!productId) {
+      toast.error(`This product (${name}) is currently unavailable for purchase. Missing product ID.`);
       return;
     }
 
     if (!isAuthenticated) {
-      sessionStorage.setItem('pendingPurchase', JSON.stringify({ productId, variantId }));
+      sessionStorage.setItem('pendingPurchase', JSON.stringify({ productId }));
       router.push('/auth', { scroll: false });
       return;
     }
@@ -47,32 +53,22 @@ export function PriceCard({
     setIsLoading(true);
 
     try {
-      const response = await authService.post('/api/checkout', {
-        productId,
-        variantId,
-        email: user?.email,
-        userId: user?.id,
-      });
-
-      const data = response.data;
-      if (data.checkoutURL || data.portalURL) {
-        try {
-          if (data.portalURL) {
-            router.push('/profile');
-            sessionStorage.setItem('activeProfileTab', 'subscription');
-          } else if (data.checkoutURL) {
-            const redirectUrl = new URL(data.checkoutURL);
-            window.open(redirectUrl.toString(), '_blank');
-          }
-        } catch (urlError) {
-          console.error('Invalid URL received:', urlError);
-          toast.error('Invalid URL received');
-        }
+      // Make a GET request to the Creem checkout endpoint
+      console.log(`Making checkout request for productId: ${productId}`);
+      const response = await authService.get(`/creem/checkout?product_id=${productId}`);
+      
+      // Log the full response
+      console.log('Checkout response:', response);
+      
+      // Safely access checkout_url from data
+      if (response && response.checkout_url) {
+        router.push(response.checkout_url);
       } else {
-        toast.error('No valid URL received');
+        console.error('No checkout URL in response:', response);
+        toast.error('No valid checkout URL received. Please try again.');
       }
     } catch (error: unknown) {
-      console.error('Error:', error);
+      console.error('Checkout error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to process checkout. Please try again.');
     } finally {
       setIsLoading(false);

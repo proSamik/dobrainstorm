@@ -1,3 +1,5 @@
+'use client'
+
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import { useAuth } from './AuthContext'
 import { authService } from '@/services/auth'
@@ -5,8 +7,7 @@ import { authService } from '@/services/auth'
 interface UserData {
   subscription: {
     status: string | null
-    productId: number | null
-    variantId: number | null
+    productId: string | null
   }
   timestamp?: number // Add timestamp for freshness check
 }
@@ -51,13 +52,13 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
     const hasValidStatus = typeof data.subscription?.status === 'string';
     
     // VariantId can be null for users with no subscription ('none' status)
-    const hasValidVariantId = data.subscription?.status === 'none' || 
-                             data.subscription?.variantId !== null;
+    const hasValidProductId = data.subscription?.status === 'none' || 
+                             data.subscription?.productId !== null;
     
     // Check timestamp for freshness if present
     const isFresh = !data.timestamp || (Date.now() - data.timestamp) < MAX_COOKIE_AGE;
     
-    return hasValidStatus && hasValidVariantId && isFresh;
+    return hasValidStatus && hasValidProductId && isFresh;
   }, []);
 
   /**
@@ -100,8 +101,7 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
         const defaultUserData: UserData = {
           subscription: {
             status: 'none',  // Use 'none' instead of null to indicate a known empty state
-            productId: null,
-            variantId: null
+            productId: null
           },
           timestamp: Date.now()
         };
@@ -124,8 +124,7 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
       const newUserData = {
         subscription: {
           status: status,
-          productId: subscriptionData.product_id || null,
-          variantId: subscriptionData.variant_id || null
+          productId: subscriptionData.product_id || null
         },
         timestamp: Date.now()
       };
@@ -181,8 +180,7 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
           const newUserData: UserData = {
             subscription: {
               status: 'none',  // Use 'none' instead of null to indicate known empty state
-              productId: null,
-              variantId: null
+              productId: null
             },
             timestamp: Date.now()
           };
@@ -205,8 +203,7 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
         const newUserData: UserData = {
           subscription: {
             status: status,
-            productId: subscriptionData.product_id || null,
-            variantId: subscriptionData.variant_id || null
+            productId: subscriptionData.product_id || null
           },
           timestamp: Date.now() // Add timestamp for freshness tracking
         };

@@ -4,8 +4,7 @@
 
 export interface Subscription {
   status: string | null;
-  productId: number | null;
-  variantId: number | null;
+  productId: string | null;
 }
 
 export interface UserData {

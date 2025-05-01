@@ -12,8 +12,7 @@ export interface AuthResponse {
 
 export interface VerifyUserResponse {
   status: string;
-  product_id: number;
-  variant_id: number;
+  product_id: string;
 }
 
 export interface LoginCredentials {
@@ -370,17 +369,6 @@ export const authService = {
         console.log('[Auth] Verifying user subscription status...');
         try {
           const response = await api.get<VerifyUserResponse>('/user/verify-user');
-          console.log('[Auth] User verification response:', response.data);
-          
-          // Add additional logging for subscription status
-          if (response.data) {
-            console.log('[Auth] Subscription status:', response.data.status);
-            console.log('[Auth] Product ID:', response.data.product_id);
-            console.log('[Auth] Variant ID:', response.data.variant_id);
-          } else {
-            console.log('[Auth] No subscription data in response');
-          }
-          
           return response.data;
         } catch (error) {
           console.error('[Auth] Error verifying user:', error);

@@ -5,7 +5,6 @@ import { useAuth } from '@/contexts/AuthContext'
 import ProfileLayout from '@/components/profile/ProfileLayout'
 import Settings from '@/components/profile/Settings'
 import Subscription from '@/components/profile/Subscription'
-import Orders from '@/components/profile/Orders'
 import { authService } from '@/services/auth'
 import { useRouter } from 'next/navigation'
 
@@ -254,7 +253,6 @@ export default function Profile() {
     <ProfileLayout
       settings={<Settings />}
       subscription={<Subscription />}
-      orders={<Orders />}
     >
       <ProfileContent
         auth={auth}

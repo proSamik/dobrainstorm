@@ -8,10 +8,10 @@ interface ActiveSubscriptionViewProps {
 
 /**
  * Component for displaying subscription details of an active subscriber
- * @param userData Object containing subscription information including status, variantId
+ * @param userData Object containing subscription information including status, productId
  */
 export const ActiveSubscriptionView = ({ userData }: ActiveSubscriptionViewProps) => {
-  const planName = getPlanName(userData?.subscription?.variantId || null)
+  const planName = getPlanName(userData?.subscription?.productId ? String(userData?.subscription?.productId) : null)
   const statusColor = getStatusColor(userData?.subscription?.status)
 
   return (
