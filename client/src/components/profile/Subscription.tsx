@@ -20,6 +20,14 @@ interface SubscriptionData {
   renews_at: string
 }
 
+// Define a proper interface for user data with subscription
+interface UserDataWithSubscription {
+  subscription?: {
+    status: string | null;
+    productId: number | null;
+  };
+}
+
 // Shared function to get customer portal URL
 const useCustomerPortal = () => {
   const [loading, setLoading] = useState(false)
@@ -189,7 +197,7 @@ const SubscriptionCard = ({
   )
 }
 
-const hasActiveSubscription = (data: any): boolean => {
+const hasActiveSubscription = (data: UserDataWithSubscription): boolean => {
   const status = data?.subscription?.status;
   
   // Active and trialing statuses are both considered active subscriptions
