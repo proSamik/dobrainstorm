@@ -8,30 +8,27 @@ import toast from 'react-hot-toast';
 
 export default function CreemCallback() {
   const router = useRouter();
-  const { isAuthenticated } = useAuth();
   const [isProcessing, setIsProcessing] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Single useEffect for both error handling and verification
   useEffect(() => {
     const verifyCallback = async () => {
-      // Make sure user is authenticated
-      if (!isAuthenticated) {
-        setError('Authentication required');
-        setIsProcessing(false);
-        // Redirect to login after a short delay
-        setTimeout(() => router.push('/auth'), 2000);
-        return;
-      }
 
       try {
         // Get the full URL to send to the server
         const fullUrl = window.location.href;
+        const queryParams = fullUrl.split('?')[1] || '';
+        
+        // Log the endpoint being called for debugging
+        const endpoint = `/creem/verify-return-url?${queryParams}`;
+        console.log('Calling verify endpoint:', endpoint);
         
         // Call the verify endpoint
-        const response = await authService.get(
-          `/creem/verify-return-url?${fullUrl.split('?')[1]}`
-        );
+        const response = await authService.get(endpoint);
+        
+        // Log the response for debugging
+        console.log('Verify endpoint response:', response);
         
         if (response?.valid) {
           // Verification successful - don't try to refresh user data here
@@ -41,6 +38,7 @@ export default function CreemCallback() {
           // Redirect to boards page - user data will be loaded on the next page
           router.push('/boards');
         } else {
+          console.error('Verification failed, response:', response);
           setError('Verification failed');
           setIsProcessing(false);
           router.push('/profile');
@@ -61,7 +59,7 @@ export default function CreemCallback() {
 
     // Otherwise proceed with verification
     verifyCallback();
-  }, [isAuthenticated, router, error]);
+  }, [router, error]);
 
   if (isProcessing) {
     return (
