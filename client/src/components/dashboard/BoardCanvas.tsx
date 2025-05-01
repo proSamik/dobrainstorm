@@ -37,7 +37,6 @@ import { useTheme } from '@/components/ThemeProvider'
 import NodeEditPanel from './NodeEditPanel'
 import NodeContextMenu from './NodeContextMenu'
 import { BoardTools } from './board/components/BoardTools'
-// import { DebugPanel } from './board/components/DebugPanel'
 import { NodeCountDisplay } from './board/components/NodeCountDisplay'
 
 // Define base node types outside component
@@ -84,24 +83,6 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   
   // Track current viewport size for responsive behavior
   const [isMobile, setIsMobile] = useState(false);
-  
-  // Selection box state
-  const [selectionBox, setSelectionBox] = useState<SelectionBox>({
-    startX: 0,
-    startY: 0,
-    currentX: 0,
-    currentY: 0,
-    isActive: false
-  });
-  
-  // State to track if we're in multi-selection mode
-  const [isMultiSelectionDrag, setIsMultiSelectionDrag] = useState(false);
-  
-  // Track start positions of nodes for multi-drag
-  const nodesStartPositionRef = useRef<Record<string, { x: number, y: number }>>({});
-  
-  // Reference for tracking mouse selection
-  const selectionStartPosRef = useRef<{ x: number, y: number } | null>(null);
   
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
@@ -184,8 +165,6 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     document.head.appendChild(style);
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // In grab mode, we use Cmd/Ctrl to temporarily switch to pointer mode
-      // In pointer mode, we use Cmd/Ctrl to temporarily switch to grab/pan mode
       if (e.metaKey || e.ctrlKey) {
         setIsPanningMode(cursorMode === 'pointer');
         document.body.classList.toggle('panning', cursorMode === 'pointer');
@@ -221,15 +200,6 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     };
   }, [cursorMode]);
   
-  // Toggle between cursor modes
-  const toggleCursorMode = useCallback(() => {
-    const newMode = cursorMode === 'grab' ? 'pointer' : 'grab';
-    setCursorMode(newMode);
-    // Update panning mode based on the new cursor mode
-    setIsPanningMode(newMode === 'grab');
-    document.body.classList.toggle('panning', newMode === 'grab');
-    document.body.style.cursor = newMode === 'grab' ? 'grab' : 'default';
-  }, [cursorMode]);
   
   // Force create a demo node if the board is still empty after a timeout
   useEffect(() => {
@@ -438,8 +408,6 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
         onExport={handleExport}
         onImport={handleImportFile}
         onSave={handleSave}
-        cursorMode={cursorMode}
-        onToggleCursorMode={toggleCursorMode}
       />
       
       {editingNodeId && (
