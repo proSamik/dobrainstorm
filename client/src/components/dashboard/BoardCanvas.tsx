@@ -9,10 +9,13 @@ import ReactFlow, {
   useNodesState,
   useEdgesState,
   Node,
+  Edge,
   useReactFlow,
   EdgeMouseHandler,
   NodeMouseHandler,
-  NodeDragHandler
+  NodeDragHandler,
+  BackgroundVariant,
+  ReactFlowInstance
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { useDispatch } from 'react-redux'
@@ -31,6 +34,7 @@ import { useBoardInitialization } from './board/hooks/useBoardInitialization'
 import { useBoardSync } from './board/hooks/useBoardSync'
 import { useFileOperations } from './board/hooks/useFileOperations'
 import { useKeyboardShortcuts } from './board/hooks/useKeyboardShortcuts'
+import { useTheme } from '@/components/ThemeProvider'
 
 // Import components
 import NodeEditPanel from './NodeEditPanel'
@@ -62,6 +66,9 @@ interface SelectionBox {
  * Orchestrates the board functionality through custom hooks
  */
 const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
+  // Get theme from context
+  const { theme } = useTheme();
+  
   // Memoize nodeTypes to prevent recreation
   const nodeTypes = useMemo(() => baseNodeTypes, []);
   
@@ -72,6 +79,14 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   // ReactFlow state
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  
+  // Define theme-aware colors
+  const bgColor = useMemo(() => theme === 'light' ? '#f8fafc' : '#1a1a1a', [theme]);
+  const gridColor = useMemo(() => theme === 'light' ? '#aaa' : '#555', [theme]);
+  const nodeSelectedBorder = useMemo(() => theme === 'light' ? 'rgb(59, 130, 246)' : 'rgb(96, 165, 250)', [theme]);
+  
+  // Track current viewport size for responsive behavior
+  const [isMobile, setIsMobile] = useState(false);
   
   // Selection box state
   const [selectionBox, setSelectionBox] = useState<SelectionBox>({
@@ -101,7 +116,14 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   
   // DOM references
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null);
   const reactFlowInstance = useReactFlow();
+  
+  // Helper to transform viewport coordinates to flow coordinates
+  const screenToFlowPosition = useCallback((screenX: number, screenY: number) => {
+    if (!reactFlowInstance) return { x: 0, y: 0 };
+    return reactFlowInstance.screenToFlowPosition({ x: screenX, y: screenY });
+  }, [reactFlowInstance]);
   
   // Initialize board
   useBoardInitialization(boardId);
@@ -129,6 +151,23 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   
   // Add state to track the cursor mode (grab or pointer)
   const [cursorMode, setCursorMode] = useState<'grab' | 'pointer'>('grab');
+  
+  // Detect mobile device
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    // Initial check
+    checkMobile();
+    
+    // Add event listener for window resize
+    window.addEventListener('resize', checkMobile);
+    
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+    };
+  }, []);
   
   // Listen for modifier key presses to toggle panning mode
   useEffect(() => {
@@ -207,6 +246,69 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     }
   }, [storeNodes.length, createNode]);
   
+  // Handle touch events for mobile devices
+  useEffect(() => {
+    if (!reactFlowWrapper.current) return;
+    
+    const touchTimeout = 300; // Timeout to differentiate between tap and long press
+    let touchTimer: NodeJS.Timeout | null = null;
+    let lastTouchX = 0;
+    let lastTouchY = 0;
+    
+    // Handle touch start
+    const handleTouchStart = (event: TouchEvent) => {
+      if (event.touches.length === 1) {
+        const touch = event.touches[0];
+        lastTouchX = touch.clientX;
+        lastTouchY = touch.clientY;
+        
+        // Start timer to detect long press
+        touchTimer = setTimeout(() => {
+          // Simulate right-click (context menu) on long press
+          const element = document.elementFromPoint(lastTouchX, lastTouchY);
+          const nodeElement = element?.closest('[data-id]');
+          
+          if (nodeElement && nodeElement instanceof HTMLElement) {
+            const nodeId = nodeElement.getAttribute('data-id');
+            if (nodeId) {
+              // Create a synthetic mouse event for context menu
+              const contextMenuEvent = new MouseEvent('contextmenu', {
+                bubbles: true,
+                cancelable: true,
+                clientX: lastTouchX,
+                clientY: lastTouchY,
+              });
+              
+              nodeElement.dispatchEvent(contextMenuEvent);
+            }
+          }
+          
+          touchTimer = null;
+        }, touchTimeout);
+      }
+    };
+    
+    // Handle touch end
+    const handleTouchEnd = () => {
+      if (touchTimer) {
+        clearTimeout(touchTimer);
+        touchTimer = null;
+      }
+    };
+    
+    // Add mobile touch event listeners if on mobile
+    if (isMobile) {
+      const wrapperEl = reactFlowWrapper.current;
+      wrapperEl.addEventListener('touchstart', handleTouchStart, { passive: true });
+      wrapperEl.addEventListener('touchend', handleTouchEnd, { passive: true });
+      
+      return () => {
+        wrapperEl.removeEventListener('touchstart', handleTouchStart);
+        wrapperEl.removeEventListener('touchend', handleTouchEnd);
+      };
+    }
+  }, [isMobile, reactFlowWrapper]);
+  
   // Save the board when user navigates away or closes the window
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -231,6 +333,18 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     };
   }, [handleSave, isDirty]);
   
+  // Store reactFlow instance when it's initialized
+  const onInit = useCallback((instance: ReactFlowInstance) => {
+    reactFlowInstanceRef.current = instance;
+    
+    // Center the view after a small delay to ensure nodes are rendered
+    setTimeout(() => {
+      if (storeNodes.length > 0) {
+        instance.fitView({ padding: 0.2 });
+      }
+    }, 200);
+  }, [storeNodes.length]);
+  
   // Handle node context menu
   const handleNodeContextMenu = useCallback(
     (event: React.MouseEvent, node: Node) => {
@@ -238,15 +352,15 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
       setContextMenu({
         id: node.id,
         x: event.clientX,
-        y: event.clientY,
+        y: event.clientY
       });
     },
     []
   );
   
   // Handle edge context menu
-  const handleEdgeContextMenu: EdgeMouseHandler = useCallback(
-    (event, edge) => {
+  const handleEdgeContextMenu = useCallback(
+    (event: React.MouseEvent, edge: Edge) => {
       event.preventDefault();
       setContextMenu({
         id: edge.id,
@@ -258,11 +372,13 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     []
   );
   
-  // Helper to transform viewport coordinates to flow coordinates
-  const screenToFlowPosition = useCallback((screenX: number, screenY: number) => {
-    if (!reactFlowInstance) return { x: 0, y: 0 };
-    return reactFlowInstance.screenToFlowPosition({ x: screenX, y: screenY });
-  }, [reactFlowInstance]);
+  // Close context menu
+  const handleBackgroundClick = () => {
+    setContextMenu(null);
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  };
   
   // Start multi-selection with a box
   const handleSelectionStart = useCallback((event: React.MouseEvent) => {
@@ -549,31 +665,9 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
     };
   }, [nodes, edges, selectedNodeIds, editingNodeId, dispatch, setNodes, setEdges]);
   
-  // Close context menu when clicked outside
-  const handlePaneClick = useCallback((event: React.MouseEvent) => {
-    // Close context menu
-    setContextMenu(null);
-    
-    // Clear selection when clicking on the pane, unless shift is held or we're in a selection
-    if (
-      !event.shiftKey && 
-      !selectionBox.isActive &&
-      !isPanningMode // Don't clear selection in panning mode
-    ) {
-      dispatch(setSelectedNodes([]));
-    }
-  }, [dispatch, selectionBox.isActive, isPanningMode]);
-  
-  // // Fit view to ensure all nodes are visible
-  // const handleFitView = useCallback(() => {
-  //   if (reactFlowInstance) {
-  //     reactFlowInstance.fitView({ padding: 0.2 });
-  //   }
-  // }, [reactFlowInstance]);
-  
+  // Render the canvas with theme-aware styling
   return (
-    <div className="h-[90vh] w-full flex flex-col">
-      {/* Top toolbar */}
+    <div className="w-full h-full flex flex-col" data-theme={theme}>
       <BoardTools
         onAddNode={createNode}
         onExport={handleExport}
@@ -583,15 +677,13 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
         onToggleCursorMode={toggleCursorMode}
       />
       
-      {/* Main canvas */}
-      <div 
-        className={`flex-1 h-full ${isPanningMode ? 'cursor-grab' : 'cursor-default'}`}
-        ref={reactFlowWrapper}
-        onMouseDown={handleSelectionStart}
-        onMouseMove={handleSelectionMove}
-        onMouseUp={handleSelectionEnd}
-        onMouseLeave={handleSelectionEnd}
-      >
+      {editingNodeId && (
+        <NodeEditPanel 
+          nodeId={editingNodeId}
+        />
+      )}
+      
+      <div className="flex-grow relative" ref={reactFlowWrapper}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -599,128 +691,93 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onEdgeUpdate={onEdgeUpdate}
-          onPaneClick={handlePaneClick}
-          onPaneContextMenu={createNodeAtMousePosition}
+          onNodeClick={(_, node) => dispatch(setSelectedNode(node.id))}
           onNodeContextMenu={handleNodeContextMenu}
-          onNodeClick={handleNodeClick}
           onEdgeContextMenu={handleEdgeContextMenu}
-          onInit={(instance) => {
-            console.log("ReactFlow initialized");
-            setTimeout(() => {
-              instance.fitView({ padding: 0.2 });
-            }, 500);
-          }}
-          onNodeDragStart={handleNodeDragStart}
-          onNodeDrag={handleNodeDrag}
-          onNodeDragStop={handleNodeDragStop}
+          onPaneClick={handleBackgroundClick}
           nodeTypes={nodeTypes}
-          connectionMode={ConnectionMode.Strict}
           defaultViewport={{ x: 0, y: 0, zoom: 1 }}
           minZoom={0.1}
           maxZoom={2}
-          fitView={true}
-          fitViewOptions={{ padding: 0.2 }}
+          onlyRenderVisibleElements
+          deleteKeyCode={['Backspace', 'Delete']}
+          multiSelectionKeyCode={['Control', 'Meta']}
+          selectionKeyCode={['Shift']}
+          panOnDrag={isPanningMode}
+          selectionOnDrag={!isPanningMode}
+          panOnScroll={isPanningMode}
+          zoomOnScroll={!isMobile}
+          zoomOnPinch={true}
           snapToGrid={false}
           snapGrid={[15, 15]}
-          nodesDraggable={true}
-          draggable={true}
-          nodesConnectable={true}
-          elementsSelectable={true}
-          noDragClassName="no-drag"
-          deleteKeyCode={['Delete', 'Backspace']}
-          multiSelectionKeyCode={[]} // Remove modifier key requirement for multi-selection
-          panOnScroll={false}
-          panOnDrag={isPanningMode} // Only enable panning when in panning mode
-          selectionOnDrag={!isPanningMode} // Only enable selection when not in panning mode
-          zoomOnScroll={false}
-          zoomOnPinch={true}
-          preventScrolling={true}
-          proOptions={{ hideAttribution: true }}
-          style={{ 
-            background: '#f8fafc',
-            cursor: isPanningMode ? 'grab' : 'default'
-          }}
+          connectionMode={ConnectionMode.Loose}
+          fitView
+          fitViewOptions={{ padding: 0.2 }}
+          onInit={onInit}
+          style={{ background: bgColor }}
+          className="touch-manipulation"
         >
-          <Background color="#aaa" gap={16} />
-          <Controls showInteractive={true} />
-          <MiniMap 
-            nodeStrokeWidth={3}
-            zoomable 
-            pannable
+          {/* Background with theme-aware colors */}
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={20}
+            size={1}
+            color={gridColor}
+            style={{ backgroundColor: bgColor }}
           />
           
-          {/* Node count display */}
-          <NodeCountDisplay count={nodes.length} />
+          {/* Controls with theme-aware styling */}
+          <Controls
+            showInteractive={!isMobile}
+            style={{
+              border: theme === 'light' ? '1px solid #e2e8f0' : '1px solid #334155',
+              borderRadius: '8px',
+              backgroundColor: theme === 'light' ? 'white' : '#1e293b',
+              boxShadow: theme === 'light' 
+                ? '0 1px 3px rgba(0, 0, 0, 0.1)' 
+                : '0 1px 3px rgba(0, 0, 0, 0.5)',
+            }}
+            position={isMobile ? 'bottom-right' : 'bottom-left'}
+            showZoom={true}
+            showFitView={true}
+          />
           
-          {/* Debug panel
-          <DebugPanel 
-            nodes={nodes} 
-            onFitView={handleFitView} 
-            onAddNode={createNode} 
-          /> */}
-          
-          {/* Selection Box Overlay */}
-          {selectionBox.isActive && (
-            <div
-              className="absolute border-2 border-blue-500 bg-blue-100 bg-opacity-20 pointer-events-none z-10"
+          {/* Minimap with theme-aware styling */}
+          {!isMobile && (
+            <MiniMap
+              nodeStrokeWidth={3}
+              nodeColor={(node) => {
+                if (selectedNodeIds.includes(node.id)) {
+                  return nodeSelectedBorder;
+                }
+                return theme === 'light' ? '#e2e8f0' : '#475569';
+              }}
+              nodeBorderRadius={4}
               style={{
-                position: 'absolute',
-                left: Math.min(selectionBox.startX, selectionBox.currentX),
-                top: Math.min(selectionBox.startY, selectionBox.currentY),
-                width: Math.abs(selectionBox.currentX - selectionBox.startX),
-                height: Math.abs(selectionBox.currentY - selectionBox.startY),
-                zIndex: 10,
+                backgroundColor: theme === 'light' ? 'rgba(255, 255, 255, 0.9)' : 'rgba(30, 41, 59, 0.9)',
+                border: theme === 'light' ? '1px solid #e2e8f0' : '1px solid #334155',
+                borderRadius: '8px',
+                boxShadow: theme === 'light' 
+                  ? '0 1px 3px rgba(0, 0, 0, 0.1)' 
+                  : '0 1px 3px rgba(0, 0, 0, 0.5)',
               }}
             />
           )}
+          
+          {/* Node count display */}
+          <NodeCountDisplay count={nodes.length} />
         </ReactFlow>
-      </div>
-      
-      {/* Context menu */}
-      {contextMenu && (
-        contextMenu.isEdge ? (
-          <div
-            className="fixed bg-white shadow-lg rounded-md py-2 px-0 min-w-40 z-50"
-            style={{
-              left: contextMenu.x,
-              top: contextMenu.y,
-            }}
-          >
-            <button
-              className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center text-red-600"
-              onClick={() => {
-                // Delete the edge
-                const currentEdges = reactFlowInstance.getEdges();
-                const updatedEdges = currentEdges.filter(edge => edge.id !== contextMenu.id);
-                
-                // Update in ReactFlow
-                setEdges(updatedEdges);
-                
-                // Update in Redux
-                dispatch(updateEdges(updatedEdges));
-                
-                // Close context menu
-                setContextMenu(null);
-              }}
-            >
-              <span className="mr-2">🗑️</span>
-              Delete Connection
-            </button>
-          </div>
-        ) : (
+        
+        {/* Render the context menu if needed */}
+        {contextMenu && (
           <NodeContextMenu
             nodeId={contextMenu.id}
             x={contextMenu.x}
             y={contextMenu.y}
             onClose={() => setContextMenu(null)}
           />
-        )
-      )}
-      
-      {/* Node edit panel - only show when a node is explicitly being edited */}
-      {editingNodeId && (
-        <NodeEditPanel nodeId={editingNodeId} />
-      )}
+        )}
+      </div>
     </div>
   );
 };
