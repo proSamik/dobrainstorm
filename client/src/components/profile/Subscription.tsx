@@ -10,27 +10,56 @@ import toast from 'react-hot-toast'
 
 interface BillingPortalResponse {
   portal_url: string
+  customer_portal_link?: string
 }
 
-const ManageSubscriptionButton = ({ customerId }: { customerId: number }) => {
+interface SubscriptionData {
+  subscription_id: string
+  customer_id: string
+  status: string
+  renews_at: string
+}
+
+// Shared function to get customer portal URL
+const useCustomerPortal = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [portalUrl, setPortalUrl] = useState('')
 
-  const handleManageClick = async () => {
+  const getPortalUrl = async () => {
     try {
       setLoading(true)
       setError('')
-      const response = await authService.get<BillingPortalResponse>(`/creem/customerportal`)
-      if (response?.portal_url) {
-        window.location.href = response.portal_url
+      const response = await authService.get<BillingPortalResponse>('/creem/customerportal')
+      
+      // Handle different possible response formats
+      const url = response?.portal_url || response?.customer_portal_link
+      if (url) {
+        setPortalUrl(url)
+        return url
       } else {
         setError('Failed to get billing portal URL')
+        return null
       }
-    } catch {
-      console.error('[Subscription] Failed to fetch billing portal')
+    } catch (err) {
+      console.error('[Subscription] Failed to fetch billing portal:', err)
       setError('Failed to access billing portal. Please try again later.')
+      return null
     } finally {
       setLoading(false)
+    }
+  }
+
+  return { loading, error, portalUrl, getPortalUrl }
+}
+
+const ManageSubscriptionButton = () => {
+  const { loading, error, getPortalUrl } = useCustomerPortal()
+
+  const handleManageClick = async () => {
+    const url = await getPortalUrl()
+    if (url) {
+      window.open(url, '_blank')
     }
   }
 
@@ -42,7 +71,55 @@ const ManageSubscriptionButton = ({ customerId }: { customerId: number }) => {
         disabled={loading}
       >
         {loading ? 'Loading...' : 'Manage Subscription'}
-    </button>
+      </button>
+      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+    </div>
+  )
+}
+
+const ChangePaymentMethodButton = () => {
+  const { loading, error, getPortalUrl } = useCustomerPortal()
+
+  const handleClick = async () => {
+    const url = await getPortalUrl()
+    if (url) {
+      window.open(url, '_blank')
+    }
+  }
+
+  return (
+    <div>
+      <button
+        className="inline-flex items-center px-4 py-2 border border-light-accent dark:border-dark-accent text-sm font-medium rounded-md shadow-sm text-light-foreground dark:text-dark-foreground bg-light-background dark:bg-dark-background hover:bg-light-accent/10 dark:hover:bg-dark-accent/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+        onClick={handleClick}
+        disabled={loading}
+      >
+        {loading ? 'Loading...' : 'Change Payment Method'}
+      </button>
+      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+    </div>
+  )
+}
+
+const CancelSubscriptionButton = () => {
+  const { loading, error, getPortalUrl } = useCustomerPortal()
+
+  const handleClick = async () => {
+    const url = await getPortalUrl()
+    if (url) {
+      window.open(url, '_blank')
+    }
+  }
+
+  return (
+    <div>
+      <button
+        className="inline-flex items-center px-4 py-2 border border-red-300 dark:border-red-700 text-sm font-medium rounded-md shadow-sm text-red-600 dark:text-red-400 bg-light-background dark:bg-dark-background hover:bg-red-50 dark:hover:bg-red-900/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+        onClick={handleClick}
+        disabled={loading}
+      >
+        {loading ? 'Loading...' : 'Cancel Subscription'}
+      </button>
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
     </div>
   )
@@ -129,9 +206,10 @@ export default function Subscription() {
   const { userData, loading: userDataLoading } = useUserData()
   const router = useRouter()
   const [detailsLoading, setDetailsLoading] = useState(true)
-  const [subscriptionDetails, setSubscriptionDetails] = useState<any>(null)
+  const [subscriptionDetails, setSubscriptionDetails] = useState<SubscriptionData | null>(null)
   const [error, setError] = useState('')
   const [isUpgrading, setIsUpgrading] = useState(false)
+  const { getPortalUrl } = useCustomerPortal()
   
   useEffect(() => {
     // If not authenticated, redirect to auth page
@@ -165,23 +243,14 @@ export default function Subscription() {
     }
   }
   
-  const handleUpgrade = async (productId: string) => {
-    // Don't do anything if this is the current plan
-    if (userData?.subscription?.productId?.toString() === productId) {
-      return
-    }
-    
+  const handleUpgrade = async () => {
     setIsUpgrading(true)
     try {
-      // Get the customer portal link instead of creating a checkout
-      console.log('Getting customer portal for upgrade process')
-      const response = await authService.get('/creem/customerportal')
-      
-      if (response && response.customer_portal_link) {
-        // Redirect to the customer portal link
-        window.location.href = response.customer_portal_link
+      // Get portal URL using shared function
+      const portalUrl = await getPortalUrl()
+      if (portalUrl) {
+        window.open(portalUrl, '_blank')
       } else {
-        console.error('No customer portal link in response:', response)
         toast.error('No valid portal URL received. Please try again.')
       }
     } catch (error: unknown) {
@@ -286,16 +355,18 @@ export default function Subscription() {
                     </p>
                   </div>
                 </div>
-                
-                <div className="pt-4">
-                  <Suspense fallback={<div>Loading...</div>}>
-                    {subscriptionDetails.customer_id && (
-                      <ManageSubscriptionButton customerId={subscriptionDetails.customer_id} />
-                    )}
-                  </Suspense>
-                </div>
               </>
             )}
+
+            <div className="pt-4">
+              <Suspense fallback={<div>Loading...</div>}>
+                <div className="flex flex-wrap gap-3">
+                  <ManageSubscriptionButton />
+                  <ChangePaymentMethodButton />
+                  <CancelSubscriptionButton />
+                </div>
+              </Suspense>
+            </div>
           </div>
         </div>
       )}
@@ -311,7 +382,7 @@ export default function Subscription() {
               key={plan.productId}
               plan={plan}
               isCurrentPlan={plan.productId === currentProductId}
-              onUpgrade={() => handleUpgrade(plan.productId)}
+              onUpgrade={() => handleUpgrade()}
               isLoading={isUpgrading}
             />
           ))}
