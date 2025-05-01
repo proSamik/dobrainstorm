@@ -15,7 +15,6 @@ interface BoardToolsProps {
  * Toolbar component with board operation buttons
  */
 export const BoardTools: React.FC<BoardToolsProps> = ({
-  onAddNode,
   onExport,
   onImport,
   onSave,
@@ -78,20 +77,13 @@ export const BoardTools: React.FC<BoardToolsProps> = ({
         )}
         
         <button
-          onClick={onAddNode}
-          className="px-3 py-1 text-sm bg-green-600 dark:bg-green-700 text-white rounded hover:bg-green-700 dark:hover:bg-green-800"
-          title="Add a new node"
-        >
-          + Add Node
-        </button>
-        
-        <button
           onClick={undoChange}
           className="p-2 rounded text-light-foreground dark:text-dark-foreground hover:bg-light-accent/20 dark:hover:bg-dark-accent/20"
           title="Undo (Cmd+Z)"
         >
           Undo
         </button>
+
         <button
           onClick={redoChange}
           className="p-2 rounded text-light-foreground dark:text-dark-foreground hover:bg-light-accent/20 dark:hover:bg-dark-accent/20"
@@ -99,6 +91,7 @@ export const BoardTools: React.FC<BoardToolsProps> = ({
         >
           Redo
         </button>
+
         <button
           onClick={onExport}
           className="p-2 rounded text-light-foreground dark:text-dark-foreground hover:bg-light-accent/20 dark:hover:bg-dark-accent/20"
@@ -106,6 +99,8 @@ export const BoardTools: React.FC<BoardToolsProps> = ({
         >
           Export
         </button>
+
+        
         <button
           onClick={handleImportClick}
           className="p-2 rounded text-light-foreground dark:text-dark-foreground hover:bg-light-accent/20 dark:hover:bg-dark-accent/20"
