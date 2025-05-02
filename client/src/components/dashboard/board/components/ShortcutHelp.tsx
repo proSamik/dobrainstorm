@@ -9,7 +9,7 @@ interface ShortcutHelpProps {
 export default function ShortcutHelp({ onClose }: ShortcutHelpProps) {
   const shortcuts = [
     { key: "N", description: "Add a new node" },
-    { key: "Delete", description: "Delete selected node" },
+    { key: "Delete", description: "Delete selected node/edge" },
     { key: "Ctrl + C", description: "Copy selected node" },
     { key: "Ctrl + V", description: "Paste copied node" },
     { key: "Ctrl + Z", description: "Undo last action" },
@@ -17,13 +17,16 @@ export default function ShortcutHelp({ onClose }: ShortcutHelpProps) {
     { key: "F", description: "Fit view to see all nodes" },
     { key: "+", description: "Zoom in" },
     { key: "-", description: "Zoom out" },
-    { key: "L", description: "Auto-layout nodes" },
+    { key: "L", description: "Auto-layout nodes (vertical)" },
+    { key: "Alt + L", description: "Auto-layout nodes (horizontal)" },
+    { key: "Shift + L", description: "Smart auto-layout (auto-detect)" },
     { key: "Double-click", description: "Edit node content" },
     { key: "Ctrl + S", description: "Save board" },
     { key: "Ctrl + E", description: "Export as image" },
-    { key: "Space + Drag", description: "Pan the canvas" },
+    { key: "Space + Drag / Pinch", description: "Pan the canvas" },
     { key: "Shift + Mouse wheel", description: "Horizontal scroll" },
     { key: "Alt + Drag", description: "Create connection between nodes" },
+    { key: "Right-click", description: "Open context menu on node/edge" },
   ]
 
   return (
