@@ -12,7 +12,8 @@ import ReactFlow, {
   Edge,
   BackgroundVariant,
   ReactFlowInstance,
-  Panel
+  Panel,
+  SelectionMode
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { useDispatch } from 'react-redux'
@@ -390,14 +391,18 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
         return;
       }
       
-      // L key for auto-layout
+      // L key for auto-layout with auto-detection
       if (e.key === 'l' || e.key === 'L') {
-        applyAutoLayout('TB');
-      }
-      
-      // H key for horizontal layout
-      if (e.key === 'h' || e.key === 'H') {
-        applyAutoLayout('LR');
+        if (e.shiftKey) {
+          // Shift+L for auto-detection
+          applyAutoLayout('auto');
+        } else if (e.altKey) {
+          // Alt+L for horizontal layout
+          applyAutoLayout('LR');
+        } else {
+          // L alone for vertical layout
+          applyAutoLayout('TB');
+        }
       }
       
       // ? key for keyboard shortcuts
@@ -456,10 +461,36 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
           }}
           nodeTypes={nodeTypes}
           connectionMode={ConnectionMode.Loose}
+          
+          // Enhanced mobile support
+          zoomOnPinch={true}
+          zoomOnScroll={!isMobile} // Disable mouse wheel zoom on mobile
+          panOnDrag={!isMobile ? isPanningMode : true} // Always allow panning on mobile
+          panOnScroll={isMobile}
+          
+          // Better UX
           selectNodesOnDrag={false}
-          panOnDrag={isPanningMode}
-          panOnScroll={isPanningMode}
-          zoomOnScroll={!isPanningMode}
+          elevateEdgesOnSelect={true}
+          defaultEdgeOptions={{
+            animated: true,
+            style: {
+              stroke: theme === 'light' ? '#64748b' : '#94a3b8',
+              strokeWidth: 2,
+            }
+          }}
+          
+          // Improved selection behavior
+          multiSelectionKeyCode={['Meta', 'Control', 'Shift']}
+          selectionOnDrag={!isPanningMode && !isMobile}
+          selectionMode={SelectionMode.Partial}
+          
+          // Better bounds
+          minZoom={0.1}
+          maxZoom={2.5}
+          
+          // Delete on key press
+          deleteKeyCode={['Backspace', 'Delete']}
+          
           onPaneClick={handleBackgroundClick}
           onNodeContextMenu={handleNodeContextMenu}
           onEdgeContextMenu={handleEdgeContextMenu}
@@ -473,15 +504,23 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
             size={1}
             color={gridColor}
           />
-          <Controls showInteractive={false} />
+          <Controls 
+            showInteractive={false}
+            position="bottom-right" 
+            // Show all controls on mobile for easier manipulation
+            showZoom={true}
+            showFitView={true}
+          />
           <MiniMap 
             nodeStrokeWidth={3} 
             zoomable 
             pannable 
+            // Only show on desktop
+            style={{ display: isMobile ? 'none' : 'block' }}
             maskColor={theme === 'light' ? 'rgba(248, 250, 252, 0.6)' : 'rgba(26, 26, 26, 0.7)'}
           />
           
-          {/* Add Panel buttons */}
+          {/* Panel buttons - reorganized for mobile */}
           <Panel position="top-right" className="flex items-center gap-2">
             <button 
               onClick={() => setShowShortcuts(true)}
@@ -490,21 +529,59 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
             >
               ?
             </button>
-            <button 
-              onClick={() => applyAutoLayout('TB')}
-              className="bg-white/90 dark:bg-gray-800/90 p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
-              title="Auto-layout (Vertical)"
-            >
-              Layout ↕
-            </button>
-            <button 
-              onClick={() => applyAutoLayout('LR')}
-              className="bg-white/90 dark:bg-gray-800/90 p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
-              title="Auto-layout (Horizontal)"
-            >
-              Layout ↔
-            </button>
+            {!isMobile && (
+              <>
+                <button 
+                  onClick={() => applyAutoLayout('TB')}
+                  className="bg-white/90 dark:bg-gray-800/90 p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
+                  title="Auto-layout (Vertical)"
+                >
+                  Layout ↕
+                </button>
+                <button 
+                  onClick={() => applyAutoLayout('LR')}
+                  className="bg-white/90 dark:bg-gray-800/90 p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
+                  title="Auto-layout (Horizontal)"
+                >
+                  Layout ↔
+                </button>
+                <button 
+                  onClick={() => applyAutoLayout('auto')}
+                  className="bg-white/90 dark:bg-gray-800/90 p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
+                  title="Smart Layout (Auto-detect)"
+                >
+                  Smart Layout
+                </button>
+              </>
+            )}
           </Panel>
+          
+          {/* Mobile-specific controls at bottom */}
+          {isMobile && (
+            <Panel position="bottom-center" className="flex items-center gap-2 mb-2">
+              <button 
+                onClick={() => applyAutoLayout('TB')}
+                className="bg-white/90 dark:bg-gray-800/90 p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
+                title="Auto-layout (Vertical)"
+              >
+                Layout ↕
+              </button>
+              <button 
+                onClick={() => applyAutoLayout('LR')}
+                className="bg-white/90 dark:bg-gray-800/90 p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
+                title="Auto-layout (Horizontal)"
+              >
+                Layout ↔
+              </button>
+              <button 
+                onClick={() => applyAutoLayout('auto')}
+                className="bg-white/90 dark:bg-gray-800/90 p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
+                title="Smart Layout (Auto-detect)"
+              >
+                Smart
+              </button>
+            </Panel>
+          )}
           
           <NodeCountDisplay count={nodes.length} />
         </ReactFlow>
@@ -515,6 +592,7 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
             nodeId={contextMenu.id}
             x={contextMenu.x}
             y={contextMenu.y}
+            isEdge={contextMenu.isEdge}
             onClose={() => setContextMenu(null)}
           />
         )}
