@@ -15,9 +15,13 @@ export default function HomePageClient() {
   return (
     <div className="min-h-screen bg-light-background dark:bg-dark-background">
       <Hero />
-      <Demo />
+      <div id="demo">
+        <Demo />
+      </div>
       <Features />
-      <Pricing />
+      <div id="pricing">
+        <Pricing />
+      </div>
       <CTA />
       <Footer />
     </div>
