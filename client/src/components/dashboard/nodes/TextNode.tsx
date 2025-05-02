@@ -36,7 +36,7 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
   const [lastClickTime, setLastClickTime] = useState<number>(0)
   
   // Function to handle node clicks with double-click detection
-  const handleNodeClick = (e: React.MouseEvent) => {
+  const handleNodeClick = () => {
     const currentTime = new Date().getTime();
     const timeSinceLastClick = currentTime - lastClickTime;
     
