@@ -475,12 +475,22 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
           defaultEdgeOptions={{
             markerEnd: {
               type: MarkerType.ArrowClosed,
+              width: 20,
+              height: 20,
+              color: theme === 'light' ? '#64748b' : '#94a3b8',
             },
             style: {
               strokeWidth: 2,
               stroke: theme === 'light' ? '#64748b' : '#94a3b8',
             },
+            type: 'default', // Use built-in default edge type
             animated: false,
+          }}
+          
+          // Handle edge creation with consistent style
+          connectionLineStyle={{
+            stroke: theme === 'light' ? '#64748b' : '#94a3b8',
+            strokeWidth: 2,
           }}
           
           // Improved selection behavior
