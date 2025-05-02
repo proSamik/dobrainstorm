@@ -251,18 +251,44 @@ const boardSlice = createSlice({
     
     // Remove a node and its connected edges
     removeNode: (state, action: PayloadAction<string>) => {
-      // Save current state to history before updating
+      // Save current state to history before removing
       state.history.past.push(deepCloneNodesEdges(state.nodes, state.edges))
       state.history.future = []
       
+      // Remove the node
       state.nodes = state.nodes.filter(node => node.id !== action.payload)
+      
+      // Also remove any edges connected to that node
       state.edges = state.edges.filter(
         edge => edge.source !== action.payload && edge.target !== action.payload
       )
       
+      // If the removed node was selected, clear selection
       if (state.selectedNodeId === action.payload) {
         state.selectedNodeId = null
       }
+      
+      // Remove from multiple selection if needed
+      if (state.selectedNodeIds.includes(action.payload)) {
+        state.selectedNodeIds = state.selectedNodeIds.filter(id => id !== action.payload)
+      }
+      
+      // If the removed node was being edited, clear editing state
+      if (state.editingNodeId === action.payload) {
+        state.editingNodeId = null
+      }
+      
+      state.isDirty = true
+    },
+    
+    // Remove an edge by ID
+    removeEdge: (state, action: PayloadAction<string>) => {
+      // Save current state to history before removing
+      state.history.past.push(deepCloneNodesEdges(state.nodes, state.edges))
+      state.history.future = []
+      
+      // Remove the edge
+      state.edges = state.edges.filter(edge => edge.id !== action.payload)
       
       state.isDirty = true
     },
@@ -358,6 +384,7 @@ export const {
   addNode,
   updateNodeContent,
   removeNode,
+  removeEdge,
   setSelectedNode,
   setSelectedNodes,
   setEditingNode,
