@@ -1,11 +1,12 @@
 'use client'
 
 import { memo, useState, useCallback } from 'react'
-import { Handle, NodeProps, Position, useReactFlow, Edge } from 'reactflow'
+import { Handle, NodeProps, Position, useReactFlow, Edge, MarkerType } from 'reactflow'
 import { useDispatch, useSelector } from 'react-redux'
 import { setSelectedNode, updateNodes, updateEdges, setEditingNode } from '@/store/boardSlice'
 import { NodeContent } from '@/store/boardSlice'
 import { RootState } from '@/store'
+import { Plus, Link as LinkIcon, Maximize2 } from 'lucide-react'
 
 interface TextNodeData {
   label: string
@@ -13,7 +14,7 @@ interface TextNodeData {
 }
 
 /**
- * Enhanced TextNode component with editable label
+ * Enhanced TextNode component with editable label and improved connection handling
  */
 const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
   const dispatch = useDispatch()
@@ -28,10 +29,7 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
   // State for editing label
   const [isEditingLabel, setIsEditingLabel] = useState(false)
   const [editedLabel, setEditedLabel] = useState(data?.label || '')
-  
-  // State for connecting mode
-  const [isConnectingMode, setIsConnectingMode] = useState(false)
-  
+
   // Custom double-click tracking
   const [lastClickTime, setLastClickTime] = useState<number>(0)
   
@@ -102,14 +100,8 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
     handleLabelSave()
   }
   
-  // Toggle connection mode
-  const toggleConnectionMode = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    setIsConnectingMode(!isConnectingMode)
-  }
-  
-  // Create a new connected node when clicking the "+" button
-  const createConnectedNode = useCallback((position: Position) => (event: React.MouseEvent) => {
+  // Create a new node at the specified position
+  const createNewNode = useCallback((position: Position) => (event: React.MouseEvent) => {
     event.stopPropagation() // Prevent node selection
     
     // Get the current node position
@@ -153,7 +145,13 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
           images: []
         }
       },
-      draggable: true
+      draggable: true,
+      // Add smooth animation for node creation
+      style: {
+        opacity: 0,
+        transform: 'scale(0.8)',
+        transition: 'all 0.3s ease-in-out',
+      },
     }
     
     // Create edge for the connection
@@ -161,39 +159,16 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       id: `edge-${Date.now()}`,
       source: id,
       target: newNodeId,
-      sourceHandle: null,
-      targetHandle: null,
-      type: 'default',
+      sourceHandle: position,
+      targetHandle: getOppositePosition(position),
       animated: false,
-      style: { strokeWidth: 2 }
-    }
-
-    // Set source and target based on the position
-    switch (position) {
-      case Position.Top:
-        newEdge.source = newNodeId
-        newEdge.target = id
-        newEdge.sourceHandle = Position.Bottom
-        newEdge.targetHandle = Position.Top
-        break
-      case Position.Right:
-        newEdge.source = id
-        newEdge.target = newNodeId
-        newEdge.sourceHandle = Position.Right
-        newEdge.targetHandle = Position.Left
-        break
-      case Position.Bottom:
-        newEdge.source = id
-        newEdge.target = newNodeId
-        newEdge.sourceHandle = Position.Bottom
-        newEdge.targetHandle = Position.Top
-        break
-      case Position.Left:
-        newEdge.source = newNodeId
-        newEdge.target = id
-        newEdge.sourceHandle = Position.Right
-        newEdge.targetHandle = Position.Left
-        break
+      // Add arrow marker to edge
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+      },
+      style: { 
+        strokeWidth: 2,
+      }
     }
     
     // Add the new node and edge
@@ -207,13 +182,41 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
     const updatedEdges = [...allEdges, newEdge]
     dispatch(updateEdges(updatedEdges))
     
+    // Animate the new node appearance
+    setTimeout(() => {
+      setNodes(nodes => nodes.map(node => {
+        if (node.id === newNodeId) {
+          return {
+            ...node,
+            style: {
+              ...node.style,
+              opacity: 1,
+              transform: 'scale(1)',
+            },
+          };
+        }
+        return node;
+      }));
+    }, 10);
+    
     // Select the new node
     setTimeout(() => {
       dispatch(setSelectedNode(newNodeId))
-    }, 100)
+    }, 300)
   }, [id, getNode, setNodes, setEdges, allNodes, allEdges, dispatch])
   
-  // Handle invalid data case - after all hooks are defined
+  // Get the opposite position for connection handles
+  const getOppositePosition = (position: Position): Position => {
+    switch (position) {
+      case Position.Top: return Position.Bottom
+      case Position.Right: return Position.Left
+      case Position.Bottom: return Position.Top
+      case Position.Left: return Position.Right
+      default: return Position.Bottom
+    }
+  }
+  
+  // Handle invalid data case
   if (!data) {
     console.error('TextNode: Invalid node data')
     return <div>Invalid node data</div>
@@ -221,22 +224,21 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
   
   return (
     <div
-      className={`px-4 py-3 rounded-lg shadow-md ${
+      className={`px-4 py-3 rounded-lg shadow-md relative ${
         selected 
-          ? 'bg-blue-50 dark:bg-blue-900 border-2 border-blue-500' // Primary selected node - strong blue border
+          ? 'bg-blue-50 dark:bg-blue-900 border-2 border-blue-500' 
           : isMultiSelected
-            ? 'bg-blue-50 dark:bg-blue-900 border-2 border-blue-300 dark:border-blue-700' // Multi-selected but not primary - lighter blue border
-            : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700'    // Not selected - regular styling
+            ? 'bg-blue-50 dark:bg-blue-900 border-2 border-blue-300 dark:border-blue-700' 
+            : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700'
       }`}
       style={{ 
-        minWidth: 150,
+        minWidth: 180,
         touchAction: 'none',
         userSelect: 'none',
-        // Different shadows for selection states
         boxShadow: selected 
-          ? '0 0 0 2px rgba(59, 130, 246, 0.5), 0 4px 6px -1px rgba(0, 0, 0, 0.1)' // Strong shadow for primary selection
+          ? '0 0 0 2px rgba(59, 130, 246, 0.5), 0 4px 6px -1px rgba(0, 0, 0, 0.1)' 
           : isMultiSelected 
-            ? '0 0 0 2px rgba(59, 130, 246, 0.3), 0 4px 6px -1px rgba(0, 0, 0, 0.1)' // Lighter shadow for multi-selection
+            ? '0 0 0 2px rgba(59, 130, 246, 0.3), 0 4px 6px -1px rgba(0, 0, 0, 0.1)' 
             : '0 1px 3px rgba(0, 0, 0, 0.1)'
       }}
       onClick={handleNodeClick}
@@ -257,7 +259,7 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
             onBlur={handleLabelBlur}
             onKeyDown={handleLabelKeyDown}
             autoFocus
-            className="flex-1 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 no-drag "
+            className="flex-1 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 no-drag"
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
@@ -270,20 +272,17 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
           </span>
         )}
         
-        {/* Connect icon */}
-        <div 
-          className={`ml-auto w-5 h-5 rounded-full ${isConnectingMode ? 'bg-green-500' : 'bg-gray-500'} flex items-center justify-center text-white cursor-pointer hover:bg-green-600 no-drag`}
+        {/* Edit button to open full editor */}
+        <button 
+          className="ml-auto p-1 text-gray-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/50 rounded no-drag"
           onClick={(e) => {
             e.stopPropagation()
-            e.preventDefault()
-            // Prevent the event from reaching the + buttons
-            e.nativeEvent.stopImmediatePropagation()
-            toggleConnectionMode(e)
+            dispatch(setEditingNode(id))
           }}
-          title={isConnectingMode ? "Exit connection mode" : "Enter connection mode (click to connect to other nodes)"}
+          title="Edit node content"
         >
-          <span className="text-xs">⟋⟍</span>
-        </div>
+          <Maximize2 size={14} />
+        </button>
       </div>
       
       {/* Content area */}
@@ -305,142 +304,78 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
         </div>
       )}
       
-      {/* Connection buttons with "+" icons */}
-      <div 
-        className={`w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 no-drag ${isConnectingMode ? 'hidden' : ''}`}
-        onClick={(e) => {
-          if (!isConnectingMode) {
-            createConnectedNode(Position.Top)(e)
-          }
-        }}
-      >
-        +
+      {/* Connection Points with separate buttons for creating and connecting */}
+      {/* Top */}
+      <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-[14px] flex items-center gap-1">
+        <Handle
+          id={Position.Top}
+          type="target"
+          position={Position.Top}
+          className="w-3 h-3 !bg-blue-500 border-2 border-white"
+          isConnectable={true}
+        />
+        <button
+          className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center text-white cursor-pointer hover:bg-green-600 no-drag"
+          onClick={createNewNode(Position.Top)}
+          title="Create a new connected node above"
+        >
+          <Plus size={12} />
+        </button>
       </div>
-      {/* Top Handle */}
-      <Handle
-        id={Position.Top}
-        type="target"
-        position={Position.Top}
-        className={`${isConnectingMode ? 'w-4 h-4 bg-blue-200 border-2 border-blue-500' : 'w-0 h-0 opacity-0'}`}
-        style={{ 
-          top: 0, 
-          left: '50%', 
-          transform: 'translate(-50%, -50%) scale(3)',
-          zIndex: 1000,
-          cursor: isConnectingMode ? 'crosshair' : 'default',
-          touchAction: 'none',
-          borderRadius: '50%',
-          transition: 'all 0.2s ease',
-          pointerEvents: isConnectingMode ? 'auto' : 'none'
-        }}
-        onMouseDown={(e) => {
-          e.stopPropagation();
-          e.preventDefault();
-        }}
-        isConnectable={isConnectingMode}
-      />
       
-      <div 
-        className={`w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute right-0 top-1/2 transform translate-x-1/2 -translate-y-1/2 no-drag ${isConnectingMode ? 'hidden' : ''}`}
-        onClick={(e) => {
-          if (!isConnectingMode) {
-            createConnectedNode(Position.Right)(e)
-          }
-        }}
-      >
-        +
+      {/* Right */}
+      <div className="absolute right-0 top-1/2 transform translate-x-[14px] -translate-y-1/2 flex flex-col items-center gap-1">
+        <Handle
+          id={Position.Right}
+          type="source"
+          position={Position.Right}
+          className="w-3 h-3 !bg-blue-500 border-2 border-white"
+          isConnectable={true}
+        />
+        <button
+          className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center text-white cursor-pointer hover:bg-green-600 no-drag"
+          onClick={createNewNode(Position.Right)}
+          title="Create a new connected node to the right"
+        >
+          <Plus size={12} />
+        </button>
       </div>
-      {/* Right Handle */}
-      <Handle
-        id={Position.Right}
-        type="source"
-        position={Position.Right}
-        className={`${isConnectingMode ? 'w-4 h-4 bg-blue-200 border-2 border-blue-500' : 'w-0 h-0 opacity-0'}`}
-        style={{ 
-          right: 0, 
-          top: '50%', 
-          transform: 'translate(50%, -50%) scale(3)', 
-          zIndex: 1000,
-          cursor: isConnectingMode ? 'crosshair' : 'default',
-          touchAction: 'none',
-          borderRadius: '50%',
-          transition: 'all 0.2s ease',
-          pointerEvents: isConnectingMode ? 'auto' : 'none'
-        }}
-        onMouseDown={(e) => {
-          e.stopPropagation();
-          e.preventDefault();
-        }}
-        isConnectable={isConnectingMode}
-      />
       
-      <div 
-        className={`w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2 no-drag ${isConnectingMode ? 'hidden' : ''}`}
-        onClick={(e) => {
-          if (!isConnectingMode) {
-            createConnectedNode(Position.Bottom)(e)
-          }
-        }}
-      >
-        +
+      {/* Bottom */}
+      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-[14px] flex items-center gap-1">
+        <Handle
+          id={Position.Bottom}
+          type="source"
+          position={Position.Bottom}
+          className="w-3 h-3 !bg-blue-500 border-2 border-white"
+          isConnectable={true}
+        />
+        <button
+          className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center text-white cursor-pointer hover:bg-green-600 no-drag"
+          onClick={createNewNode(Position.Bottom)}
+          title="Create a new connected node below"
+        >
+          <Plus size={12} />
+        </button>
       </div>
-      {/* Bottom Handle */}
-      <Handle
-        id={Position.Bottom}
-        type="source"
-        position={Position.Bottom}
-        className={`${isConnectingMode ? 'w-24 h-24 bg-blue-200 border-2 border-blue-500' : 'w-0 h-0 opacity-0'}`}
-        style={{ 
-          bottom: 0, 
-          left: '50%', 
-          transform: 'translate(-50%, 50%) scale(3)', 
-          zIndex: 1000,
-          cursor: isConnectingMode ? 'crosshair' : 'default',
-          touchAction: 'none',
-          borderRadius: '50%',
-          transition: 'all 0.2s ease',
-          pointerEvents: isConnectingMode ? 'auto' : 'none'
-        }}
-        onMouseDown={(e) => {
-          e.stopPropagation();
-          e.preventDefault();
-        }}
-        isConnectable={isConnectingMode}
-      />
       
-      <div 
-        className={`w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white cursor-pointer hover:bg-blue-600 absolute left-0 top-1/2 transform -translate-x-1/2 -translate-y-1/2 no-drag ${isConnectingMode ? 'hidden' : ''}`}
-        onClick={(e) => {
-          if (!isConnectingMode) {
-            createConnectedNode(Position.Left)(e)
-          }
-        }}
-      >
-        +
+      {/* Left */}
+      <div className="absolute left-0 top-1/2 transform -translate-x-[14px] -translate-y-1/2 flex flex-col items-center gap-1">
+        <Handle
+          id={Position.Left}
+          type="target"
+          position={Position.Left}
+          className="w-3 h-3 !bg-blue-500 border-2 border-white"
+          isConnectable={true}
+        />
+        <button
+          className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center text-white cursor-pointer hover:bg-green-600 no-drag"
+          onClick={createNewNode(Position.Left)}
+          title="Create a new connected node to the left"
+        >
+          <Plus size={12} />
+        </button>
       </div>
-      {/* Left Handle */}
-      <Handle
-        id={Position.Left}
-        type="target"
-        position={Position.Left}
-        className={`${isConnectingMode ? 'w-4 h-4 bg-blue-200 border-2 border-blue-500' : 'w-0 h-0 opacity-0'}`}
-        style={{ 
-          left: 0, 
-          top: '50%', 
-          transform: 'translate(-50%, 50%) scale(3)', 
-          zIndex: 1000,
-          cursor: isConnectingMode ? 'crosshair' : 'default',
-          touchAction: 'none',
-          borderRadius: '50%',
-          transition: 'all 0.2s ease',
-          pointerEvents: isConnectingMode ? 'auto' : 'none'
-        }}
-        onMouseDown={(e) => {
-          e.stopPropagation();
-          e.preventDefault();
-        }}
-        isConnectable={isConnectingMode}
-      />
     </div>
   )
 }
