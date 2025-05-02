@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react'
 import { Footer } from '@/components/Footer'
+import { authService } from '@/services/auth'
 
 /**
  * Client component for the Contact page that handles form submission
@@ -25,29 +26,21 @@ export default function ContactPageClient() {
 
     console.log(data)
 
-    // try {
-    //   const response = await fetch('/api/contact', {
-    //     method: 'POST',
-    //     headers: {
-    //       'Content-Type': 'application/json',
-    //     },
-    //     body: JSON.stringify(data),
-    //   })
-
-    //   const result = await response.json()
-
-    //   if (response.ok) {
-    //     setResponseMessage('Thank you for your message. We\'ll get back to you soon!')
-    //     // Reset form
-    //     event.currentTarget.reset()
-    //   } else {
-    //     setResponseMessage(result.error || 'Something went wrong. Please try again later.')
-    //   }
-    // } catch (error) {
-    //   setResponseMessage('Something went wrong. Please try again later.')
-    // } finally {
-    //   setIsSubmitting(false)
-    // }
+    try {
+      const response = await authService.post('/api/contact', data);
+      
+      if (response.status === 200) {
+        setResponseMessage('Thank you for your message. We\'ll get back to you soon!')
+        // Reset form
+        event.currentTarget.reset()
+      } else {
+        setResponseMessage(response.data?.error || 'Something went wrong. Please try again later.')
+      }
+    } catch (error) {
+      setResponseMessage('Something went wrong. Please try again later.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
