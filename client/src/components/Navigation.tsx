@@ -91,19 +91,11 @@ const Navigation = () => {
                 Demo
               </button>
               <Link
-                href="/blog"
+                href="/docs"
                 className="text-sm font-medium text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
               >
-                Blog
+                Docs
               </Link>
-              {auth && (
-                <Link
-                  href="/overview"
-                  className="text-sm font-medium text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
-                >
-                  Overview
-                </Link>
-              )}
               {auth && (
                 <Link
                   href="/boards"
@@ -210,21 +202,12 @@ const Navigation = () => {
                 Demo
               </button>
               <Link
-                href="/blog"
+                href="/docs"
                 className="block py-2 text-base font-medium text-light-muted dark:text-dark-muted hover:text-light-foreground dark:hover:text-dark-foreground"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                Blog
+                Docs
               </Link>
-              {auth && (
-                <Link
-                  href="/overview"
-                  className="block py-2 text-base font-medium text-light-muted dark:text-dark-muted hover:text-light-foreground dark:hover:text-dark-foreground"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  Overview
-                </Link>
-              )}
               {auth && (
                 <Link
                   href="/boards"
