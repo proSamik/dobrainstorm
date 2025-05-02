@@ -16,7 +16,7 @@ import (
 type PlunkEmailRequest struct {
 	To      string `json:"to"`
 	Subject string `json:"subject"`
-	HTML    string `json:"html"`
+	HTML    string `json:"body"`
 }
 
 // SendEmail sends an email using the Plunk API with validation and sanitization
