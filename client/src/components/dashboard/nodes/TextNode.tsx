@@ -1,12 +1,12 @@
 'use client'
 
 import { memo, useState, useCallback } from 'react'
-import { Handle, NodeProps, Position, useReactFlow, Edge, MarkerType } from 'reactflow'
+import { Handle, NodeProps, Position, useReactFlow, MarkerType } from 'reactflow'
 import { useDispatch, useSelector } from 'react-redux'
 import { setSelectedNode, updateNodes, updateEdges, setEditingNode } from '@/store/boardSlice'
 import { NodeContent } from '@/store/boardSlice'
 import { RootState } from '@/store'
-import { Plus, Link as LinkIcon, Maximize2 } from 'lucide-react'
+import { Plus, Maximize2 } from 'lucide-react'
 
 interface TextNodeData {
   label: string
@@ -234,7 +234,7 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       console.log("Node and edge added successfully");
     }, 50);
     
-  }, [id, getNode, setNodes, setEdges, allNodes, allEdges, dispatch]);
+  }, [id, getNode, setNodes, setEdges, allNodes, allEdges, dispatch, reactFlow]);
   
   // Handle invalid data case
   if (!data) {
