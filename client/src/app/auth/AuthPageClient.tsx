@@ -10,7 +10,6 @@ import { SignUpForm } from '@/components/auth/signup-form'
 import { ForgotPasswordForm } from '@/components/auth/forgot-password-form'
 import { SocialAuth } from '@/components/auth/social-auth'
 import { GoogleAuth } from '@/components/auth/google-auth'
-import { GithubAuth } from '@/components/auth/github-auth'
 
 type AuthView = 'login' | 'signup' | 'forgot-password'
 
@@ -128,7 +127,6 @@ export default function AuthPageClient() {
               <div className="mt-6">
                 <SocialAuth dividerText={view === 'login' ? 'Or sign in with' : 'Or sign up with'}>
                   <GoogleAuth />
-                  <GithubAuth />
                 </SocialAuth>
               </div>
             )}
