@@ -27,8 +27,16 @@ export const ParentNodeTrace = ({ nodeId }: ParentNodeTraceProps) => {
   }>({ asciiTree: '', nodeList: [] })
 
   useEffect(() => {
+    // Cache for storing connections to avoid repeated calculations
+    const connectionsCache = new Map()
+    
     // Function to get all connected nodes
     const getConnectedNodes = (nodeId: string) => {
+      // Return from cache if we've already calculated this
+      if (connectionsCache.has(nodeId)) {
+        return connectionsCache.get(nodeId)
+      }
+      
       const connections = {
         parents: [] as Array<{ id: string; label: string }>,
         siblings: [] as Array<{ id: string; label: string }>,
@@ -70,7 +78,9 @@ export const ParentNodeTrace = ({ nodeId }: ParentNodeTraceProps) => {
           }
         }
       })
-
+      
+      // Cache the result for future calls
+      connectionsCache.set(nodeId, connections)
       return connections
     }
 
@@ -93,9 +103,21 @@ export const ParentNodeTrace = ({ nodeId }: ParentNodeTraceProps) => {
         })
 
         const connections = getConnectedNodes(nodeId)
-        connections.parents.forEach(parent => collectNodeInfo(parent.id))
-        connections.siblings.forEach(sibling => collectNodeInfo(sibling.id))
-        connections.children.forEach(child => collectNodeInfo(child.id))
+        
+        // Process parents that we haven't visited yet
+        connections.parents
+          .filter((parent: { id: string; label: string }) => !visitedNodes.has(parent.id))
+          .forEach((parent: { id: string; label: string }) => collectNodeInfo(parent.id))
+        
+        // Process siblings that we haven't visited yet
+        connections.siblings
+          .filter((sibling: { id: string; label: string }) => !visitedNodes.has(sibling.id))
+          .forEach((sibling: { id: string; label: string }) => collectNodeInfo(sibling.id))
+        
+        // Process children that we haven't visited yet
+        connections.children
+          .filter((child: { id: string; label: string }) => !visitedNodes.has(child.id))
+          .forEach((child: { id: string; label: string }) => collectNodeInfo(child.id))
       }
 
       // First collect all connected nodes
@@ -107,10 +129,16 @@ export const ParentNodeTrace = ({ nodeId }: ParentNodeTraceProps) => {
         return connections.parents.length === 0
       })
 
+      // Create a set to track visited nodes in the tree building process
+      const visitedInTree = new Set<string>()
+
       // Helper function to build tree lines
       const buildTreeLines = (nodeId: string, prefix: string = '', isLast: boolean = true) => {
         const node = nodes.find(n => n.id === nodeId)
-        if (!node) return
+        if (!node || visitedInTree.has(nodeId)) return
+        
+        // Mark this node as visited to prevent cycles
+        visitedInTree.add(nodeId)
 
         const connections = getConnectedNodes(nodeId)
         const label = node.data.label || 'Untitled'
