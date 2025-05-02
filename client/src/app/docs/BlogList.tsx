@@ -303,7 +303,7 @@ export default function BlogList({ posts }: BlogListProps) {
             {currentPosts.map((post) => (
               <Link
                 key={post.slug}
-                href={`/blog/${post.slug}`}
+                href={`/docs/${post.slug}`}
                 className="group flex flex-col overflow-hidden rounded-2xl border border-light-accent dark:border-dark-accent bg-light-background dark:bg-dark-background shadow-sm transition-all hover:shadow-md"
               >
                 <div className="relative h-48 overflow-hidden bg-light-accent/10 dark:bg-dark-accent/10">

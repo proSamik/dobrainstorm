@@ -23,9 +23,9 @@ const BlogPageClient: React.FC<BlogPageClientProps> = ({ posts }) => {
               ← Back to Home
         </Link>
         <header className="text-center mb-16">
-          <h1 className="text-4xl md:text-5xl font-bold text-primary-400 mb-6">Our Blog</h1>
+          <h1 className="text-4xl md:text-5xl font-bold text-primary-400 mb-6">Our Docs and Blogs</h1>
           <p className="text-xl text-foreground max-w-3xl mx-auto">
-            Insights, tutorials, and updates from our team to help you build better software
+            Docs have docs tag and Blogs have blog tag
           </p>
         </header>
         
