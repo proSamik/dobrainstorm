@@ -10,7 +10,6 @@ import ReactFlow, {
   useEdgesState,
   Node,
   Edge,
-  useReactFlow,
   BackgroundVariant,
   ReactFlowInstance,
   Panel
