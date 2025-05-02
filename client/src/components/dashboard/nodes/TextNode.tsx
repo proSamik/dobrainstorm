@@ -18,7 +18,8 @@ interface TextNodeData {
  */
 const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
   const dispatch = useDispatch()
-  const { getNode, setNodes, setEdges } = useReactFlow()
+  const reactFlow = useReactFlow()
+  const { getNode, setNodes, setEdges } = reactFlow
   const allNodes = useSelector((state: RootState) => state.board.nodes)
   const allEdges = useSelector((state: RootState) => state.board.edges)
   const selectedNodeIds = useSelector((state: RootState) => state.board.selectedNodeIds)
@@ -100,43 +101,57 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
     handleLabelSave()
   }
   
-  // Create a new node at the specified position
+  // Create a new node at the specified position with improved logic
   const createNewNode = useCallback((position: Position) => (event: React.MouseEvent) => {
-    event.stopPropagation() // Prevent node selection
+    event.stopPropagation(); 
+    event.preventDefault();
     
-    // Get the current node position
-    const parentNode = getNode(id)
-    if (!parentNode) return
+    console.log(`Creating new node from ${id} at position ${position}`);
+    
+    // Get the current node
+    const sourceNode = getNode(id);
+    if (!sourceNode) {
+      console.error('Source node not found');
+      return;
+    }
     
     // Calculate position for the new node
-    let offsetX = 0
-    let offsetY = 0
-    const distanceHorizontal = 300
-    const distanceVertical = 200
+    let offsetX = 0;
+    let offsetY = 0;
+    const distanceHorizontal = 250;
+    const distanceVertical = 150;
     
     switch (position) {
       case Position.Top:
-        offsetY = -distanceVertical
-        break
+        offsetY = -distanceVertical;
+        break;
       case Position.Right:
-        offsetX = distanceHorizontal
-        break
+        offsetX = distanceHorizontal;
+        break;
       case Position.Bottom:
-        offsetY = distanceVertical
-        break
+        offsetY = distanceVertical;
+        break;
       case Position.Left:
-        offsetX = -distanceHorizontal
-        break
+        offsetX = -distanceHorizontal;
+        break;
     }
     
-    // Create a new node
-    const newNodeId = `node-${Date.now()}`
+    // Calculate absolute position for new node
+    const newNodeX = sourceNode.position.x + offsetX;
+    const newNodeY = sourceNode.position.y + offsetY;
+    
+    console.log(`New node position: ${newNodeX}, ${newNodeY}`);
+    
+    // Create a unique ID for the new node
+    const newNodeId = `node-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    
+    // Create the new node with explicit position and ensure draggable is true
     const newNode = {
       id: newNodeId,
       type: 'textNode',
       position: {
-        x: parentNode.position.x + offsetX,
-        y: parentNode.position.y + offsetY
+        x: newNodeX,
+        y: newNodeY
       },
       data: {
         label: 'New Node',
@@ -145,76 +160,81 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
           images: []
         }
       },
-      draggable: true,
-      // Add smooth animation for node creation
-      style: {
-        opacity: 0,
-        transform: 'scale(0.8)',
-        transition: 'all 0.3s ease-in-out',
-      },
+      draggable: true
+    };
+    
+    // Configure source, target and handle IDs for the edge
+    let sourceId, targetId;
+    let source, target;
+    
+    // Configure edge connection points based on the direction
+    switch (position) {
+      case Position.Top:
+        source = newNodeId;  // The new node is the source (it's above)
+        target = id;         // The original node is the target
+        sourceId = 'bottom'; // Connect from bottom of new node
+        targetId = 'top';    // To top of original node
+        break;
+      case Position.Right:
+        source = id;         // The original node is the source
+        target = newNodeId;  // The new node is the target (it's to the right)
+        sourceId = 'right';  // Connect from right of original node
+        targetId = 'left';   // To left of new node
+        break;
+      case Position.Bottom:
+        source = id;         // The original node is the source
+        target = newNodeId;  // The new node is the target (it's below)
+        sourceId = 'bottom'; // Connect from bottom of original node
+        targetId = 'top';    // To top of new node
+        break;
+      case Position.Left:
+        source = newNodeId;  // The new node is the source (it's to the left)
+        target = id;         // The original node is the target
+        sourceId = 'right';  // Connect from right of new node
+        targetId = 'left';   // To left of original node
+        break;
     }
     
-    // Create edge for the connection
-    const newEdge: Edge = {
-      id: `edge-${Date.now()}`,
-      source: id,
-      target: newNodeId,
-      sourceHandle: position,
-      targetHandle: getOppositePosition(position),
-      animated: false,
-      // Add arrow marker to edge
+    console.log(`Creating edge: ${source} (${sourceId}) → ${target} (${targetId})`);
+    
+    // Create the edge with the configured connection points
+    const newEdge = {
+      id: `edge-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      source,
+      target,
+      sourceHandle: sourceId,
+      targetHandle: targetId,
       markerEnd: {
         type: MarkerType.ArrowClosed,
       },
       style: { 
-        strokeWidth: 2,
+        strokeWidth: 2
       }
-    }
+    };
     
-    // Add the new node and edge
-    setNodes(nodes => [...nodes, newNode])
-    setEdges(edges => [...edges, newEdge])
+    // First add the node to React Flow
+    setNodes(nodes => [...nodes, newNode]);
     
-    // Update Redux store
-    const updatedNodes = [...allNodes, newNode]
-    dispatch(updateNodes(updatedNodes))
+    // Then add the node to Redux store
+    dispatch(updateNodes([...allNodes, newNode]));
     
-    const updatedEdges = [...allEdges, newEdge]
-    dispatch(updateEdges(updatedEdges))
-    
-    // Animate the new node appearance
+    // Add edge after a small delay to ensure nodes are registered
     setTimeout(() => {
-      setNodes(nodes => nodes.map(node => {
-        if (node.id === newNodeId) {
-          return {
-            ...node,
-            style: {
-              ...node.style,
-              opacity: 1,
-              transform: 'scale(1)',
-            },
-          };
-        }
-        return node;
-      }));
-    }, 10);
+      setEdges(edges => [...edges, newEdge]);
+      dispatch(updateEdges([...allEdges, newEdge]));
+      
+      // Select the new node
+      dispatch(setSelectedNode(newNodeId));
+      
+      // Ensure the new node is visible
+      setTimeout(() => {
+        reactFlow.fitView({ padding: 0.2, includeHiddenNodes: true });
+      }, 100);
+      
+      console.log("Node and edge added successfully");
+    }, 50);
     
-    // Select the new node
-    setTimeout(() => {
-      dispatch(setSelectedNode(newNodeId))
-    }, 300)
-  }, [id, getNode, setNodes, setEdges, allNodes, allEdges, dispatch])
-  
-  // Get the opposite position for connection handles
-  const getOppositePosition = (position: Position): Position => {
-    switch (position) {
-      case Position.Top: return Position.Bottom
-      case Position.Right: return Position.Left
-      case Position.Bottom: return Position.Top
-      case Position.Left: return Position.Right
-      default: return Position.Bottom
-    }
-  }
+  }, [id, getNode, setNodes, setEdges, allNodes, allEdges, dispatch]);
   
   // Handle invalid data case
   if (!data) {
@@ -306,12 +326,13 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       
       {/* Connection Points with separate buttons for creating and connecting */}
       {/* Top */}
-      <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-[14px] flex items-center gap-1">
+      <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-[14px] flex items-center gap-1 z-10">
         <Handle
-          id={Position.Top}
+          id="top"
           type="target"
           position={Position.Top}
-          className="w-3 h-3 !bg-blue-500 border-2 border-white"
+          className="w-3 h-3 !bg-blue-500 border-2 border-white hover:!bg-blue-600"
+          style={{ zIndex: 20 }}
           isConnectable={true}
         />
         <button
@@ -324,12 +345,13 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       </div>
       
       {/* Right */}
-      <div className="absolute right-0 top-1/2 transform translate-x-[14px] -translate-y-1/2 flex flex-col items-center gap-1">
+      <div className="absolute right-0 top-1/2 transform translate-x-[14px] -translate-y-1/2 flex flex-col items-center gap-1 z-10">
         <Handle
-          id={Position.Right}
+          id="right"
           type="source"
           position={Position.Right}
-          className="w-3 h-3 !bg-blue-500 border-2 border-white"
+          className="w-3 h-3 !bg-blue-500 border-2 border-white hover:!bg-blue-600"
+          style={{ zIndex: 20 }}
           isConnectable={true}
         />
         <button
@@ -342,12 +364,13 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       </div>
       
       {/* Bottom */}
-      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-[14px] flex items-center gap-1">
+      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-[14px] flex items-center gap-1 z-10">
         <Handle
-          id={Position.Bottom}
+          id="bottom"
           type="source"
           position={Position.Bottom}
-          className="w-3 h-3 !bg-blue-500 border-2 border-white"
+          className="w-3 h-3 !bg-blue-500 border-2 border-white hover:!bg-blue-600"
+          style={{ zIndex: 20 }}
           isConnectable={true}
         />
         <button
@@ -360,12 +383,13 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
       </div>
       
       {/* Left */}
-      <div className="absolute left-0 top-1/2 transform -translate-x-[14px] -translate-y-1/2 flex flex-col items-center gap-1">
+      <div className="absolute left-0 top-1/2 transform -translate-x-[14px] -translate-y-1/2 flex flex-col items-center gap-1 z-10">
         <Handle
-          id={Position.Left}
+          id="left"
           type="target"
           position={Position.Left}
-          className="w-3 h-3 !bg-blue-500 border-2 border-white"
+          className="w-3 h-3 !bg-blue-500 border-2 border-white hover:!bg-blue-600"
+          style={{ zIndex: 20 }}
           isConnectable={true}
         />
         <button
