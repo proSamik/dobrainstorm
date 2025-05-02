@@ -13,23 +13,41 @@ export const useAutoLayout = () => {
 
   /**
    * Applies automatic layout to the current nodes using dagre
-   * @param direction - The direction of the layout ('TB' for top-to-bottom, 'LR' for left-to-right)
+   * @param direction - The direction of the layout ('TB' for top-to-bottom, 'LR' for left-to-right, 'auto' for auto-detection)
+   * @param animate - Whether to animate the transition (defaults to true)
    */
-  const applyAutoLayout = useCallback((direction: 'TB' | 'LR' = 'TB') => {
+  const applyAutoLayout = useCallback((direction: 'TB' | 'LR' | 'auto' = 'TB', animate = true) => {
     const nodes = getNodes()
     const edges = getEdges()
 
     if (nodes.length === 0) return
 
-    const { nodes: layoutedNodes } = autoLayout(nodes, edges, direction)
+    // Use auto-detection if direction is 'auto'
+    const useAutoDetection = direction === 'auto'
+    const layoutDirection = useAutoDetection ? 'TB' : direction // Initial direction, will be overridden if auto-detecting
 
-    // Apply the layout to ReactFlow
-    setNodes(layoutedNodes)
+    const { nodes: layoutedNodes } = autoLayout(nodes, edges, layoutDirection, useAutoDetection)
 
-    // Also update the Redux store (with a delay to allow for animation)
+    // Apply the layout to ReactFlow with animation
+    if (animate) {
+      // Add transition styles for smooth animation
+      const animatedNodes = layoutedNodes.map(node => ({
+        ...node,
+        style: {
+          ...node.style,
+          transition: 'all 0.5s ease-in-out',
+        }
+      }))
+      setNodes(animatedNodes)
+    } else {
+      // Apply without animation for immediate effect
+      setNodes(layoutedNodes)
+    }
+
+    // Also update the Redux store (with a delay to allow for animation if enabled)
     setTimeout(() => {
       dispatch(updateNodes(layoutedNodes))
-    }, 500)
+    }, animate ? 500 : 0)
 
   }, [getNodes, getEdges, setNodes, dispatch])
 
@@ -48,7 +66,8 @@ export const useAutoLayout = () => {
     // If auto-adjust is enabled, apply the auto-layout after a short delay
     if (autoAdjust && newNodeId) {
       setTimeout(() => {
-        applyAutoLayout()
+        // Use auto-detection for optimal layout
+        applyAutoLayout('auto')
       }, 100)
     }
 
