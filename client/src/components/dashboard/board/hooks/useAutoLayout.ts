@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { Node, Edge, useReactFlow } from 'reactflow'
+import { useReactFlow } from 'reactflow'
 import { autoLayout } from '@/lib/utils/layoutUtils'
 import { useDispatch } from 'react-redux'
 import { updateNodes } from '@/store/boardSlice'
