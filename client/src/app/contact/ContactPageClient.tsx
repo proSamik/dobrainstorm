@@ -29,8 +29,9 @@ export default function ContactPageClient() {
     try {
       const response = await authService.post('/api/contact', data);
       
-      if (response.status === 200) {
-        setResponseMessage('Thank you for your message. We\'ll get back to you soon!')
+      if (response.status === 200 && response.data) {
+        // Use the server's success message if available
+        setResponseMessage(response.data.message || 'Thank you for your message. We\'ll get back to you soon!')
         // Reset form
         event.currentTarget.reset()
       } else {
@@ -107,7 +108,7 @@ export default function ContactPageClient() {
             </div>
 
             {responseMessage && (
-              <p className={`mt-4 text-sm text-center ${responseMessage.includes('thank you') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+              <p className={`mt-4 text-sm text-center ${responseMessage.includes('thank you') || responseMessage.includes('Thank you') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                 {responseMessage}
               </p>
             )}
