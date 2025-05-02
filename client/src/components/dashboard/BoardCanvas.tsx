@@ -13,7 +13,8 @@ import ReactFlow, {
   BackgroundVariant,
   ReactFlowInstance,
   Panel,
-  SelectionMode
+  SelectionMode,
+  MarkerType
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { useDispatch } from 'react-redux'
@@ -472,11 +473,14 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
           selectNodesOnDrag={false}
           elevateEdgesOnSelect={true}
           defaultEdgeOptions={{
-            animated: true,
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+            },
             style: {
-              stroke: theme === 'light' ? '#64748b' : '#94a3b8',
               strokeWidth: 2,
-            }
+              stroke: theme === 'light' ? '#64748b' : '#94a3b8',
+            },
+            animated: false,
           }}
           
           // Improved selection behavior
