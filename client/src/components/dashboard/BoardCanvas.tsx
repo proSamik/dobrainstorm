@@ -42,9 +42,6 @@ import { BoardTools } from './board/components/BoardTools'
 import { NodeCountDisplay } from './board/components/NodeCountDisplay'
 import ShortcutHelp from './board/components/ShortcutHelp'
 
-// Import utilities
-import { autoLayout } from '@/lib/utils/layoutUtils'
-
 // Define base node types outside component
 const baseNodeTypes = {
   textNode: TextNode,
@@ -52,15 +49,6 @@ const baseNodeTypes = {
 
 interface BoardCanvasProps {
   boardId: string
-}
-
-// Interface for selection box
-interface SelectionBox {
-  startX: number
-  startY: number
-  currentX: number
-  currentY: number
-  isActive: boolean
 }
 
 /**
@@ -85,7 +73,6 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   // Define theme-aware colors
   const bgColor = useMemo(() => theme === 'light' ? '#f8fafc' : '#1a1a1a', [theme]);
   const gridColor = useMemo(() => theme === 'light' ? '#aaa' : '#555', [theme]);
-  const nodeSelectedBorder = useMemo(() => theme === 'light' ? 'rgb(59, 130, 246)' : 'rgb(96, 165, 250)', [theme]);
   
   // Track current viewport size for responsive behavior
   const [isMobile, setIsMobile] = useState(false);
@@ -104,13 +91,6 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   // DOM references
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null);
-  const reactFlowInstance = useReactFlow();
-  
-  // Helper to transform viewport coordinates to flow coordinates
-  const screenToFlowPosition = useCallback((screenX: number, screenY: number) => {
-    if (!reactFlowInstance) return { x: 0, y: 0 };
-    return reactFlowInstance.screenToFlowPosition({ x: screenX, y: screenY });
-  }, [reactFlowInstance]);
   
   // Initialize board
   useBoardInitialization(boardId);
@@ -140,7 +120,7 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
   const [isPanningMode, setIsPanningMode] = useState(false);
   
   // Add state to track the cursor mode (grab or pointer)
-  const [cursorMode, setCursorMode] = useState<'grab' | 'pointer'>('grab');
+  const [cursorMode] = useState<'grab' | 'pointer'>('pointer');
   
   // Detect mobile device
   useEffect(() => {
@@ -311,18 +291,6 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [handleSave, isDirty]);
-  
-  // Store reactFlow instance when it's initialized
-  const onInit = useCallback((instance: ReactFlowInstance) => {
-    reactFlowInstanceRef.current = instance;
-    
-    // Center the view after a small delay to ensure nodes are rendered
-    setTimeout(() => {
-      if (storeNodes.length > 0) {
-        instance.fitView({ padding: 0.2 });
-      }
-    }, 200);
-  }, [storeNodes.length]);
   
   // Handle node context menu
   const handleNodeContextMenu = useCallback(
