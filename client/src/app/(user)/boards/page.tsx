@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { authService } from '@/services/auth'
 import { Spinner } from '@/components/ui/spinner'
+import FeedbackButton from '@/components/ui/FeedbackButton'
 
 interface Board {
   id: string
@@ -205,6 +206,7 @@ export default function Boards() {
               </svg>
             </button>
           </Link>
+          <FeedbackButton position="bottom-right" />
         </div>
         <div className="flex flex-col md:flex-row gap-4">
           {error && (
