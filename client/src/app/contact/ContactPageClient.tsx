@@ -67,7 +67,7 @@ export default function ContactPageClient() {
                 name="name"
                 id="name"
                 required
-                className="mt-2 block w-full rounded-md border border-light-accent dark:border-dark-accent bg-light-card dark:bg-dark-card px-3 py-2 text-light-foreground dark:text-dark-foreground shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="mt-2 block w-full rounded-md border border-light-accent dark:border-dark-accent bg-light-card dark:bg-dark-card px-3 py-2 text-light-foreground dark:text-dark-foreground shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:bg-dark-background"
               />
             </div>
 
@@ -80,7 +80,7 @@ export default function ContactPageClient() {
                 name="email"
                 id="email"
                 required
-                className="mt-2 block w-full rounded-md border border-light-accent dark:border-dark-accent bg-light-card dark:bg-dark-card px-3 py-2 text-light-foreground dark:text-dark-foreground shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="mt-2 block w-full rounded-md border border-light-accent dark:border-dark-accent bg-light-card dark:bg-dark-card px-3 py-2 text-light-foreground dark:text-dark-foreground shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:bg-dark-background"
               />
             </div>
 
@@ -93,7 +93,7 @@ export default function ContactPageClient() {
                 id="message"
                 rows={6}
                 required
-                className="mt-2 block w-full rounded-md border border-light-accent dark:border-dark-accent bg-light-card dark:bg-dark-card px-3 py-2 text-light-foreground dark:text-dark-foreground shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="mt-2 block w-full rounded-md border border-light-accent dark:border-dark-accent bg-light-card dark:bg-dark-card px-3 py-2 text-light-foreground dark:text-dark-foreground shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:bg-dark-background"
               />
             </div>
 
