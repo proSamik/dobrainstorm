@@ -1,4 +1,15 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { ApiProvider } from '@/lib/models/providers';
+
+/**
+ * Interface for a provider's API key data
+ */
+export interface ApiKeyData {
+  key: string;
+  isValid?: boolean;
+  models?: string[];
+  selectedModel?: string;
+}
 
 /**
  * Interface for application settings state
@@ -6,9 +17,10 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 interface SettingsState {
   theme: 'light' | 'dark' | 'system';
   apiKeys: {
-    openai: string;
-    claude: string;
-    klusterai: string;
+    openai: ApiKeyData;
+    gemini: ApiKeyData;
+    klusterv1: ApiKeyData;
+    openrouter: ApiKeyData;
   };
   keysFetched: boolean;
 }
@@ -19,9 +31,10 @@ interface SettingsState {
 const initialState: SettingsState = {
   theme: 'system',
   apiKeys: {
-    openai: '',
-    claude: '',
-    klusterai: ''
+    openai: { key: '' },
+    gemini: { key: '' },
+    klusterv1: { key: '' },
+    openrouter: { key: '' }
   },
   keysFetched: false
 };
@@ -38,16 +51,27 @@ const settingsSlice = createSlice({
       state.theme = action.payload;
     },
     
-    // Update API keys
-    setApiKeys: (state, action: PayloadAction<{
-      openai?: string;
-      claude?: string;
-      klusterai?: string;
+    // Update a specific API key with all its data
+    updateApiKey: (state, action: PayloadAction<{
+      provider: ApiProvider;
+      data: ApiKeyData;
     }>) => {
-      state.apiKeys = {
-        ...state.apiKeys,
-        ...action.payload
-      };
+      const { provider, data } = action.payload;
+      if (provider in state.apiKeys) {
+        state.apiKeys[provider as keyof typeof state.apiKeys] = data;
+      }
+      state.keysFetched = true;
+    },
+    
+    // Update multiple API keys at once
+    setApiKeys: (state, action: PayloadAction<{
+      [K in ApiProvider]?: ApiKeyData;
+    }>) => {
+      Object.entries(action.payload).forEach(([provider, data]) => {
+        if (provider in state.apiKeys && data) {
+          state.apiKeys[provider as keyof typeof state.apiKeys] = data;
+        }
+      });
       state.keysFetched = true;
     },
     
@@ -60,6 +84,7 @@ const settingsSlice = createSlice({
 
 export const {
   setTheme,
+  updateApiKey,
   setApiKeys,
   resetApiKeysFetched
 } = settingsSlice.actions;
