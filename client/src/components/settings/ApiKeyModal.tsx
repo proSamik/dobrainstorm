@@ -1,7 +1,14 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter,
+  DialogDescription 
+} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -115,7 +122,10 @@ export default function ApiKeyModal({
   if (isLoading) {
     return (
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="max-w-md md:max-w-2xl">
+        <DialogContent className="max-w-md md:max-w-2xl" aria-describedby="loading-description">
+          <DialogDescription id="loading-description" className="sr-only">
+            Loading API key configuration
+          </DialogDescription>
           <div className="flex justify-center items-center py-20">
             <Spinner size="lg" />
           </div>
@@ -141,6 +151,9 @@ export default function ApiKeyModal({
               <X className="h-4 w-4" />
             </Button>
           </div>
+          <DialogDescription className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+            Configure your {providerConfig.displayName} API key to use with your boards.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-6 py-4">
