@@ -32,7 +32,6 @@ func (h *SettingsHandler) GetAPIKeys(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context using the middleware helper
 	userIDStr := middleware.GetUserID(r.Context())
 	if userIDStr == "" {
-		log.Printf("[SettingsHandler] Error: user_id not found in context")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -40,7 +39,6 @@ func (h *SettingsHandler) GetAPIKeys(w http.ResponseWriter, r *http.Request) {
 	// Get user to verify existence
 	_, err := h.DB.GetUserByID(userIDStr)
 	if err != nil {
-		log.Printf("[SettingsHandler] User not found: %v", err)
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
@@ -48,7 +46,6 @@ func (h *SettingsHandler) GetAPIKeys(w http.ResponseWriter, r *http.Request) {
 	// Get user settings from database
 	settings, err := h.DB.GetUserSettings(userIDStr)
 	if err != nil {
-		log.Printf("[SettingsHandler] Error retrieving settings: %v", err)
 		http.Error(w, "Error retrieving settings", http.StatusInternalServerError)
 		return
 	}
@@ -56,7 +53,6 @@ func (h *SettingsHandler) GetAPIKeys(w http.ResponseWriter, r *http.Request) {
 	// If no settings or empty AI settings, return empty object
 	var aiSettings map[string]ProviderSettings
 	if settings == nil || settings.AISettings == nil || len(settings.AISettings) == 0 {
-		log.Printf("[SettingsHandler] No settings found for user %s", userIDStr)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{})
 		return
@@ -64,7 +60,6 @@ func (h *SettingsHandler) GetAPIKeys(w http.ResponseWriter, r *http.Request) {
 
 	// Parse AI settings
 	if err := settings.AISettings.Unmarshal(&aiSettings); err != nil {
-		log.Printf("[SettingsHandler] Error parsing AI settings: %v", err)
 		http.Error(w, "Failed to parse settings", http.StatusInternalServerError)
 		return
 	}
@@ -95,11 +90,9 @@ func (h *SettingsHandler) GetAPIKeys(w http.ResponseWriter, r *http.Request) {
 			var err error
 			decryptedKey, err = encryption.Decrypt(encryptedKey)
 			if err != nil {
-				log.Printf("[SettingsHandler] Error decrypting key for provider %s: %v", provider, err)
 				decryptedKey = ""
 			}
 		} else {
-			log.Printf("[SettingsHandler] Invalid key format for provider %s - will be cleared", provider)
 			decryptedKey = ""
 		}
 
@@ -140,10 +133,6 @@ func (h *SettingsHandler) GetAPIKeys(w http.ResponseWriter, r *http.Request) {
 				models = newModels
 			}
 		}
-
-		// Prepare response using decrypted key
-		log.Printf("[SettingsHandler] Sending response for provider %s: decryptedKey masked in log, isValid=%v, models=%v, selectedModel=%s",
-			provider, decryptedKey != "", models, selectedModel)
 
 		maskedSettings[provider] = map[string]interface{}{
 			"key":           decryptedKey,
