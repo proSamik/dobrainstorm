@@ -11,6 +11,7 @@ import { validateApiKey } from '@/lib/apiKeyValidation'
 import { toast } from 'sonner'
 import { Label } from '@/components/ui/label'
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select'
+import FeedbackButton from '@/components/ui/FeedbackButton'
 
 // API provider types
 type ApiProvider = 'openai' | 'claude' | 'klusterai'
@@ -694,6 +695,7 @@ export default function BoardsSettings() {
   
   return (
     <div className="container mx-auto px-4 py-8">
+      <FeedbackButton position="bottom-right" />
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">API Settings</h1>
         <Button variant="outline" onClick={() => router.push('/boards')}>
