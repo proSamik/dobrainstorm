@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -22,7 +23,23 @@ type R2Client struct {
 	publicURL  string
 }
 
-// NewR2Client creates a new Cloudflare R2 client
+// NewClient creates a new Cloudflare R2 client from environment variables
+func NewClient() (*R2Client, error) {
+	// Load configuration from environment variables
+	accountID := os.Getenv("CLOUDFLARE_ACCOUNT_ID")
+	accessKeyID := os.Getenv("CLOUDFLARE_ACCESS_KEY_ID")
+	secretAccessKey := os.Getenv("CLOUDFLARE_SECRET_ACCESS_KEY")
+	bucketName := os.Getenv("CLOUDFLARE_BUCKET_NAME")
+
+	// Validate required environment variables
+	if accountID == "" || accessKeyID == "" || secretAccessKey == "" || bucketName == "" {
+		return nil, fmt.Errorf("missing required R2 configuration environment variables")
+	}
+
+	return NewR2Client(accountID, accessKeyID, secretAccessKey, bucketName)
+}
+
+// NewR2Client creates a new Cloudflare R2 client with explicit parameters
 func NewR2Client(accountID, accessKeyID, secretAccessKey, bucketName string) (*R2Client, error) {
 	// Configure the S3 client to use R2
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
