@@ -144,7 +144,9 @@ export default function ApiKeyModal({
             />
             
             {error && (
-              <p className="text-sm text-red-500">{error}</p>
+              <p className="text-sm text-red-500 break-words max-w-full">
+                {error}
+              </p>
             )}
 
             {/* Connection Test Button */}
