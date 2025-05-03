@@ -472,16 +472,29 @@ export const authService = {
   },
 
   async submitFeedback(message: string): Promise<void> {
-    const key = `feedback:${message}`;
+    const key = `feedback:${message.slice(0, 20)}`;
     
     return requestDeduper.execute(
       key,
       async () => {
-        console.log('[Auth] Sending user feedback...');
-        const response = await api.post('/user/feedback', { message });
-        console.log('[Auth] Feedback submitted successfully');
-        return response.data;
+        await api.post('/user/feedback', { message });
       }
     );
+  },
+
+  async uploadImage(file: File): Promise<{ url: string; filename: string; size: number }> {
+    // Create a FormData object to send the file
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    // Use a different instance of axios for this request since it's multipart/form-data
+    const response = await axios.post(`${API_URL}/api/upload/image`, formData, {
+      withCredentials: true, // Required for cookies/auth
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    
+    return response.data;
   }
 };
