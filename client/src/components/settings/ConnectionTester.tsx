@@ -33,6 +33,27 @@ export default function ConnectionTester({
   const providerResult = results[provider]
   const isValidating = providerResult?.isValidating || false
 
+  // Handle connection test error with truncation
+  const handleConnectionError = (errorMessage: string) => {
+    // Truncate long error messages, especially those containing API keys
+    let truncatedError = errorMessage;
+    
+    // If it's an API key error, sanitize it to prevent exposing the key
+    if (errorMessage.includes('API key') && errorMessage.includes('sk-')) {
+      // Match and truncate API key pattern (sk-...)
+      truncatedError = errorMessage.replace(/(sk-[a-zA-Z0-9]{5})[a-zA-Z0-9]+/g, '$1...');
+    }
+    
+    // In all cases, limit error message length
+    if (truncatedError.length > 80) {
+      truncatedError = truncatedError.substring(0, 77) + '...';
+    }
+    
+    setConnectionStatus('error');
+    onError(truncatedError);
+    toast.error(`${provider} API key validation failed`);
+  }
+
   // Test connection with current API key
   const testConnection = async () => {
     if (!apiKey?.trim()) {
@@ -50,15 +71,12 @@ export default function ConnectionTester({
         onSuccess(result.models || [])
         toast.success(`${provider} API key verified successfully!`)
       } else {
-        setConnectionStatus('error')
-        onError(result.error || 'Failed to validate API key')
-        toast.error(`${provider} API key validation failed`)
+        handleConnectionError(result.error || 'Failed to validate API key')
       }
     } catch (error) {
       setConnectionStatus('error')
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
-      onError(errorMessage)
-      toast.error(`Connection test failed: ${errorMessage}`)
+      handleConnectionError(errorMessage)
     }
   }
 
@@ -97,4 +115,4 @@ export default function ConnectionTester({
       )}
     </div>
   )
-} 
+}
