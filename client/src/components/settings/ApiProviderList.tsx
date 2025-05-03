@@ -7,7 +7,7 @@ import { Check, AlertCircle, Plus, Edit } from 'lucide-react'
 import { ApiProvider, providers } from '@/lib/models/providers'
 import { maskApiKey } from '@/lib/apiValidation'
 import Image from 'next/image'
-import { ApiKeyData } from '@/app/(user)/boards/settings/page'
+import { ApiKeyData } from '@/store/settingsSlice'
 
 interface ApiProviderListItemProps {
   provider: ApiProvider
