@@ -37,10 +37,15 @@ export const providers: Record<ApiProvider, ProviderConfig> = {
     logoPath: '/logos/gemini-logo.svg',
     docUrl: 'https://ai.google.dev/docs',
     supportedModels: [
-      'gemini-pro',
-      'gemini-pro-vision',
-      'gemini-1.5-pro',
-      'gemini-1.5-flash'
+      'gemini-2.5-pro-exp-03-25',
+      'gemini-2.0-flash-thinking-exp',
+      'gemini-2.0-flash-thinking-exp-01-21',
+      'gemini-2.0-flash-exp',
+      'gemini-2.0-flash-lite',
+      'gemini-2.0-flash-001',
+      'gemini-2.0-flash-live-001',
+      'gemini-1.5-flash',
+      'gemini-1.5-flash-8b-exp-0827',
     ]
   },
   klusterv1: {
