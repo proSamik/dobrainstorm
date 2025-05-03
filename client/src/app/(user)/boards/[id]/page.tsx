@@ -7,6 +7,7 @@ import { Provider } from 'react-redux'
 import { ReactFlowProvider } from 'reactflow'
 import { store } from '@/store'
 import { Spinner } from '@/components/ui/spinner'
+import FeedbackButton from '@/components/ui/FeedbackButton'
 
 /**
  * Individual board page component that renders the BoardCanvas
@@ -74,6 +75,7 @@ export default function BoardPage() {
       <ReactFlowProvider>
         <Provider store={store}>
           <BoardCanvas boardId={boardId} />
+          <FeedbackButton position="top-right" />
         </Provider>
       </ReactFlowProvider>
   )
