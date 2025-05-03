@@ -17,6 +17,14 @@ interface ValidationResult {
 export function useProviderValidation() {
   const [results, setResults] = useState<Record<string, ValidationResult>>({})
 
+  // Safe version of window access for Next.js
+  const getOrigin = () => {
+    if (typeof window !== 'undefined') {
+      return window.location.origin
+    }
+    return 'https://mapyourideas.com'
+  }
+
   /**
    * Validate an OpenAI API key
    */
@@ -177,12 +185,14 @@ export function useProviderValidation() {
    */
   const validateOpenRouter = async (apiKey: string): Promise<ValidationResult> => {
     try {
+      const origin = getOrigin()
+      
       // Use the auth/key endpoint to validate the API key
       const authResponse = await fetch('https://openrouter.ai/api/v1/auth/key', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
-          'HTTP-Referer': window.location.origin,
+          'HTTP-Referer': origin,
           'X-Title': 'API Key Validation'
         }
       })
@@ -203,7 +213,7 @@ export function useProviderValidation() {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
-          'HTTP-Referer': window.location.origin,
+          'HTTP-Referer': origin,
           'X-Title': 'API Key Validation'
         }
       })
