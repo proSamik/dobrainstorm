@@ -37,7 +37,7 @@ export default function ContactPageClient() {
       } else {
         setResponseMessage(response.data?.error || 'Something went wrong. Please try again later.')
       }
-    } catch (error) {
+    } catch {
       setResponseMessage('Something went wrong. Please try again later.')
     } finally {
       setIsSubmitting(false)
