@@ -18,17 +18,18 @@ export const providers: Record<ApiProvider, ProviderConfig> = {
     logoPath: '/logos/openai-logo.svg',
     docUrl: 'https://platform.openai.com/docs/api-reference',
     supportedModels: [
-      'o1',
-      'o4-mini',
-      'gpt-4.1-nano',
-      'gpt-4.1-nano-2025-04-14',
+      'gpt-4.1',
+      'chatgpt-4o-latest',
       'o4-mini-2025-04-16',
       'gpt-4',
       'gpt-4.1-mini',
-      'gpt-4.1-mini-2025-04-14',
-      'gpt-4.5-preview',
-      'gpt-4.5-preview-2025-02-27',
-      'gpt-4.1'
+      'gpt-4.1-nano',
+      "gpt-4.5-preview",
+      'o1',
+      "o1-mini",
+      'o3-2025-04-16',
+      "o3-mini",
+      'o4-mini',
     ]
   },
   gemini: {
