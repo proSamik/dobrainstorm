@@ -105,8 +105,37 @@ export function useProviderValidation() {
    */
   const validateKlusterv1 = async (apiKey: string): Promise<ValidationResult> => {
     try {
-      // Kluster uses OpenAI-compatible API with a different base URL
-      const response = await fetch('https://api.kluster.ai/v1/models', {
+      // First, validate authentication with a minimal chat completion request
+      // This ensures the API key is actually valid for usage
+      const authResponse = await fetch('https://api.kluster.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: "klusterai/Meta-Llama-3.1-8B-Instruct-Turbo",
+          messages: [
+            { role: "system", content: "You are a helpful assistant." },
+            { role: "user", content: "Respond with 'API connection successful'" }
+          ],
+          max_tokens: 5 // Minimize the response for quicker testing
+        })
+      })
+
+      // Check if authentication was successful
+      if (!authResponse.ok) {
+        const errorData = await authResponse.json()
+        return {
+          isValid: false,
+          models: [],
+          error: errorData.error?.message || `Error: ${authResponse.status} ${authResponse.statusText}`,
+          isValidating: false
+        }
+      }
+
+      // If authentication succeeded, get the models
+      const modelsResponse = await fetch('https://api.kluster.ai/v1/models', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
@@ -114,19 +143,19 @@ export function useProviderValidation() {
         }
       })
 
-      const data = await response.json()
+      const modelsData = await modelsResponse.json()
 
-      if (!response.ok) {
+      if (!modelsResponse.ok) {
         return {
-          isValid: false,
+          isValid: true, // API key is valid since auth check passed, even if models fetch failed
           models: [],
-          error: data.error?.message || `Error: ${response.status} ${response.statusText}`,
+          error: modelsData.error?.message || 'Failed to retrieve models list',
           isValidating: false
         }
       }
 
       // Extract model names
-      const models = data.data?.map((model: any) => model.id) || []
+      const models = modelsData.data?.map((model: any) => model.id) || []
       
       return {
         isValid: true,
@@ -148,7 +177,8 @@ export function useProviderValidation() {
    */
   const validateOpenRouter = async (apiKey: string): Promise<ValidationResult> => {
     try {
-      const response = await fetch('https://openrouter.ai/api/v1/models', {
+      // Use the auth/key endpoint to validate the API key
+      const authResponse = await fetch('https://openrouter.ai/api/v1/auth/key', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
@@ -157,19 +187,40 @@ export function useProviderValidation() {
         }
       })
 
-      const data = await response.json()
+      const authData = await authResponse.json()
 
-      if (!response.ok) {
+      if (!authResponse.ok || !authData.data) {
         return {
           isValid: false,
           models: [],
-          error: data.error?.message || `Error: ${response.status} ${response.statusText}`,
+          error: authData.error?.message || `Error: ${authResponse.status} ${authResponse.statusText}`,
+          isValidating: false
+        }
+      }
+
+      // If authentication was successful, get available models
+      const modelsResponse = await fetch('https://openrouter.ai/api/v1/models', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': window.location.origin,
+          'X-Title': 'API Key Validation'
+        }
+      })
+
+      const modelsData = await modelsResponse.json()
+
+      if (!modelsResponse.ok) {
+        return {
+          isValid: true, // API key is valid since auth check passed, even if models fetch failed
+          models: [],
+          error: modelsData.error?.message || 'Failed to retrieve models list',
           isValidating: false
         }
       }
 
       // Extract model names (OpenRouter uses id or name depending on the model)
-      const models = data.data?.map((model: any) => model.id || model.name) || []
+      const models = modelsData.data?.map((model: any) => model.id || model.name) || []
       
       return {
         isValid: true,
