@@ -3,9 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
-import { X } from 'lucide-react'
-import { authService } from '@/services/auth'
-import { toast } from 'sonner'
+import FeedbackModal from './FeedbackModal'
 
 interface FeedbackButtonProps {
   position?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left'
@@ -17,8 +15,6 @@ interface FeedbackButtonProps {
  */
 export default function FeedbackButton({ position = 'bottom-right' }: FeedbackButtonProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const [feedback, setFeedback] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const { isAuthenticated } = useAuth()
   const router = useRouter()
 
@@ -38,26 +34,6 @@ export default function FeedbackButton({ position = 'bottom-right' }: FeedbackBu
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!feedback.trim()) return
-    
-    setIsSubmitting(true)
-    
-    try {
-      await authService.submitFeedback(feedback)
-      toast.success('Thank you for your feedback!')
-      setFeedback('')
-      setIsOpen(false)
-    } catch (error) {
-      console.error('Error submitting feedback:', error)
-      toast.error('Failed to submit feedback. Please try again.')
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
   return (
     <>
       {/* Feedback button in the corner */}
@@ -72,54 +48,10 @@ export default function FeedbackButton({ position = 'bottom-right' }: FeedbackBu
       </button>
 
       {/* Feedback modal */}
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden">
-            <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                Share Your Feedback
-              </h3>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
-                aria-label="Close"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <form onSubmit={handleSubmit} className="p-4">
-              <div className="mb-4">
-                <textarea
-                  value={feedback}
-                  onChange={(e) => setFeedback(e.target.value)}
-                  placeholder="Tell us what you think or suggest improvements..."
-                  className="w-full px-3 py-2 text-gray-700 dark:text-gray-300 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600"
-                  rows={5}
-                  required
-                />
-              </div>
-              
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setIsOpen(false)}
-                  className="mr-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting || !feedback.trim()}
-                  className="px-4 py-2 text-sm font-medium text-white bg-primary-500 rounded-md hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <FeedbackModal 
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+      />
     </>
   )
 } 
