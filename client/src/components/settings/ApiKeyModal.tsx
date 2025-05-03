@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,7 +12,7 @@ import ProviderDocumentation from './ProviderDocumentation'
 import ConnectionTester from './ConnectionTester'
 import ModelSelector from './ModelSelector'
 import { X } from 'lucide-react'
-import { ApiKeyData } from '@/app/(user)/boards/settings/page'
+import { ApiKeyData } from '@/store/settingsSlice'
 
 interface ApiKeyModalProps {
   provider: ApiProvider
@@ -32,14 +32,26 @@ export default function ApiKeyModal({
   initialData,
   onSave
 }: ApiKeyModalProps) {
-  const [apiKey, setApiKey] = useState(initialData?.key || '')
-  const [isValid, setIsValid] = useState(initialData?.isValid || false)
-  const [models, setModels] = useState<string[]>(initialData?.models || [])
-  const [selectedModel, setSelectedModel] = useState(initialData?.selectedModel || '')
+  const [apiKey, setApiKey] = useState('')
+  const [isValid, setIsValid] = useState(false)
+  const [models, setModels] = useState<string[]>([])
+  const [selectedModel, setSelectedModel] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   const providerConfig = providers[provider]
+
+  // Initialize state from initialData
+  useEffect(() => {
+    if (initialData) {
+      setApiKey(initialData.key || '')
+      setIsValid(initialData.isValid || false)
+      setModels(initialData.models || [])
+      setSelectedModel(initialData.selectedModel || '')
+    }
+    setIsLoading(false)
+  }, [initialData, provider])
 
   // Handle successful connection test
   const handleConnectionSuccess = (availableModels: string[]) => {
@@ -98,6 +110,18 @@ export default function ApiKeyModal({
     } finally {
       setIsSaving(false)
     }
+  }
+
+  if (isLoading) {
+    return (
+      <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+        <DialogContent className="max-w-md md:max-w-2xl">
+          <div className="flex justify-center items-center py-20">
+            <Spinner size="lg" />
+          </div>
+        </DialogContent>
+      </Dialog>
+    )
   }
 
   return (
