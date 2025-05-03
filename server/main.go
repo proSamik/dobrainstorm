@@ -168,6 +168,10 @@ func main() {
 	feedbackHandler := handlers.NewFeedbackHandler(db)
 	mux.Handle("/user/feedback", authMiddleware.RequireAuth(http.HandlerFunc(feedbackHandler.SubmitFeedback)))
 
+	// Image upload route - requires authentication
+	uploadHandler := handlers.NewUploadHandler(db)
+	mux.Handle("/api/upload/image", authMiddleware.RequireAuth(http.HandlerFunc(uploadHandler.UploadImage)))
+
 	// Early access waitlist route - public, rate-limited only (no CSRF)
 	earlyAccessHandler := handlers.NewEarlyAccessHandler(db)
 	mux.Handle("/api/early-access", publicRateLimiter.Limit(http.HandlerFunc(earlyAccessHandler.Register)))
