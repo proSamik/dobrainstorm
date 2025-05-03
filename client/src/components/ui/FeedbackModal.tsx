@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { X, X as XIcon, Image as ImageIcon } from 'lucide-react'
 import { authService } from '@/services/auth'
 import { toast } from 'sonner'
+import Image from 'next/image'
 
 interface FeedbackModalProps {
   isOpen: boolean
@@ -177,7 +178,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
               <div className="grid grid-cols-2 gap-2 mb-3">
                 {images.map((image, index) => (
                   <div key={index} className="relative group">
-                    <img 
+                    <Image 
                       src={image.preview} 
                       alt={`Attachment ${index + 1}`} 
                       width={100} // Adjust width as needed
