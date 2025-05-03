@@ -49,9 +49,11 @@ export const providers: Record<ApiProvider, ProviderConfig> = {
     logoPath: '/logos/kluster-logo.svg',
     docUrl: 'https://kluster.ai/docs',
     supportedModels: [
-      'kluster-fast',
-      'kluster-pro',
-      'kluster-vision'
+        'deepseek-ai/DeepSeek-R1',
+        'Qwen/Qwen3-235B-A22B-FP8',
+        'klusterai/Meta-Llama-3.3-70B-Instruct-Turbo',
+        'deepseek-ai/DeepSeek-V3-0324',
+        'klusterai/Meta-Llama-3.1-8B-Instruct-Turbo',
     ]
   },
   openrouter: {
