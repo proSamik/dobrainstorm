@@ -68,14 +68,9 @@ func (h *UploadHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Initialize R2 client
-	r2Client, err := storage.NewR2Client(
-		os.Getenv("CLOUDFLARE_ACCOUNT_ID"),
-		os.Getenv("CLOUDFLARE_ACCESS_KEY_ID"),
-		os.Getenv("CLOUDFLARE_SECRET_ACCESS_KEY"),
-		os.Getenv("CLOUDFLARE_BUCKET_NAME"),
-	)
+	r2Client, err := storage.NewClient()
 	if err != nil {
-		http.Error(w, "Failed to initialize storage client", http.StatusInternalServerError)
+		http.Error(w, "Failed to initialize storage client: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
