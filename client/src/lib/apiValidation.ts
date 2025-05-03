@@ -1,7 +1,5 @@
 // Client-side API key validation module
 
-import { ApiProvider } from './models/providers';
-
 /**
  * Formats and masks an API key for display
  * @param key API key to mask
