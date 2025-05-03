@@ -10,6 +10,13 @@ interface FeedbackModalProps {
   onClose: () => void
 }
 
+interface UploadedImage {
+  url: string;
+  filename: string;
+  size: number;
+  preview: string;
+}
+
 /**
  * Modal component for submitting feedback with optional image attachments
  * Allows users to submit text feedback and up to 2 images
@@ -17,12 +24,13 @@ interface FeedbackModalProps {
 export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
   const [feedback, setFeedback] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [images, setImages] = useState<{ file: File; preview: string }[]>([])
+  const [isUploading, setIsUploading] = useState(false)
+  const [images, setImages] = useState<UploadedImage[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Reset states when modal is closed
   const handleClose = () => {
-    if (!isSubmitting) {
+    if (!isSubmitting && !isUploading) {
       setFeedback('')
       setImages([])
       onClose()
@@ -30,7 +38,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
   }
 
   // Handle file selection for image uploads
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files
     if (!files || files.length === 0) return
 
@@ -56,9 +64,27 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
 
     // Create a temporary URL for preview
     const reader = new FileReader()
-    reader.onload = (e) => {
-      const base64String = e.target?.result as string
-      setImages([...images, { file, preview: base64String }])
+    reader.onload = async (e) => {
+      const preview = e.target?.result as string
+      
+      try {
+        setIsUploading(true)
+        // Upload the image to R2
+        const uploadedImage = await authService.uploadImage(file)
+        
+        // Add the uploaded image to the state
+        setImages([...images, { 
+          ...uploadedImage, 
+          preview // Keep the preview for display
+        }])
+        
+        toast.success('Image uploaded successfully')
+      } catch (error) {
+        console.error('Error uploading image:', error)
+        toast.error('Failed to upload image. Please try again.')
+      } finally {
+        setIsUploading(false)
+      }
     }
     reader.readAsDataURL(file)
 
@@ -73,16 +99,6 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
     setImages(images.filter((_, i) => i !== index))
   }
 
-  // Convert an image to base64
-  const imageToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as string)
-      reader.onerror = reject
-      reader.readAsDataURL(file)
-    })
-  }
-
   // Submit feedback with images
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -92,13 +108,13 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
     setIsSubmitting(true)
     
     try {
-      // Format message with feedback text and base64 images
+      // Format message with feedback text and image URLs
       let fullMessage = `feedback-\n"${feedback.trim()}"`;
       
-      // Add base64 images if any
+      // Add image URLs if any
       if (images.length > 0) {
         for (let i = 0; i < images.length; i++) {
-          fullMessage += `\n\nimage${i+1}- "${images[i].preview}"`;
+          fullMessage += `\n\nimage${i+1}- "${images[i].url}"`;
         }
       }
       
@@ -182,10 +198,19 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
             {/* Upload button */}
             {images.length < 2 && (
               <div className="flex items-center justify-center">
-                <label className="cursor-pointer flex items-center justify-center w-full p-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:border-primary-500 dark:hover:border-primary-400 transition-colors">
+                <label className={`cursor-pointer flex items-center justify-center w-full p-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:border-primary-500 dark:hover:border-primary-400 transition-colors ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
                   <div className="flex flex-col items-center">
-                    <ImageIcon size={24} className="text-gray-400 dark:text-gray-500 mb-2" />
-                    <span className="text-sm text-gray-500 dark:text-gray-400">Click to add image</span>
+                    {isUploading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-500 mb-2"></div>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">Uploading...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ImageIcon size={24} className="text-gray-400 dark:text-gray-500 mb-2" />
+                        <span className="text-sm text-gray-500 dark:text-gray-400">Click to add image</span>
+                      </>
+                    )}
                   </div>
                   <input
                     ref={fileInputRef}
@@ -193,6 +218,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                     accept="image/*"
                     onChange={handleFileChange}
                     className="hidden"
+                    disabled={isUploading}
                   />
                 </label>
               </div>
@@ -204,12 +230,13 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
               type="button"
               onClick={handleClose}
               className="mr-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+              disabled={isUploading}
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || !feedback.trim()}
+              disabled={isSubmitting || isUploading || !feedback.trim()}
               className="px-4 py-2 text-sm font-medium text-white bg-primary-500 rounded-md hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
