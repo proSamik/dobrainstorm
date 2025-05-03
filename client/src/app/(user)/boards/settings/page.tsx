@@ -12,14 +12,7 @@ import ApiKeyModal from '@/components/settings/ApiKeyModal'
 import { ApiProvider } from '@/lib/models/providers' 
 import { useUserData } from '@/contexts/UserDataContext'
 import { useApiKeys } from '@/hooks/useApiKeys'
-
-// Define the ApiKeyData type once to avoid conflicts
-export interface ApiKeyData {
-  key: string
-  isValid: boolean
-  models: string[]
-  selectedModel: string
-}
+import { ApiKeyData } from '@/store/settingsSlice'
 
 /**
  * Settings page for managing API keys and connections
