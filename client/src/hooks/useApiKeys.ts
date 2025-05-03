@@ -1,20 +1,30 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
 import { ApiProvider } from '@/lib/models/providers'
-import { ApiKeyData } from '@/app/(user)/boards/settings/page'
+import { ApiKeyData, updateApiKey, setApiKeys } from '@/store/settingsSlice'
 import { authService } from '@/services/auth'
+import { RootState } from '@/store'
 
 /**
  * Hook for loading and managing API keys
  */
 export function useApiKeys() {
-  const [isLoading, setIsLoading] = useState(true)
+  const dispatch = useDispatch()
+  const storeApiKeys = useSelector((state: RootState) => state.settings.apiKeys)
+  const keysFetched = useSelector((state: RootState) => state.settings.keysFetched)
+  
+  const [isLoading, setIsLoading] = useState(!keysFetched)
   const [error, setError] = useState<string | null>(null)
-  const [apiKeys, setApiKeys] = useState<Record<ApiProvider, ApiKeyData | undefined>>({} as Record<ApiProvider, ApiKeyData | undefined>)
 
   // Load API keys from server
   const loadApiKeys = async () => {
+    // If keys are already fetched, no need to fetch again
+    if (keysFetched) {
+      return storeApiKeys
+    }
+    
     setIsLoading(true)
     setError(null)
     
@@ -23,7 +33,7 @@ export function useApiKeys() {
       const response = await authService.get('/settings/api-keys')
       
       // Process and normalize response
-      const processedKeys: Record<ApiProvider, ApiKeyData | undefined> = {} as Record<ApiProvider, ApiKeyData | undefined>
+      const processedKeys: Record<ApiProvider, ApiKeyData> = {} as Record<ApiProvider, ApiKeyData>
 
       // Initialize with empty values for all providers
       for (const provider of Object.keys(response) as ApiProvider[]) {
@@ -46,12 +56,13 @@ export function useApiKeys() {
         }
       }
       
-      setApiKeys(processedKeys)
+      // Update Redux store
+      dispatch(setApiKeys(processedKeys))
       return processedKeys
     } catch (err) {
       console.error('Error fetching API keys:', err)
       setError('Failed to load saved API keys. Please try again.')
-      return {} as Record<ApiProvider, ApiKeyData | undefined>
+      return {} as Record<ApiProvider, ApiKeyData>
     } finally {
       setIsLoading(false)
     }
@@ -64,7 +75,8 @@ export function useApiKeys() {
       const keysToSave = {
         [provider]: {
           key: data.key,
-          models: [data.selectedModel, ...data.models.filter(model => model !== data.selectedModel)]
+          models: data.models || [],
+          selectedModel: data.selectedModel || ''
         }
       }
       
@@ -72,12 +84,8 @@ export function useApiKeys() {
       const response = await authService.post('/settings/save-keys', keysToSave)
       
       if (response && response.data && response.data.success) {
-        // Update local state with the new key data
-        setApiKeys(prev => ({
-          ...prev,
-          [provider]: data
-        }))
-        
+        // Update Redux store with the new key data
+        dispatch(updateApiKey({ provider, data }))
         return true
       } else {
         throw new Error(response?.data?.error || 'Failed to save API key')
@@ -88,15 +96,19 @@ export function useApiKeys() {
     }
   }
 
-  // Load keys on mount
+  // Load keys on mount if they haven't been fetched yet
   useEffect(() => {
-    loadApiKeys()
-  }, [])
+    if (!keysFetched) {
+      loadApiKeys()
+    } else {
+      setIsLoading(false)
+    }
+  }, [keysFetched])
 
   return {
     isLoading,
     error,
-    apiKeys,
+    apiKeys: storeApiKeys,
     loadApiKeys,
     saveApiKey
   }
