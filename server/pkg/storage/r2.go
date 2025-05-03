@@ -79,8 +79,8 @@ func (r *R2Client) UploadFile(ctx context.Context, file multipart.File, header *
 		return "", fmt.Errorf("failed to upload file: %w", err)
 	}
 
-	// Return the public URL of the uploaded file
-	return fmt.Sprintf("%s/%s", r.publicURL, objectKey), nil
+	// Return just the object key
+	return objectKey, nil
 }
 
 // DeleteFile removes a file from R2 storage
