@@ -72,9 +72,9 @@ func (h *SettingsHandler) GetAPIKeys(w http.ResponseWriter, r *http.Request) {
 	// Create response with masked keys
 	maskedSettings := make(map[string]interface{})
 	for provider, data := range aiSettings {
-		// Pass the encrypted key directly - don't try to decrypt or mask it
-		// The client will handle decryption
+		// Decrypt the key before sending to client
 		encryptedKey := data.Key
+		var decryptedKey string
 
 		// Validate that the key appears to be a valid Base64 encrypted value
 		// and not a masked key (e.g., with bullet points) or Bearer prefixed key
@@ -90,13 +90,17 @@ func (h *SettingsHandler) GetAPIKeys(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// If the key contains "Bearer" or bullet points or isn't valid Base64,
-		// clear it to force the user to re-enter a valid key
-		if !validBase64 ||
-			len(encryptedKey) < 10 ||
-			encryptedKey == "" {
+		// If the key is valid Base64, try to decrypt it
+		if validBase64 && len(encryptedKey) >= 10 && encryptedKey != "" {
+			var err error
+			decryptedKey, err = encryption.Decrypt(encryptedKey)
+			if err != nil {
+				log.Printf("[SettingsHandler] Error decrypting key for provider %s: %v", provider, err)
+				decryptedKey = ""
+			}
+		} else {
 			log.Printf("[SettingsHandler] Invalid key format for provider %s - will be cleared", provider)
-			encryptedKey = ""
+			decryptedKey = ""
 		}
 
 		// Ensure models is not null
@@ -137,13 +141,13 @@ func (h *SettingsHandler) GetAPIKeys(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Prepare response using encrypted key
-		log.Printf("[SettingsHandler] Sending response for provider %s: encryptedKey masked in log, isValid=true, models=%v, selectedModel=%s",
-			provider, models, selectedModel)
+		// Prepare response using decrypted key
+		log.Printf("[SettingsHandler] Sending response for provider %s: decryptedKey masked in log, isValid=%v, models=%v, selectedModel=%s",
+			provider, decryptedKey != "", models, selectedModel)
 
 		maskedSettings[provider] = map[string]interface{}{
-			"key":           encryptedKey,
-			"isValid":       true,
+			"key":           decryptedKey,
+			"isValid":       decryptedKey != "",
 			"models":        models,
 			"selectedModel": selectedModel,
 		}
