@@ -30,6 +30,10 @@ export interface GoogleAuthCredentials {
   };
 }
 
+export interface FeedbackRequest {
+  message: string;
+}
+
 const api = axios.create({
   baseURL: API_URL,
   withCredentials: true, // Required for cookies
@@ -463,6 +467,20 @@ export const authService = {
         const response = await api.put(url, data);
         console.log(`[Auth] PUT response received from ${url}`);
         return response;
+      }
+    );
+  },
+
+  async submitFeedback(message: string): Promise<void> {
+    const key = `feedback:${message}`;
+    
+    return requestDeduper.execute(
+      key,
+      async () => {
+        console.log('[Auth] Sending user feedback...');
+        const response = await api.post('/user/feedback', { message });
+        console.log('[Auth] Feedback submitted successfully');
+        return response.data;
       }
     );
   }
