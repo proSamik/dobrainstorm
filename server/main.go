@@ -164,6 +164,10 @@ func main() {
 	contactHandler := handlers.NewContactHandler()
 	mux.Handle("/api/contact", publicRateLimiter.Limit(http.HandlerFunc(contactHandler.SendContactEmail)))
 
+	// User feedback route - requires authentication
+	feedbackHandler := handlers.NewFeedbackHandler(db)
+	mux.Handle("/user/feedback", authMiddleware.RequireAuth(http.HandlerFunc(feedbackHandler.SubmitFeedback)))
+
 	// Early access waitlist route - public, rate-limited only (no CSRF)
 	earlyAccessHandler := handlers.NewEarlyAccessHandler(db)
 	mux.Handle("/api/early-access", publicRateLimiter.Limit(http.HandlerFunc(earlyAccessHandler.Register)))
