@@ -71,14 +71,25 @@ export function useApiKeys() {
   // Save API key
   const saveApiKey = async (provider: ApiProvider, data: ApiKeyData) => {
     try {
-      // Format data for the server
-      const keysToSave = {
-        [provider]: {
-          key: data.key,
-          models: data.models || [],
-          selectedModel: data.selectedModel || ''
+      // Get all existing keys from the Redux store
+      const allKeys = { ...storeApiKeys }
+      
+      // Update the key for the current provider
+      allKeys[provider] = data
+      
+      // Prepare all keys to be sent to the server
+      const keysToSave: Record<string, any> = {}
+      
+      // Format all keys for the server
+      Object.entries(allKeys).forEach(([keyProvider, keyData]) => {
+        if (keyData && keyData.key) {
+          keysToSave[keyProvider] = {
+            key: keyData.key,
+            models: keyData.models || [],
+            selectedModel: keyData.selectedModel || ''
+          }
         }
-      }
+      })
       
       // Save to server using authService which handles authentication
       const response = await authService.post('/settings/save-keys', keysToSave)
