@@ -11,6 +11,7 @@ import PageView from '@/components/PageView'
 import JsonLd from '@/components/seo/JsonLd'
 import PrismInit from '@/components/PrismInit'
 import Head from 'next/head'
+import { ReduxProvider } from '@/providers/ReduxProvider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -93,29 +94,31 @@ export default function RootLayout({
         {/* Add organization structured data to all pages */}
         <JsonLd data={organizationData} />
         
-        <ThemeProvider>
-          <AuthProvider>
-            <UserDataProvider>
-              <Navigation />
-              <PageView />
-              {children}
-              <PrismInit />
-              {/* React Hot Toast for legacy components */}
-              <HotToaster 
-                position="bottom-right"
-                toastOptions={{
-                  className: 'bg-light-background dark:bg-dark-background text-light-foreground dark:text-dark-foreground',
-                }}
-              />
-              {/* Sonner Toast for newer components */}
-              <SonnerToaster 
-                position="bottom-right"
-                theme="system"
-                className="bg-light-background dark:bg-dark-background text-light-foreground dark:text-dark-foreground"
-              />
-            </UserDataProvider>
-          </AuthProvider>
-        </ThemeProvider>
+        <ReduxProvider>
+          <ThemeProvider>
+            <AuthProvider>
+              <UserDataProvider>
+                <Navigation />
+                <PageView />
+                {children}
+                <PrismInit />
+                {/* React Hot Toast for legacy components */}
+                <HotToaster 
+                  position="bottom-right"
+                  toastOptions={{
+                    className: 'bg-light-background dark:bg-dark-background text-light-foreground dark:text-dark-foreground',
+                  }}
+                />
+                {/* Sonner Toast for newer components */}
+                <SonnerToaster 
+                  position="bottom-right"
+                  theme="system"
+                  className="bg-light-background dark:bg-dark-background text-light-foreground dark:text-dark-foreground"
+                />
+              </UserDataProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </ReduxProvider>
       </body>
     </html>
   )
