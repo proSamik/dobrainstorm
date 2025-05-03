@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 
@@ -79,11 +80,26 @@ func (h *UploadHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Upload the file
-	fileURL, err := r2Client.UploadFile(r.Context(), file, header)
+	objectKey, err := r2Client.UploadFile(r.Context(), file, header)
 	if err != nil {
 		http.Error(w, "Failed to upload file", http.StatusInternalServerError)
 		return
 	}
+
+	// Get the public URL prefix from environment
+	publicURLPrefix := os.Getenv("CLOUDFLARE_PUBLIC_URL")
+	if publicURLPrefix == "" {
+		// Fallback to development URL if production URL is not set
+		publicURLPrefix = os.Getenv("CLOUDFLARE_PUBLIC_DEVELOPMENT_URL")
+	}
+
+	// Ensure the URL doesn't have a trailing slash
+	if publicURLPrefix != "" && publicURLPrefix[len(publicURLPrefix)-1] == '/' {
+		publicURLPrefix = publicURLPrefix[:len(publicURLPrefix)-1]
+	}
+
+	// Construct the final public URL
+	fileURL := fmt.Sprintf("%s/%s", publicURLPrefix, objectKey)
 
 	// Return the URL of the uploaded file
 	response := UploadResponseBody{
