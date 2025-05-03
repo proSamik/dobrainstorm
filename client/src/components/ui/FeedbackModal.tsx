@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { X, Upload, X as XIcon, Image as ImageIcon } from 'lucide-react'
+import { X, X as XIcon, Image as ImageIcon } from 'lucide-react'
 import { authService } from '@/services/auth'
 import { toast } from 'sonner'
 
@@ -180,6 +180,8 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                     <img 
                       src={image.preview} 
                       alt={`Attachment ${index + 1}`} 
+                      width={100} // Adjust width as needed
+                      height={100} // Adjust height as needed
                       className="w-full h-24 object-cover rounded-md border border-gray-300 dark:border-gray-600"
                     />
                     <button
