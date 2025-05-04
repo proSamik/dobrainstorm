@@ -229,8 +229,14 @@ export function useProviderValidation() {
         }
       }
 
-      // Extract model names (OpenRouter uses id or name depending on the model)
-      const models = modelsData.data?.map((model: any) => model.id || model.name) || []
+      // Filter models by modality (text->text) and extract model names
+      const models = modelsData.data
+        ?.filter((model: any) => 
+          model.architecture?.modality === 'text->text' &&
+          model.architecture?.input_modalities?.includes('text') && 
+          model.architecture?.output_modalities?.includes('text')
+        )
+        .map((model: any) => model.id) || []
       
       return {
         isValid: true,
