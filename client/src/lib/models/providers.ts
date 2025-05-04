@@ -68,14 +68,6 @@ export const providers: Record<ApiProvider, ProviderConfig> = {
     logoPath: '/logos/openrouter-logo.svg',
     docUrl: 'https://openrouter.ai/docs',
     supportedModels: [
-      'openai/o1',
-      'openai/o4-mini',
-      'anthropic/claude-3-opus',
-      'anthropic/claude-3-sonnet',
-      'meta-llama/llama-3-70b-instruct',
-      'meta-llama/llama-3-8b-instruct',
-      'mistral/mistral-large',
-      'mistral/mistral-medium'
     ]
   }
 };
@@ -89,16 +81,14 @@ export const providers: Record<ApiProvider, ProviderConfig> = {
 export function filterModels(provider: ApiProvider, availableModels: string[]): string[] {
   const supportedModels = providers[provider].supportedModels;
   
+    // Special case for OpenRouter which prefixes model names
+    if (provider === 'openrouter') {
+      return availableModels;
+    }
+
   // If no available models or empty supported models list, return empty array
   if (!availableModels?.length || !supportedModels?.length) {
     return [];
-  }
-  
-  // Special case for OpenRouter which prefixes model names
-  if (provider === 'openrouter') {
-    return availableModels.filter(model => 
-      supportedModels.some(supported => model.includes(supported))
-    );
   }
   
   // Default filtering: return only models that are in the supported list
