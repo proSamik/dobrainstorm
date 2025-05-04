@@ -1,8 +1,10 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
+import { Input } from '@/components/ui/input'
+import { Search } from 'lucide-react'
 
 interface ModelSelectorProps {
   models: string[]
@@ -14,6 +16,7 @@ interface ModelSelectorProps {
 
 /**
  * Component for selecting a model from the available list
+ * Supports searching and scrolling through models
  */
 export default function ModelSelector({
   models,
@@ -22,10 +25,18 @@ export default function ModelSelector({
   isLoading = false,
   className = ''
 }: ModelSelectorProps) {
+  // State for search input
+  const [searchQuery, setSearchQuery] = useState('')
+
   // If no models, or only one model (which is already selected), don't render
   if (!models?.length || (models.length === 1 && models[0] === selectedModel)) {
     return null
   }
+
+  // Filter models based on search query
+  const filteredModels = models.filter(model => 
+    model.toLowerCase().includes(searchQuery.toLowerCase())
+  )
 
   return (
     <div className={`space-y-2 ${className}`}>
@@ -45,9 +56,25 @@ export default function ModelSelector({
           <SelectTrigger className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700">
             <SelectValue placeholder="-- Select a default model --" />
           </SelectTrigger>
-          <SelectContent className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700">
+          <SelectContent 
+            className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700"
+            style={{ maxHeight: '300px', overflowY: 'auto' }}
+          >
+            {/* Search input */}
+            <div className="p-2 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900 z-10">
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500 dark:text-gray-400" />
+                <Input
+                  placeholder="Search models..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 py-2 w-full text-sm bg-gray-50 dark:bg-gray-800"
+                />
+              </div>
+            </div>
+            
             {/* Put selected model at the top */}
-            {selectedModel && models.includes(selectedModel) && (
+            {selectedModel && filteredModels.includes(selectedModel) && (
               <SelectItem
                 key={`current-${selectedModel}`}
                 value={selectedModel}
@@ -57,8 +84,8 @@ export default function ModelSelector({
               </SelectItem>
             )}
             
-            {/* Show all other models */}
-            {models
+            {/* Show all other filtered models */}
+            {filteredModels
               .filter(model => model !== selectedModel)
               .map(model => (
                 <SelectItem
@@ -69,6 +96,13 @@ export default function ModelSelector({
                   {model}
                 </SelectItem>
               ))}
+
+            {/* Show message when no models match the search */}
+            {filteredModels.length === 0 && (
+              <div className="py-3 px-2 text-sm text-gray-500 dark:text-gray-400 text-center">
+                No models match your search
+              </div>
+            )}
           </SelectContent>
         </Select>
 
