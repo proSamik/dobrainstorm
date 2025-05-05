@@ -168,7 +168,7 @@ func (h *ChatHandler) streamWithContext(conn *websocket.Conn, sessionID string, 
 	defer cancel() // Ensure context is always cancelled when function exits
 
 	// Log streaming start
-	log.Printf("Starting OpenRouter streaming for session %s", sessionID)
+	// log.Printf("Starting OpenRouter streaming for session %s", sessionID)
 
 	// Process the stream response
 	streamErr := h.openRouter.ChatCompletionsStreamWithContext(
@@ -177,13 +177,13 @@ func (h *ChatHandler) streamWithContext(conn *websocket.Conn, sessionID string, 
 		func(resp openrouter.StreamResponse, isComment bool, commentText string) error {
 			// Check if streaming was cancelled
 			if !isStreaming {
-				log.Printf("Stream cancelled by client")
+				// log.Printf("Stream cancelled by client")
 				return fmt.Errorf("streaming canceled by client")
 			}
 
 			// Handle OpenRouter comments (like processing indicators)
 			if isComment {
-				log.Printf("OpenRouter comment: %s", commentText)
+				// log.Printf("OpenRouter comment: %s", commentText)
 
 				// Send a processing indicator to client
 				processingMsg := ChatMessage{
@@ -193,7 +193,7 @@ func (h *ChatHandler) streamWithContext(conn *websocket.Conn, sessionID string, 
 					IsStreaming: true,
 				}
 				if err := h.writeJSON(conn, wsWriteMutex, processingMsg); err != nil {
-					log.Printf("Error sending processing status: %v", err)
+					// log.Printf("Error sending processing status: %v", err)
 					return err
 				}
 				return nil
@@ -201,7 +201,7 @@ func (h *ChatHandler) streamWithContext(conn *websocket.Conn, sessionID string, 
 
 			// Handle [DONE] marker
 			if commentText == "[DONE]" {
-				log.Printf("Received [DONE] marker")
+				// log.Printf("Received [DONE] marker")
 				// Stream is complete - send end marker and final content
 				streamEndMsg := ChatMessage{
 					Type:        "status",
@@ -218,15 +218,15 @@ func (h *ChatHandler) streamWithContext(conn *websocket.Conn, sessionID string, 
 
 			// Handle normal streaming chunks
 			chunkCounter++
-			log.Printf("Processing stream chunk #%d for session %s", chunkCounter, sessionID)
+			// log.Printf("Processing stream chunk #%d for session %s", chunkCounter, sessionID)
 
 			if len(resp.Choices) > 0 {
 				choice := resp.Choices[0]
 
 				// Check if this is the end of the stream by finish_reason
 				if choice.FinishReason != "" {
-					log.Printf("Stream naturally finished (finish_reason=%s) after %d chunks",
-						choice.FinishReason, chunkCounter)
+					// log.Printf("Stream naturally finished (finish_reason=%s) after %d chunks",
+					// 	choice.FinishReason, chunkCounter)
 
 					// Stream has ended naturally
 					streamEndMsg := ChatMessage{
@@ -235,7 +235,7 @@ func (h *ChatHandler) streamWithContext(conn *websocket.Conn, sessionID string, 
 						SessionID:   sessionID,
 						IsStreaming: false,
 					}
-					log.Printf("Sending stream_end status message")
+					// log.Printf("Sending stream_end status message")
 					if err := h.writeJSON(conn, wsWriteMutex, streamEndMsg); err != nil {
 						log.Printf("Error sending stream end status: %v", err)
 						return err
@@ -246,8 +246,8 @@ func (h *ChatHandler) streamWithContext(conn *websocket.Conn, sessionID string, 
 				// Process reasoning delta
 				if reasoning := choice.Delta.Reasoning; reasoning != "" {
 					reasoningContent += reasoning
-					log.Printf("Stream reasoning chunk: %q (total reasoning length: %d)",
-						reasoning, len(reasoningContent))
+					// log.Printf("Stream reasoning chunk: %q (total reasoning length: %d)",
+					// 	reasoning, len(reasoningContent))
 
 					// Send reasoning chunk to client
 					reasoningMsg := ChatMessage{
@@ -270,14 +270,14 @@ func (h *ChatHandler) streamWithContext(conn *websocket.Conn, sessionID string, 
 						return err
 					}
 
-					log.Printf("Reasoning chunk sent to client")
+					// log.Printf("Reasoning chunk sent to client")
 				}
 
 				// Process content delta - immediately send to client
 				if content := choice.Delta.Content; content != "" {
 					responseContent += content
-					log.Printf("Stream content chunk: %q (total content length: %d)",
-						content, len(responseContent))
+					// log.Printf("Stream content chunk: %q (total content length: %d)",
+					// 	content, len(responseContent))
 
 					// Send the stream chunk to client IMMEDIATELY
 					streamMsg := ChatMessage{
@@ -302,15 +302,15 @@ func (h *ChatHandler) streamWithContext(conn *websocket.Conn, sessionID string, 
 						return err
 					}
 
-					log.Printf("Stream chunk #%d sent to client", chunkCounter)
+					// log.Printf("Stream chunk #%d sent to client", chunkCounter)
 				}
 			} else {
-				log.Printf("Stream chunk #%d had no choices", chunkCounter)
+				// log.Printf("Stream chunk #%d had no choices", chunkCounter)
 			}
 
 			// Check if final usage data is being sent (end of stream)
 			if resp.Usage != nil {
-				log.Printf("Received final usage data after %d chunks: %+v", chunkCounter, resp.Usage)
+				// log.Printf("Received final usage data after %d chunks: %+v", chunkCounter, resp.Usage)
 				streamEndMsg := ChatMessage{
 					Type:        "status",
 					Value:       "stream_end",
@@ -321,15 +321,15 @@ func (h *ChatHandler) streamWithContext(conn *websocket.Conn, sessionID string, 
 					log.Printf("Error sending stream end status: %v", err)
 					return err
 				}
-				log.Printf("Sent stream_end status message with usage data")
+				// log.Printf("Sent stream_end status message with usage data")
 			}
 
 			return nil
 		})
 
 	// Log streaming completion
-	log.Printf("Streaming completed for session %s. Total chunks: %d, Content length: %d, Reasoning length: %d",
-		sessionID, chunkCounter, len(responseContent), len(reasoningContent))
+	// log.Printf("Streaming completed for session %s. Total chunks: %d, Content length: %d, Reasoning length: %d",
+	// 	sessionID, chunkCounter, len(responseContent), len(reasoningContent))
 
 	return responseContent, reasoningContent, streamErr
 }
