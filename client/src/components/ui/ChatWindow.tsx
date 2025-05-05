@@ -80,6 +80,7 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
         // Handle different message types
         switch (data.type) {
           case 'connected':
+            console.log('Connected to chat server')
             // System message for connection status
             setMessages(prev => [
               ...prev, 
@@ -88,8 +89,10 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
             break
             
           case 'message':
+            console.log(`Received message type with isStreaming=${data.isStreaming}`)
             // Regular message from user or complete AI response
             if (data.isStreaming === false) {
+              console.log('Received complete AI response after streaming')
               // This is the final complete AI response after streaming
               setIsStreaming(false)
               setCurrentStreamContent('')
@@ -110,6 +113,7 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
                 ]
               })
             } else {
+              console.log('Received user message')
               // Regular message (likely from user)
               setMessages(prev => [
                 ...prev, 
@@ -120,15 +124,19 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
             
           case 'stream':
             // Partial AI response during streaming - server is streaming content
+            console.log(`Received stream chunk: "${data.value}"`)
             if (!isStreaming) {
+              console.log('First stream chunk received, setting isStreaming to true')
               setIsStreaming(true)
             }
             setCurrentStreamContent(prev => prev + data.value)
             break
             
           case 'status':
+            console.log(`Received status: ${data.value}`)
             if (data.value === 'typing') {
               // AI is starting to respond
+              console.log('AI is starting to type')
               setIsStreaming(true)
               setMessages(prev => [
                 ...prev, 
@@ -136,10 +144,12 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
               ])
             } else if (data.value === 'stopped') {
               // Streaming was stopped by user
+              console.log('Stream stopped by user')
               setIsStreaming(false)
               
               // If we have partial content, add it as a complete message
               if (currentStreamContent) {
+                console.log(`Adding partial content as message: ${currentStreamContent.length} chars`)
                 setMessages(prev => {
                   const newMessages = [...prev]
                   // Find and remove any system "typing" message
@@ -158,10 +168,12 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
               }
             } else if (data.value === 'stream_end') {
               // Server signals end of stream - all content delivered
+              console.log('Stream ended naturally')
               setIsStreaming(false)
               
               // If we have partial content, add it as a complete message
               if (currentStreamContent) {
+                console.log(`Adding complete streamed content: ${currentStreamContent.length} chars`)
                 setMessages(prev => {
                   const newMessages = [...prev]
                   // Find and remove any system "typing" message
