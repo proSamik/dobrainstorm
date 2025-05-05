@@ -155,7 +155,7 @@ func (h *ChatHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 
 // Create a reusable function for creating and managing the context
 func (h *ChatHandler) streamWithContext(conn *websocket.Conn, sessionID string, wsWriteMutex *sync.Mutex,
-	req openrouter.ChatCompletionRequest, chatHistory *[]openrouter.Message) (string, error, string) {
+	req openrouter.ChatCompletionRequest, _ *[]openrouter.Message) (string, string, error) {
 
 	// Track streaming state and content
 	isStreaming := true
@@ -331,7 +331,7 @@ func (h *ChatHandler) streamWithContext(conn *websocket.Conn, sessionID string, 
 	log.Printf("Streaming completed for session %s. Total chunks: %d, Content length: %d, Reasoning length: %d",
 		sessionID, chunkCounter, len(responseContent), len(reasoningContent))
 
-	return responseContent, streamErr, reasoningContent
+	return responseContent, reasoningContent, streamErr
 }
 
 // handleConnectionWithMutex processes messages for a single websocket connection with mutex protection
@@ -445,7 +445,7 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 			}
 
 			// Process stream with proper context handling
-			responseContent, streamErr, reasoningContent := h.streamWithContext(conn, sessionID, wsWriteMutex, req, &chatHistory)
+			responseContent, reasoningContent, streamErr := h.streamWithContext(conn, sessionID, wsWriteMutex, req, &chatHistory)
 
 			// Streaming has ended
 			isStreaming = false
