@@ -395,18 +395,6 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 			}
 			chatHistory = append(chatHistory, userMessage)
 
-			// Add the client message to response for display
-			clientMessage := ChatMessage{
-				Type:      "user",
-				Value:     messageContent,
-				SessionID: sessionID,
-			}
-			// Send the client message back for UI display
-			if err := h.writeJSON(conn, wsWriteMutex, clientMessage); err != nil {
-				log.Printf("Error sending client message: %v", err)
-				break
-			}
-
 			// Start streaming
 			isStreaming = true
 
