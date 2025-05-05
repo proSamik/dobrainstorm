@@ -464,17 +464,9 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 						}
 						chatHistory = append(chatHistory, aiMessage)
 
-						// Send final message
-						completeMsg := ChatMessage{
-							Type:        "assistant",
-							Value:       responseContent + " (response incomplete due to timeout)",
-							SessionID:   sessionID,
-							IsStreaming: false,
-						}
-						if err := h.writeJSON(conn, wsWriteMutex, completeMsg); err != nil {
-							// Just log the error and continue
-							log.Printf("Error sending complete message after timeout: %v", err)
-						}
+						// Log that we're not sending the complete message since client compiles it
+						log.Printf("Not sending complete message after timeout, client has compiled %d chars",
+							len(responseContent))
 					}
 				} else {
 					// This is an unexpected error
@@ -499,18 +491,22 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 			}
 			chatHistory = append(chatHistory, aiMessage)
 
-			// Send final complete message with reasoning if available
-			completeMsg := ChatMessage{
-				Type:        "assistant",
-				Value:       responseContent,
-				Reasoning:   reasoningContent,
+			// Don't send a final complete message, just a stream_end status
+			// Client will use the accumulated chunks as the final message
+			streamEndMsg := ChatMessage{
+				Type:        "status",
+				Value:       "stream_end",
 				SessionID:   sessionID,
 				IsStreaming: false,
 			}
-			if err := h.writeJSON(conn, wsWriteMutex, completeMsg); err != nil {
-				log.Printf("Error sending complete message: %v", err)
+			if err := h.writeJSON(conn, wsWriteMutex, streamEndMsg); err != nil {
+				log.Printf("Error sending stream end status: %v", err)
 				break
 			}
+
+			// Log that we're not sending the complete message since client compiles it
+			log.Printf("Not sending complete message, client has compiled %d chars of content and %d chars of reasoning",
+				len(responseContent), len(reasoningContent))
 		} else if message.Type == "stop" {
 			// Client wants to stop streaming
 			if isStreaming {
