@@ -4,7 +4,6 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Button } from './button'
 import { Card } from './card'
 import { X, StopCircle, MessageSquare, Bot, Info, BrainCircuit } from 'lucide-react'
-import { authService } from '@/services/auth'
 
 // Define different message types
 interface BaseMessage {
@@ -69,7 +68,7 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
       ? process.env.NEXT_PUBLIC_API_URL.replace(/^http/, 'ws')
       : 'ws://localhost:8080'
     
-    authService.verifyUser()
+
     // Create new WebSocket connection
     const socket = new WebSocket(`${wsBaseUrl}/ws/chat`)
     socketRef.current = socket
@@ -387,17 +386,17 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
       case 'assistant':
         const assistantMsg = msg as AssistantMessage;
         return (
-          <div key={idx} className="text-left mb-2">
+          <div key={idx} className="text-left mb-3">
             <div className="flex justify-start items-start gap-2">
               <div className={`inline-block px-3 py-2 rounded-lg max-w-[80%] ${
                 assistantMsg.isIncomplete 
                   ? 'bg-yellow-100 dark:bg-yellow-900 text-gray-800 dark:text-gray-200 border border-yellow-300 dark:border-yellow-700'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                  : 'bg-slate-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200'
               }`}>
                 <div className="flex items-start gap-2">
-                  <Bot className="h-4 w-4 mt-1 flex-shrink-0" />
+                  <Bot className="h-4 w-4 mt-1 flex-shrink-0 text-slate-700 dark:text-slate-300" />
                   <div>
-                    <div>{assistantMsg.content}</div>
+                    <div className="text-left">{assistantMsg.content}</div>
                     {assistantMsg.isIncomplete && (
                       <div className="text-xs text-yellow-600 dark:text-yellow-400 mt-1 italic">
                         (Response incomplete due to timeout)
@@ -406,7 +405,7 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
                     {assistantMsg.reasoning && (
                       <button 
                         onClick={toggleAllReasoning} 
-                        className="text-xs text-blue-500 hover:text-blue-700 mt-1 flex items-center gap-1"
+                        className="text-xs text-blue-500 hover:text-blue-700 mt-2 flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900 rounded-md"
                       >
                         <BrainCircuit className="h-3 w-3" />
                         {showReasoning ? 'Hide reasoning' : 'Show reasoning'}
@@ -440,11 +439,19 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
     }
   };
 
+  // Handle closing the chat window
+  const handleClose = () => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.close();
+    }
+    onClose();
+  };
+
   return (
     <Card className="flex flex-col h-96 w-full shadow-md">
       <div className="flex justify-between items-center p-3 border-b">
         <h3 className="font-medium">Chat Window {windowId}</h3>
-        <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
+        <Button variant="ghost" size="sm" onClick={handleClose} className="h-8 w-8 p-0">
           <X className="h-4 w-4" />
         </Button>
       </div>
@@ -455,20 +462,20 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
         
         {/* Show streaming content */}
         {currentStreamContent && isStreaming && (
-          <div className="text-left mb-2">
+          <div className="text-left mb-3">
             <div className="flex justify-start items-start gap-2">
-              <div className="inline-block px-3 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 max-w-[80%]">
+              <div className="inline-block px-3 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200 max-w-[80%]">
                 <div className="flex items-start gap-2">
-                  <Bot className="h-4 w-4 mt-1 flex-shrink-0" />
+                  <Bot className="h-4 w-4 mt-1 flex-shrink-0 text-slate-700 dark:text-slate-300" />
                   <div>
-                    <div>
+                    <div className="text-left">
                       {currentStreamContent}
                       <span className="inline-block ml-1 animate-pulse">▌</span>
                     </div>
                     {currentReasoning && (
                       <button 
                         onClick={toggleAllReasoning} 
-                        className="text-xs text-blue-500 hover:text-blue-700 mt-1 flex items-center gap-1"
+                        className="text-xs text-blue-500 hover:text-blue-700 mt-2 flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900 rounded-md"
                       >
                         <BrainCircuit className="h-3 w-3" />
                         {showReasoning ? 'Hide reasoning' : 'Show reasoning'}
@@ -523,4 +530,4 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
       </div>
     </Card>
   )
-} 
+}
