@@ -49,6 +49,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
   const socketRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const hasConnectedRef = useRef(false) // Track if we've already connected
+  const lastMessageIsUserRef = useRef(false) // Track if the last sent message was from user
 
   // Function to scroll to bottom of chat
   const scrollToBottom = () => {
@@ -130,59 +131,71 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
             
           case 'message':
             console.log(`Received message type with isStreaming=${data.isStreaming}`)
-            // Regular message from user or complete AI response
+            
+            // Check if this is a response to a user message or a user message itself
             if (data.isStreaming === false) {
-              console.log('Received complete AI response after streaming')
+              // This is the final AI response after streaming or a complete non-streaming response
+              console.log('Received complete AI response')
               console.log('Reasoning received:', data.reasoning)
               
-              // This is the final complete AI response after streaming
               setIsStreaming(false)
               
               // Get reasoning if available
               const reasoning = data.reasoning || currentReasoning || '';
               
-              // Replace the current streaming content with the full content
-              setMessages(prev => {
-                const newMessages = [...prev]
-                // Find and remove any system "typing" message
-                const typingIndex = newMessages.findIndex(
-                  m => m.sender === 'system' && 
-                  (m.content === 'AI is typing...' || m.content.includes('Processing'))
-                )
-                if (typingIndex !== -1) {
-                  newMessages.splice(typingIndex, 1)
-                }
-                
-                // Check if the message indicates a timeout or incomplete response
-                const content = data.value.toString()
-                const isIncomplete = content.includes('(response incomplete due to timeout)')
-                
-                // Remove the timeout suffix from content if present
-                const cleanContent = isIncomplete 
-                  ? content.replace(' (response incomplete due to timeout)', '')
-                  : content
-                
-                return [
-                  ...newMessages,
-                  { 
-                    sender: 'assistant', 
-                    content: cleanContent,
-                    isIncomplete: isIncomplete,
-                    reasoning: reasoning || undefined
+              // Check if the message indicates a timeout or incomplete response
+              const content = data.value.toString()
+              const isIncomplete = content.includes('(response incomplete due to timeout)')
+              
+              // Remove the timeout suffix from content if present
+              const cleanContent = isIncomplete 
+                ? content.replace(' (response incomplete due to timeout)', '')
+                : content
+              
+              // If this is an AI response after user message, add it as assistant message
+              if (lastMessageIsUserRef.current) {
+                setMessages(prev => {
+                  const newMessages = [...prev]
+                  // Find and remove any system "typing" message
+                  const typingIndex = newMessages.findIndex(
+                    m => m.sender === 'system' && 
+                    (m.content === 'AI is typing...' || m.content.includes('Processing') || m.content.includes('thinking'))
+                  )
+                  if (typingIndex !== -1) {
+                    newMessages.splice(typingIndex, 1)
                   }
-                ]
-              })
+                  
+                  return [
+                    ...newMessages,
+                    { 
+                      sender: 'assistant', 
+                      content: cleanContent,
+                      isIncomplete: isIncomplete,
+                      reasoning: reasoning || undefined
+                    }
+                  ]
+                })
+                
+                // Reset the user message flag
+                lastMessageIsUserRef.current = false
+              } else {
+                // This must be a user message being echoed back, ignore it or handle appropriately
+                console.log('Received a non-user message in message type - this may be a server echo')
+              }
               
               // Clear streaming content after adding to messages
               setCurrentStreamContent('')
               // Don't clear reasoning as we want to keep it
             } else {
               console.log('Received user message')
-              // Regular message (likely from user)
+              // This is a user message
               setMessages(prev => [
                 ...prev, 
                 { sender: 'user', content: data.value }
               ])
+              
+              // Mark that we've just received a user message
+              lastMessageIsUserRef.current = true
             }
             break
             
@@ -210,10 +223,22 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
               setIsStreaming(true)
               // Clear any previous reasoning when starting new response
               setCurrentReasoning('')
-              setMessages(prev => [
-                ...prev, 
-                { sender: 'system', content: 'AI is typing...' }
-              ])
+              // Update system message to indicate AI is thinking/typing
+              setMessages(prev => {
+                // Check if we already have a typing message
+                const hasTypingMsg = prev.some(
+                  m => m.sender === 'system' && 
+                  (m.content === 'AI is typing...' || m.content.includes('thinking'))
+                )
+                
+                if (!hasTypingMsg) {
+                  return [
+                    ...prev, 
+                    { sender: 'system', content: 'AI is thinking...' }
+                  ]
+                }
+                return prev
+              })
             } else if (data.value === 'processing') {
               // OpenRouter is processing - update UI to indicate this
               console.log('OpenRouter is processing')
@@ -226,7 +251,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
               setMessages(prev => {
                 const hasProcessingMsg = prev.some(
                   m => m.sender === 'system' && 
-                       (m.content === 'AI is typing...' || m.content.includes('Processing'))
+                       (m.content === 'AI is typing...' || m.content.includes('Processing') || m.content.includes('thinking'))
                 )
                 
                 if (!hasProcessingMsg) {
@@ -251,7 +276,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
                   // Find and remove any system "typing" message
                   const typingIndex = newMessages.findIndex(
                     m => m.sender === 'system' && 
-                    (m.content === 'AI is typing...' || m.content.includes('Processing'))
+                    (m.content === 'AI is typing...' || m.content.includes('Processing') || m.content.includes('thinking'))
                   )
                   if (typingIndex !== -1) {
                     newMessages.splice(typingIndex, 1)
@@ -266,7 +291,8 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
                   ]
                 })
                 setCurrentStreamContent('')
-                // Don't clear reasoning as it may be needed for the final message
+                // Reset user message flag since we've completed a response
+                lastMessageIsUserRef.current = false
               }
             } else if (data.value === 'stream_end') {
               // Server signals end of stream - all content delivered
@@ -282,7 +308,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
                   // Find and remove any system "typing" message
                   const typingIndex = newMessages.findIndex(
                     m => m.sender === 'system' && 
-                    (m.content === 'AI is typing...' || m.content.includes('Processing'))
+                    (m.content === 'AI is typing...' || m.content.includes('Processing') || m.content.includes('thinking'))
                   )
                   if (typingIndex !== -1) {
                     newMessages.splice(typingIndex, 1)
@@ -297,7 +323,8 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
                   ]
                 })
                 setCurrentStreamContent('')
-                // Don't clear reasoning as it may be needed for the final message
+                // Reset user message flag since we've completed a response
+                lastMessageIsUserRef.current = false
               }
             }
             break
@@ -309,6 +336,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
               { sender: 'system', content: `Error: ${data.value}` }
             ])
             setIsStreaming(false)
+            lastMessageIsUserRef.current = false
             break
             
           default:
@@ -356,6 +384,9 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
 
       // Clear input field
       setInputValue('')
+      
+      // Set the flag indicating we're expecting an AI response
+      lastMessageIsUserRef.current = true
     } catch (error) {
       console.error('Error sending message:', error)
     }
