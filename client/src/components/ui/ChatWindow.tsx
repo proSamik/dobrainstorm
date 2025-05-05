@@ -173,8 +173,9 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
             ])
             break
             
-          case 'message':
-            console.log(`Received message type with isStreaming=${data.isStreaming}`);
+          case 'user':
+            // Handle user message echoed back from server
+            console.log('User message received from server');
             
             if (typeof data.value !== 'string') {
               console.error('Invalid message value type:', typeof data.value);
@@ -182,8 +183,9 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
             }
             
             // Check if this is a user message echo from the server
-            const isUserMessageEcho = !data.isStreaming && 
-              messages.some(m => m.sender === 'user' && m.content === data.value);
+            const isUserMessageEcho = messages.some(m => 
+              m.sender === 'user' && m.content === data.value
+            );
             
             // Skip processing if this is just an echo of our own message
             if (isUserMessageEcho) {
@@ -191,62 +193,147 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
               break;
             }
             
-            // The message is from the user (new message, not an echo)
-            if (data.isStreaming === undefined && !lastMessageIsUserRef.current) {
-              console.log('User message received');
-              setMessages(prev => [
-                ...prev, 
-                { sender: 'user', content: data.value }
-              ]);
-              lastMessageIsUserRef.current = true;
-              // Reset stream message ID as we're starting a new conversation turn
-              streamMessageIdRef.current = null;
+            // Otherwise add a new user message (this should rarely happen)
+            setMessages(prev => [
+              ...prev, 
+              { sender: 'user', content: data.value }
+            ]);
+            
+            // Update state to expect an AI response
+            lastMessageIsUserRef.current = true;
+            // Reset stream message ID as we're starting a new conversation turn
+            streamMessageIdRef.current = null;
+            break;
+            
+          case 'assistant':
+            // Handle AI response from server
+            console.log('Assistant message received from server');
+            console.log('Reasoning received:', data.reasoning);
+            
+            if (typeof data.value !== 'string') {
+              console.error('Invalid message value type:', typeof data.value);
               break;
             }
             
-            // This is a final AI response, either streaming is false or undefined with lastMessageIsUser true
-            if (data.isStreaming === false || (data.isStreaming === undefined && lastMessageIsUserRef.current)) {
-              console.log('Final AI response received');
-              console.log('Reasoning received:', data.reasoning);
+            // Mark streaming as finished
+            setIsStreaming(false);
+            
+            // Get full reasoning if available
+            const reasoning = data.reasoning || currentReasoning || '';
+            
+            // Check if the message indicates a timeout or incomplete response
+            const content = data.value;
+            const isIncomplete = content.includes('(response incomplete due to timeout)');
+            
+            // Remove the timeout suffix from content if present
+            const cleanContent = isIncomplete 
+              ? content.replace(' (response incomplete due to timeout)', '')
+              : content;
+            
+            // If we have a stream message, update it with the final content
+            if (streamMessageIdRef.current !== null) {
+              console.log(`Updating stream message #${streamMessageIdRef.current} with final content`);
+              setMessages(prev => {
+                return prev.map((msg, index) => {
+                  if (index === streamMessageIdRef.current) {
+                    return {
+                      sender: 'assistant',
+                      content: cleanContent,
+                      isIncomplete,
+                      reasoning: reasoning || undefined
+                    } as AssistantMessage;
+                  }
+                  return msg;
+                });
+              });
+            } else {
+              // No stream message exists, create a new one
+              console.log('Creating new assistant message from final content');
+              
+              setMessages(prev => {
+                const newMessages = [...prev];
+                // Find and remove any system "typing" message
+                const typingIndex = newMessages.findIndex(
+                  m => m.sender === 'system' && 
+                  (m.content === 'AI is typing...' || m.content.includes('Processing') || m.content.includes('thinking'))
+                );
+                
+                if (typingIndex !== -1) {
+                  newMessages.splice(typingIndex, 1);
+                }
+                
+                return [
+                  ...newMessages,
+                  { 
+                    sender: 'assistant', 
+                    content: cleanContent,
+                    isIncomplete,
+                    reasoning: reasoning || undefined
+                  }
+                ];
+              });
+            }
+            
+            // Reset states
+            setCurrentStreamContent('');
+            streamMessageIdRef.current = null;
+            lastMessageIsUserRef.current = false;
+            break;
+            
+          case 'message':
+            // Handle legacy message type for backward compatibility
+            console.log(`Received legacy message type with isStreaming=${data.isStreaming}`);
+            
+            if (typeof data.value !== 'string') {
+              console.error('Invalid message value type:', typeof data.value);
+              break;
+            }
+            
+            // Check if this is a user message echo from the server
+            const isLegacyUserMessageEcho = !data.isStreaming && 
+              messages.some(m => m.sender === 'user' && m.content === data.value);
+            
+            // Skip processing if this is just an echo of our own message
+            if (isLegacyUserMessageEcho) {
+              console.log('Ignoring echo of user message:', data.value);
+              break;
+            }
+            
+            // Handle as assistant message if streaming is false and we're expecting a response
+            if (data.isStreaming === false && lastMessageIsUserRef.current) {
+              // Process as an assistant message
+              console.log('Processing as assistant message');
               
               // Mark streaming as finished
               setIsStreaming(false);
               
               // Get full reasoning if available
-              const reasoning = data.reasoning || currentReasoning || '';
+              const legacyReasoning = data.reasoning || currentReasoning || '';
               
-              // Check if the message indicates a timeout or incomplete response
-              const content = data.value;
-              const isIncomplete = content.includes('(response incomplete due to timeout)');
+              // Check for timeout/incomplete
+              const legacyContent = data.value;
+              const legacyIsIncomplete = legacyContent.includes('(response incomplete due to timeout)');
               
-              // Remove the timeout suffix from content if present
-              const cleanContent = isIncomplete 
-                ? content.replace(' (response incomplete due to timeout)', '')
-                : content;
-              
-              // If we have a stream message, update it with the final content
+              // Update message state
               if (streamMessageIdRef.current !== null) {
-                console.log(`Updating stream message #${streamMessageIdRef.current} with final content`);
                 setMessages(prev => {
                   return prev.map((msg, index) => {
                     if (index === streamMessageIdRef.current) {
                       return {
                         sender: 'assistant',
-                        content: cleanContent,
-                        isIncomplete,
-                        reasoning: reasoning || undefined
+                        content: legacyIsIncomplete 
+                          ? legacyContent.replace(' (response incomplete due to timeout)', '')
+                          : legacyContent,
+                        isIncomplete: legacyIsIncomplete,
+                        reasoning: legacyReasoning || undefined
                       } as AssistantMessage;
                     }
                     return msg;
                   });
                 });
               } else {
-                // No stream message exists, create a new one
-                console.log('Creating new assistant message from final content');
-                
                 setMessages(prev => {
                   const newMessages = [...prev];
-                  // Find and remove any system "typing" message
                   const typingIndex = newMessages.findIndex(
                     m => m.sender === 'system' && 
                     (m.content === 'AI is typing...' || m.content.includes('Processing') || m.content.includes('thinking'))
@@ -260,9 +347,11 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
                     ...newMessages,
                     { 
                       sender: 'assistant', 
-                      content: cleanContent,
-                      isIncomplete,
-                      reasoning: reasoning || undefined
+                      content: legacyIsIncomplete 
+                        ? legacyContent.replace(' (response incomplete due to timeout)', '')
+                        : legacyContent,
+                      isIncomplete: legacyIsIncomplete,
+                      reasoning: legacyReasoning || undefined
                     }
                   ];
                 });
@@ -272,16 +361,18 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
               setCurrentStreamContent('');
               streamMessageIdRef.current = null;
               lastMessageIsUserRef.current = false;
-            } else {
-              // Handle user messages that don't fit the patterns above
-              if (data.isStreaming === undefined && !isUserMessageEcho) {
-                console.log('Processing new user message');
+            } else if (data.isStreaming === undefined) {
+              // Process as a user message
+              console.log('Processing as user message');
+              
+              // Check for duplicate
+              const isDuplicate = messages.some(m => m.sender === 'user' && m.content === data.value);
+              if (!isDuplicate) {
                 setMessages(prev => [
                   ...prev, 
                   { sender: 'user', content: data.value }
                 ]);
                 lastMessageIsUserRef.current = true;
-                // Reset stream message ID as we're starting a new conversation turn
                 streamMessageIdRef.current = null;
               }
             }
@@ -545,9 +636,9 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
       ]);
       
       // Send the message to the server
-      // Note: the server should ideally use 'user' type for user messages and 'assistant' for AI responses
+      // Note: we're still using "message" as the type for backward compatibility
       socketRef.current.send(JSON.stringify({
-        type: 'message', // This should ideally be 'user' for clarity, but keeping for compatibility
+        type: "message", 
         value: messageContent,
         sessionId: sessionId
       }));
@@ -692,13 +783,13 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
             Stop
           </Button>
         ) : (
-        <Button 
-          onClick={handleSendMessage} 
-          disabled={!connected}
-          className="rounded-l-none"
-        >
-          Send
-        </Button>
+          <Button 
+            onClick={handleSendMessage} 
+            disabled={!connected}
+            className="rounded-l-none"
+          >
+            Send
+          </Button>
         )}
       </div>
     </Card>
