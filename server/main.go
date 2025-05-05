@@ -141,7 +141,7 @@ func main() {
 			boardWriteRateLimiter.Limit(http.HandlerFunc(boardHandler.DeleteBoard)))))
 
 	// Chat websocket route
-	chatHandler := handlers.NewChatHandler(db)
+	chatHandler := handlers.NewChatHandler(db, []string{os.Getenv("FRONTEND_URL"), os.Getenv("BETA_CLIENT_URL")})
 	mux.Handle("/ws/chat", authMiddleware.RequireAuth(http.HandlerFunc(chatHandler.HandleChat)))
 
 	// Analytics routes (public)
