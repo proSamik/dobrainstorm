@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"saas-server/database"
+	"saas-server/pkg/openrouter"
 )
 
 // ChatHandler handles websocket connections for chat functionality
@@ -17,13 +18,15 @@ type ChatHandler struct {
 	DB          *database.DB
 	connections sync.Map
 	upgrader    websocket.Upgrader
+	openRouter  *openrouter.Client
 }
 
 // ChatMessage represents a message in the chat
 type ChatMessage struct {
-	Type      string      `json:"type"`
-	Value     interface{} `json:"value"`
-	SessionID string      `json:"sessionId"`
+	Type        string      `json:"type"`
+	Value       interface{} `json:"value"`
+	SessionID   string      `json:"sessionId"`
+	IsStreaming bool        `json:"isStreaming,omitempty"`
 }
 
 // NewChatHandler creates a new instance of ChatHandler, configured with allowed CORS origins.
@@ -35,8 +38,15 @@ func NewChatHandler(db *database.DB, allowedOrigins []string) *ChatHandler {
 		log.Printf("[WebSocket CORS] Allowing origin: %s", origin) // Log allowed origins
 	}
 
+	// Initialize OpenRouter client
+	openRouterClient, err := openrouter.NewClient()
+	if err != nil {
+		log.Printf("Failed to initialize OpenRouter client: %v", err)
+	}
+
 	return &ChatHandler{
-		DB: db,
+		DB:         db,
+		openRouter: openRouterClient,
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -55,6 +65,21 @@ func NewChatHandler(db *database.DB, allowedOrigins []string) *ChatHandler {
 					log.Printf("[WebSocket CORS] Origin '%s' is allowed.", origin)
 					return true
 				}
+
+				// Optional: Handle cases like localhost with different ports if necessary,
+				// but be cautious as it can weaken security.
+				// Example (use carefully):
+				// u, err := url.Parse(origin)
+				// if err == nil && u.Hostname() == "localhost" {
+				//   // Check if any allowed origin is a localhost variant
+				//   for allowed := range originMap {
+				//     allowedU, allowedErr := url.Parse(allowed)
+				//     if allowedErr == nil && allowedU.Hostname() == "localhost" {
+				//       log.Printf("[WebSocket CORS] Allowing localhost variant origin '%s'.", origin)
+				// 		 return true
+				//     }
+				//   }
+				// }
 
 				log.Printf("[WebSocket CORS] Origin '%s' is NOT allowed.", origin)
 				return false
@@ -93,8 +118,8 @@ func (h *ChatHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 
 	// Send initial message
 	initialMsg := ChatMessage{
-		Type:      "number",
-		Value:     0,
+		Type:      "connected",
+		Value:     "Connected to chat. Send a message to start a conversation.",
 		SessionID: sessionID,
 	}
 	if err := conn.WriteJSON(initialMsg); err != nil {
@@ -110,17 +135,11 @@ func (h *ChatHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 
 // handleConnection processes messages for a single websocket connection
 func (h *ChatHandler) handleConnection(conn *websocket.Conn, sessionID string, userID string) {
-	// Track chat history (for future database storage)
-	chatHistory := []ChatMessage{
-		{
-			Type:      "number",
-			Value:     0,
-			SessionID: sessionID,
-		},
-	}
+	// Track chat history
+	chatHistory := []openrouter.Message{}
 
-	// Keep track of the last number for addition
-	lastNumber := 0
+	// Keep track of streaming state
+	isStreaming := false
 
 	// Recover from panics to prevent crashing the server
 	defer func() {
@@ -140,19 +159,9 @@ func (h *ChatHandler) handleConnection(conn *websocket.Conn, sessionID string, u
 
 	// Process messages
 	for {
-		// Read raw message from WebSocket
-		_, rawMessage, err := conn.ReadMessage()
-		if err != nil {
-			log.Printf("Error reading raw message: %v", err)
-			break
-		}
-
-		// Log the raw message
-		log.Printf("Raw message received: %s", string(rawMessage))
-
-		// Use only ONE method to read from WebSocket - ReadJSON
+		// Read message from WebSocket
 		var message ChatMessage
-		err = conn.ReadJSON(&message)
+		err := conn.ReadJSON(&message)
 		if err != nil {
 			log.Printf("Error reading message: %v", err)
 			break
@@ -166,28 +175,24 @@ func (h *ChatHandler) handleConnection(conn *websocket.Conn, sessionID string, u
 			message.SessionID = sessionID
 		}
 
-		// Add message to history
-		chatHistory = append(chatHistory, message)
-
 		// Process the message based on type
-		if message.Type == "number" {
-			var clientInt int
+		if message.Type == "message" {
+			// If currently streaming, send stop command
+			if isStreaming {
+				isStreaming = false
+				continue
+			}
 
-			// Extract the number based on the value type
+			// Get the message content as string
+			var messageContent string
 			switch v := message.Value.(type) {
-			case float64:
-				clientInt = int(v)
-			case float32:
-				clientInt = int(v)
-			case int:
-				clientInt = v
-			case int64:
-				clientInt = int(v)
+			case string:
+				messageContent = v
 			default:
-				log.Printf("Invalid number type: %T", message.Value)
+				log.Printf("Invalid message type: %T", message.Value)
 				errorResp := ChatMessage{
 					Type:      "error",
-					Value:     "Invalid number format",
+					Value:     "Invalid message format",
 					SessionID: sessionID,
 				}
 				if writeErr := conn.WriteJSON(errorResp); writeErr != nil {
@@ -197,24 +202,127 @@ func (h *ChatHandler) handleConnection(conn *websocket.Conn, sessionID string, u
 				continue
 			}
 
-			// Calculate the new sum
-			sum := lastNumber + clientInt
-			lastNumber = sum
+			// Add user message to history
+			userMessage := openrouter.Message{
+				Role:    "user",
+				Content: messageContent,
+			}
+			chatHistory = append(chatHistory, userMessage)
 
-			// Prepare response
-			response := ChatMessage{
-				Type:      "number",
-				Value:     sum,
+			// Add the client message to response for display
+			clientMessage := ChatMessage{
+				Type:      "message",
+				Value:     messageContent,
 				SessionID: sessionID,
 			}
+			// Send the client message back for UI display
+			if err := conn.WriteJSON(clientMessage); err != nil {
+				log.Printf("Error sending client message: %v", err)
+				break
+			}
 
-			// Add response to history
-			chatHistory = append(chatHistory, response)
-			log.Printf("Sending response: %+v", response)
+			// Start streaming
+			isStreaming = true
 
-			// Send response
-			if err := conn.WriteJSON(response); err != nil {
-				log.Printf("Error sending response: %v", err)
+			// Send notification that AI is typing
+			typingMsg := ChatMessage{
+				Type:        "status",
+				Value:       "typing",
+				SessionID:   sessionID,
+				IsStreaming: true,
+			}
+			if err := conn.WriteJSON(typingMsg); err != nil {
+				log.Printf("Error sending typing status: %v", err)
+				isStreaming = false
+				break
+			}
+
+			// Create request to OpenRouter API
+			req := openrouter.ChatCompletionRequest{
+				Messages: chatHistory,
+				Stream:   true,
+			}
+
+			// Build response content as we receive stream chunks
+			responseContent := ""
+
+			// Stream the response
+			streamErr := h.openRouter.ChatCompletionsStream(req, func(resp openrouter.StreamResponse) error {
+				if !isStreaming {
+					// Client has requested to stop streaming
+					return fmt.Errorf("streaming canceled by client")
+				}
+
+				if len(resp.Choices) > 0 {
+					content := resp.Choices[0].Delta.Content
+					if content != "" {
+						responseContent += content
+
+						// Send the stream chunk to client
+						streamMsg := ChatMessage{
+							Type:        "stream",
+							Value:       content,
+							SessionID:   sessionID,
+							IsStreaming: true,
+						}
+						if err := conn.WriteJSON(streamMsg); err != nil {
+							log.Printf("Error sending stream chunk: %v", err)
+							isStreaming = false
+							return err
+						}
+					}
+				}
+
+				return nil
+			})
+
+			// Streaming has ended
+			isStreaming = false
+
+			if streamErr != nil && streamErr.Error() != "streaming canceled by client" {
+				log.Printf("Error streaming response: %v", streamErr)
+				errorMsg := ChatMessage{
+					Type:      "error",
+					Value:     "Failed to get AI response",
+					SessionID: sessionID,
+				}
+				if err := conn.WriteJSON(errorMsg); err != nil {
+					log.Printf("Error sending error message: %v", err)
+					break
+				}
+				continue
+			}
+
+			// Add AI message to history
+			if responseContent != "" {
+				aiMessage := openrouter.Message{
+					Role:    "assistant",
+					Content: responseContent,
+				}
+				chatHistory = append(chatHistory, aiMessage)
+
+				// Send final complete message
+				completeMsg := ChatMessage{
+					Type:        "message",
+					Value:       responseContent,
+					SessionID:   sessionID,
+					IsStreaming: false,
+				}
+				if err := conn.WriteJSON(completeMsg); err != nil {
+					log.Printf("Error sending complete message: %v", err)
+					break
+				}
+			}
+		} else if message.Type == "stop" {
+			// Client wants to stop streaming
+			isStreaming = false
+			stopMsg := ChatMessage{
+				Type:      "status",
+				Value:     "stopped",
+				SessionID: sessionID,
+			}
+			if err := conn.WriteJSON(stopMsg); err != nil {
+				log.Printf("Error sending stop confirmation: %v", err)
 				break
 			}
 		} else {
