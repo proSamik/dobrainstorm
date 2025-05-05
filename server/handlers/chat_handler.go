@@ -29,6 +29,7 @@ type ChatMessage struct {
 	Value       interface{} `json:"value"`
 	SessionID   string      `json:"sessionId"`
 	IsStreaming bool        `json:"isStreaming,omitempty"`
+	Reasoning   string      `json:"reasoning,omitempty"`
 }
 
 // NewChatHandler creates a new instance of ChatHandler, configured with allowed CORS origins.
@@ -154,11 +155,12 @@ func (h *ChatHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 
 // Create a reusable function for creating and managing the context
 func (h *ChatHandler) streamWithContext(conn *websocket.Conn, sessionID string, wsWriteMutex *sync.Mutex,
-	req openrouter.ChatCompletionRequest, _ *[]openrouter.Message) (string, error) {
+	req openrouter.ChatCompletionRequest, chatHistory *[]openrouter.Message) (string, error, string) {
 
 	// Track streaming state and content
 	isStreaming := true
 	responseContent := ""
+	reasoningContent := ""
 	chunkCounter := 0
 
 	// Create a cancellable context
@@ -241,12 +243,41 @@ func (h *ChatHandler) streamWithContext(conn *websocket.Conn, sessionID string, 
 					return nil
 				}
 
+				// Process reasoning delta
+				if reasoning := choice.Delta.Reasoning; reasoning != "" {
+					reasoningContent += reasoning
+					log.Printf("Stream reasoning chunk: %q (total reasoning length: %d)",
+						reasoning, len(reasoningContent))
+
+					// Send reasoning chunk to client
+					reasoningMsg := ChatMessage{
+						Type:        "reasoning",
+						Value:       reasoning,
+						SessionID:   sessionID,
+						IsStreaming: true,
+					}
+
+					// Use thread-safe method to write to websocket
+					jsonData, err := json.Marshal(reasoningMsg)
+					if err != nil {
+						log.Printf("Error marshaling reasoning chunk: %v", err)
+						return err
+					}
+
+					if err := h.writeMessage(conn, wsWriteMutex, websocket.TextMessage, jsonData); err != nil {
+						log.Printf("Error sending reasoning chunk: %v", err)
+						isStreaming = false
+						return err
+					}
+
+					log.Printf("Reasoning chunk sent to client")
+				}
+
 				// Process content delta - immediately send to client
-				content := choice.Delta.Content
-				if content != "" {
+				if content := choice.Delta.Content; content != "" {
 					responseContent += content
-					log.Printf("Stream chunk #%d content: %q (total length so far: %d)",
-						chunkCounter, content, len(responseContent))
+					log.Printf("Stream content chunk: %q (total content length: %d)",
+						content, len(responseContent))
 
 					// Send the stream chunk to client IMMEDIATELY
 					streamMsg := ChatMessage{
@@ -272,8 +303,6 @@ func (h *ChatHandler) streamWithContext(conn *websocket.Conn, sessionID string, 
 					}
 
 					log.Printf("Stream chunk #%d sent to client", chunkCounter)
-				} else {
-					log.Printf("Stream chunk #%d had empty content", chunkCounter)
 				}
 			} else {
 				log.Printf("Stream chunk #%d had no choices", chunkCounter)
@@ -299,10 +328,10 @@ func (h *ChatHandler) streamWithContext(conn *websocket.Conn, sessionID string, 
 		})
 
 	// Log streaming completion
-	log.Printf("Streaming completed for session %s. Total chunks: %d, Content length: %d",
-		sessionID, chunkCounter, len(responseContent))
+	log.Printf("Streaming completed for session %s. Total chunks: %d, Content length: %d, Reasoning length: %d",
+		sessionID, chunkCounter, len(responseContent), len(reasoningContent))
 
-	return responseContent, streamErr
+	return responseContent, streamErr, reasoningContent
 }
 
 // handleConnectionWithMutex processes messages for a single websocket connection with mutex protection
@@ -416,7 +445,7 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 			}
 
 			// Process stream with proper context handling
-			responseContent, streamErr := h.streamWithContext(conn, sessionID, wsWriteMutex, req, &chatHistory)
+			responseContent, streamErr, reasoningContent := h.streamWithContext(conn, sessionID, wsWriteMutex, req, &chatHistory)
 
 			// Streaming has ended
 			isStreaming = false
@@ -490,25 +519,24 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 				continue
 			}
 
-			// Add AI message to history
-			if responseContent != "" {
-				aiMessage := openrouter.Message{
-					Role:    "assistant",
-					Content: responseContent,
-				}
-				chatHistory = append(chatHistory, aiMessage)
+			// Add AI message to history with reasoning if available
+			aiMessage := openrouter.Message{
+				Role:    "assistant",
+				Content: responseContent,
+			}
+			chatHistory = append(chatHistory, aiMessage)
 
-				// Send final complete message
-				completeMsg := ChatMessage{
-					Type:        "message",
-					Value:       responseContent,
-					SessionID:   sessionID,
-					IsStreaming: false,
-				}
-				if err := h.writeJSON(conn, wsWriteMutex, completeMsg); err != nil {
-					log.Printf("Error sending complete message: %v", err)
-					break
-				}
+			// Send final complete message with reasoning if available
+			completeMsg := ChatMessage{
+				Type:        "message",
+				Value:       responseContent,
+				Reasoning:   reasoningContent,
+				SessionID:   sessionID,
+				IsStreaming: false,
+			}
+			if err := h.writeJSON(conn, wsWriteMutex, completeMsg); err != nil {
+				log.Printf("Error sending complete message: %v", err)
+				break
 			}
 		} else if message.Type == "stop" {
 			// Client wants to stop streaming
