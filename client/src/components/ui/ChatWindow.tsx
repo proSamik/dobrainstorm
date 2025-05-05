@@ -23,6 +23,7 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
   const [currentStreamContent, setCurrentStreamContent] = useState('')
   const socketRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const hasConnectedRef = useRef(false) // Track if we've already connected
 
   // Function to scroll to bottom of chat
   const scrollToBottom = () => {
@@ -31,6 +32,13 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
 
   // Connect to WebSocket when component mounts
   useEffect(() => {
+    // Prevent duplicate connections in StrictMode
+    if (hasConnectedRef.current) {
+      return
+    }
+    
+    hasConnectedRef.current = true
+    
     // Get the API URL from environment variable or fallback to default
     const wsBaseUrl = process.env.NEXT_PUBLIC_API_URL 
       ? process.env.NEXT_PUBLIC_API_URL.replace(/^http/, 'ws')
@@ -111,7 +119,10 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
             break
             
           case 'stream':
-            // Partial AI response during streaming
+            // Partial AI response during streaming - server is streaming content
+            if (!isStreaming) {
+              setIsStreaming(true)
+            }
             setCurrentStreamContent(prev => prev + data.value)
             break
             
@@ -141,6 +152,28 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
                   return [
                     ...newMessages,
                     { sender: 'assistant', content: currentStreamContent + ' (stopped)' }
+                  ]
+                })
+                setCurrentStreamContent('')
+              }
+            } else if (data.value === 'stream_end') {
+              // Server signals end of stream - all content delivered
+              setIsStreaming(false)
+              
+              // If we have partial content, add it as a complete message
+              if (currentStreamContent) {
+                setMessages(prev => {
+                  const newMessages = [...prev]
+                  // Find and remove any system "typing" message
+                  const typingIndex = newMessages.findIndex(
+                    m => m.sender === 'system' && m.content === 'AI is typing...'
+                  )
+                  if (typingIndex !== -1) {
+                    newMessages.splice(typingIndex, 1)
+                  }
+                  return [
+                    ...newMessages,
+                    { sender: 'assistant', content: currentStreamContent }
                   ]
                 })
                 setCurrentStreamContent('')
@@ -253,10 +286,11 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
         ))}
         
         {/* Show streaming content */}
-        {currentStreamContent && (
+        {currentStreamContent && isStreaming && (
           <div className="text-left">
             <span className="inline-block px-3 py-1 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
               {currentStreamContent}
+              <span className="inline-block ml-1 animate-pulse">▌</span>
             </span>
           </div>
         )}
