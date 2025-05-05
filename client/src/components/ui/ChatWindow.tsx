@@ -546,7 +546,6 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
         
       case 'assistant':
         const assistantMsg = msg as AssistantMessage;
-        const isActiveMessage = idx === activeMessageRef.current;
         const hasReasoning = !!assistantMsg.reasoning && assistantMsg.reasoning.length > 0;
         
         return (
