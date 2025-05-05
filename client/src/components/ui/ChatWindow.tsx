@@ -3,13 +3,29 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Button } from './button'
 import { Card } from './card'
-import { X, StopCircle } from 'lucide-react'
+import { X, StopCircle, MessageSquare, Bot, Info, BrainCircuit } from 'lucide-react'
 
-interface MessageItem {
+// Define different message types
+interface BaseMessage {
   sender: string;
   content: string;
-  isIncomplete?: boolean;
 }
+
+interface UserMessage extends BaseMessage {
+  sender: 'user';
+}
+
+interface AssistantMessage extends BaseMessage {
+  sender: 'assistant';
+  isIncomplete?: boolean;
+  reasoning?: string;
+}
+
+interface SystemMessage extends BaseMessage {
+  sender: 'system';
+}
+
+type MessageItem = UserMessage | AssistantMessage | SystemMessage;
 
 interface ChatWindowProps {
   windowId: number
@@ -27,6 +43,8 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [isStreaming, setIsStreaming] = useState(false)
   const [currentStreamContent, setCurrentStreamContent] = useState('')
+  const [currentReasoning, setCurrentReasoning] = useState('')
+  const [showReasoning, setShowReasoning] = useState(false)
   const socketRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const hasConnectedRef = useRef(false) // Track if we've already connected
@@ -101,7 +119,12 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
               console.log('Received complete AI response after streaming')
               // This is the final complete AI response after streaming
               setIsStreaming(false)
+              
+              // Clear the streaming content since we now have the complete message
               setCurrentStreamContent('')
+              
+              // Get reasoning if available
+              const reasoning = data.reasoning || '';
               
               // Replace the current streaming content with the full content
               setMessages(prev => {
@@ -129,7 +152,8 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
                   { 
                     sender: 'assistant', 
                     content: cleanContent,
-                    isIncomplete: isIncomplete
+                    isIncomplete: isIncomplete,
+                    reasoning: reasoning
                   }
                 ]
               })
@@ -151,6 +175,12 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
               setIsStreaming(true)
             }
             setCurrentStreamContent(prev => prev + data.value)
+            break
+            
+          case 'reasoning':
+            // Handle reasoning content
+            console.log(`Received reasoning chunk: "${data.value}"`)
+            setCurrentReasoning(prev => prev + data.value)
             break
             
           case 'status':
@@ -206,10 +236,15 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
                   }
                   return [
                     ...newMessages,
-                    { sender: 'assistant', content: currentStreamContent + ' (stopped)' }
+                    { 
+                      sender: 'assistant', 
+                      content: currentStreamContent + ' (stopped)',
+                      reasoning: currentReasoning || undefined
+                    }
                   ]
                 })
                 setCurrentStreamContent('')
+                setCurrentReasoning('')
               }
             } else if (data.value === 'stream_end') {
               // Server signals end of stream - all content delivered
@@ -231,10 +266,15 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
                   }
                   return [
                     ...newMessages,
-                    { sender: 'assistant', content: currentStreamContent }
+                    { 
+                      sender: 'assistant', 
+                      content: currentStreamContent,
+                      reasoning: currentReasoning || undefined
+                    }
                   ]
                 })
                 setCurrentStreamContent('')
+                setCurrentReasoning('')
               }
             }
             break
@@ -313,6 +353,78 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
     }
   }
 
+  // Render a message based on its type
+  const renderMessage = (msg: MessageItem, idx: number) => {
+    switch(msg.sender) {
+      case 'user':
+        return (
+          <div key={idx} className="text-right mb-2">
+            <div className="flex justify-end items-start gap-2">
+              <div className="inline-block px-3 py-2 rounded-lg bg-blue-500 text-white max-w-[80%]">
+                <div className="flex items-start gap-2">
+                  <div>{msg.content}</div>
+                  <MessageSquare className="h-4 w-4 mt-1 flex-shrink-0" />
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+        
+      case 'assistant':
+        return (
+          <div key={idx} className="text-left mb-2">
+            <div className="flex justify-start items-start gap-2">
+              <div className={`inline-block px-3 py-2 rounded-lg max-w-[80%] ${
+                msg.isIncomplete 
+                  ? 'bg-yellow-100 dark:bg-yellow-900 text-gray-800 dark:text-gray-200 border border-yellow-300 dark:border-yellow-700'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+              }`}>
+                <div className="flex items-start gap-2">
+                  <Bot className="h-4 w-4 mt-1 flex-shrink-0" />
+                  <div>
+                    <div>{msg.content}</div>
+                    {msg.isIncomplete && (
+                      <div className="text-xs text-yellow-600 dark:text-yellow-400 mt-1 italic">
+                        (Response incomplete due to timeout)
+                      </div>
+                    )}
+                    {msg.reasoning && (
+                      <button 
+                        onClick={() => setShowReasoning(prev => !prev)} 
+                        className="text-xs text-blue-500 hover:text-blue-700 mt-1 flex items-center gap-1"
+                      >
+                        <BrainCircuit className="h-3 w-3" />
+                        {showReasoning ? 'Hide reasoning' : 'Show reasoning'}
+                      </button>
+                    )}
+                    {msg.reasoning && showReasoning && (
+                      <div className="mt-2 p-2 text-xs bg-gray-100 dark:bg-gray-800 rounded border-l-2 border-blue-500">
+                        <div className="font-medium mb-1 text-blue-600 dark:text-blue-400">AI Reasoning:</div>
+                        <div className="whitespace-pre-wrap">{msg.reasoning}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+        
+      case 'system':
+        return (
+          <div key={idx} className="text-center my-2">
+            <div className="inline-flex items-center px-3 py-1 rounded-lg bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs">
+              <Info className="h-3 w-3 mr-1" />
+              {msg.content}
+            </div>
+          </div>
+        );
+        
+      default:
+        return null;
+    }
+  };
+
   return (
     <Card className="flex flex-col h-96 w-full shadow-md">
       <div className="flex justify-between items-center p-3 border-b">
@@ -323,40 +435,43 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
       </div>
       
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
-        {messages.map((msg, idx) => (
-          <div key={idx} className={`${
-            msg.sender === 'user' 
-              ? 'text-right' 
-              : msg.sender === 'system' 
-                ? 'text-center' 
-                : 'text-left'
-          }`}>
-            <span className={`inline-block px-3 py-1 rounded-lg ${
-              msg.sender === 'user' 
-                ? 'bg-blue-500 text-white'
-                : msg.sender === 'system'
-                  ? 'bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs'
-                  : msg.isIncomplete 
-                    ? 'bg-yellow-100 dark:bg-yellow-900 text-gray-800 dark:text-gray-200 border border-yellow-300 dark:border-yellow-700'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
-            }`}>
-              {msg.content}
-              {msg.isIncomplete && (
-                <div className="text-xs text-yellow-600 dark:text-yellow-400 mt-1 italic">
-                  (Response incomplete due to timeout)
-                </div>
-              )}
-            </span>
-          </div>
-        ))}
+        {/* Render all messages */}
+        {messages.map((msg, idx) => renderMessage(msg, idx))}
         
         {/* Show streaming content */}
         {currentStreamContent && isStreaming && (
-          <div className="text-left">
-            <span className="inline-block px-3 py-1 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
-              {currentStreamContent}
-              <span className="inline-block ml-1 animate-pulse">▌</span>
-            </span>
+          <div className="text-left mb-2">
+            <div className="flex justify-start items-start gap-2">
+              <div className="inline-block px-3 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 max-w-[80%]">
+                <div className="flex items-start gap-2">
+                  <Bot className="h-4 w-4 mt-1 flex-shrink-0" />
+                  <div>
+                    <div>
+                      {currentStreamContent}
+                      <span className="inline-block ml-1 animate-pulse">▌</span>
+                    </div>
+                    {currentReasoning && (
+                      <button 
+                        onClick={() => setShowReasoning(prev => !prev)} 
+                        className="text-xs text-blue-500 hover:text-blue-700 mt-1 flex items-center gap-1"
+                      >
+                        <BrainCircuit className="h-3 w-3" />
+                        {showReasoning ? 'Hide reasoning' : 'Show reasoning'}
+                      </button>
+                    )}
+                    {currentReasoning && showReasoning && (
+                      <div className="mt-2 p-2 text-xs bg-gray-100 dark:bg-gray-800 rounded border-l-2 border-blue-500">
+                        <div className="font-medium mb-1 text-blue-600 dark:text-blue-400">AI Reasoning (live):</div>
+                        <div className="whitespace-pre-wrap">
+                          {currentReasoning}
+                          <span className="inline-block ml-1 animate-pulse">▌</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
         
