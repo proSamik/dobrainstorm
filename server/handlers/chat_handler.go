@@ -26,15 +26,54 @@ type ChatMessage struct {
 	SessionID string      `json:"sessionId"`
 }
 
-// NewChatHandler creates a new instance of ChatHandler
-func NewChatHandler(db *database.DB) *ChatHandler {
+// NewChatHandler creates a new instance of ChatHandler, configured with allowed CORS origins.
+func NewChatHandler(db *database.DB, allowedOrigins []string) *ChatHandler {
+	// Create a map for quick origin lookup
+	originMap := make(map[string]bool)
+	for _, origin := range allowedOrigins {
+		originMap[origin] = true
+		log.Printf("[WebSocket CORS] Allowing origin: %s", origin) // Log allowed origins
+	}
+
 	return &ChatHandler{
 		DB: db,
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
-			// Allow all origins for now
-			CheckOrigin: func(r *http.Request) bool { return true },
+			// CheckOrigin function now validates against the allowed origins list.
+			CheckOrigin: func(r *http.Request) bool {
+				origin := r.Header.Get("Origin")
+				if origin == "" {
+					// Allow requests with no Origin header (e.g., non-browser clients, same-origin requests)
+					// Adjust this policy if stricter control is needed.
+					log.Println("[WebSocket CORS] No Origin header, allowing.")
+					return true
+				}
+
+				// Simple string comparison is often sufficient and secure.
+				if originMap[origin] {
+					log.Printf("[WebSocket CORS] Origin '%s' is allowed.", origin)
+					return true
+				}
+
+				// Optional: Handle cases like localhost with different ports if necessary,
+				// but be cautious as it can weaken security.
+				// Example (use carefully):
+				// u, err := url.Parse(origin)
+				// if err == nil && u.Hostname() == "localhost" {
+				//   // Check if any allowed origin is a localhost variant
+				//   for allowed := range originMap {
+				//     allowedU, allowedErr := url.Parse(allowed)
+				//     if allowedErr == nil && allowedU.Hostname() == "localhost" {
+				//       log.Printf("[WebSocket CORS] Allowing localhost variant origin '%s'.", origin)
+				// 		 return true
+				//     }
+				//   }
+				// }
+
+				log.Printf("[WebSocket CORS] Origin '%s' is NOT allowed.", origin)
+				return false
+			},
 		},
 	}
 }
