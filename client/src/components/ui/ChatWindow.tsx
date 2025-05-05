@@ -275,15 +275,21 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
               // Finalize the active message
               setMessages(prev => {
                 const newMessages = [...prev];
-                if (activeMessageRef.current !== null) {
-                  const current = newMessages[activeMessageRef.current] as AssistantMessage;
-                  newMessages[activeMessageRef.current] = {
-                    ...current,
-                    isThinking: false,
-                    isStreaming: false
-                  };
-                }
-                return newMessages;
+                
+                // Update all messages that might be streaming
+                return newMessages.map(msg => {
+                  if (msg.sender === 'assistant') {
+                    const assistantMsg = msg as AssistantMessage;
+                    if (assistantMsg.isStreaming) {
+                      return {
+                        ...assistantMsg,
+                        isThinking: false,
+                        isStreaming: false
+                      };
+                    }
+                  }
+                  return msg;
+                });
               });
               
               // Reset active message
