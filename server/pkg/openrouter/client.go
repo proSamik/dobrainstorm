@@ -4,6 +4,7 @@ package openrouter
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -176,9 +177,14 @@ func (c *Client) ChatCompletions(req ChatCompletionRequest) (*ChatCompletionResp
 	return &result, nil
 }
 
-// ChatCompletionsStream sends a streaming chat completion request to the OpenRouter API
-// and calls the callback function for each chunk received
-func (c *Client) ChatCompletionsStream(req ChatCompletionRequest, callback func(StreamResponse) error) error {
+// ChatCompletionsStreamWithContext sends a streaming chat completion request to the OpenRouter API
+// and calls the callback function for each chunk received, including comment lines.
+// This version accepts a context for cancellation support.
+func (c *Client) ChatCompletionsStreamWithContext(
+	ctx context.Context,
+	req ChatCompletionRequest,
+	callback func(StreamResponse, bool, string) error,
+) error {
 	// Force streaming to be enabled
 	req.Stream = true
 
@@ -209,7 +215,7 @@ func (c *Client) ChatCompletionsStream(req ChatCompletionRequest, callback func(
 		return fmt.Errorf("error marshaling request: %w", err)
 	}
 
-	httpReq, err := http.NewRequest("POST", BaseURL+"/chat/completions", bytes.NewBuffer(jsonData))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", BaseURL+"/chat/completions", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("error creating request: %w", err)
 	}
@@ -243,23 +249,64 @@ func (c *Client) ChatCompletionsStream(req ChatCompletionRequest, callback func(
 
 	chunkCount := 0
 	reader := bufio.NewReader(resp.Body)
+
+	// Monitor for context cancellation in a separate goroutine
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-ctx.Done():
+			fmt.Println("Request cancelled, closing connection")
+			resp.Body.Close() // This will cause the read loop to exit with an error
+		case <-done:
+			// Normal exit, do nothing
+		}
+	}()
+
 	for {
+		// Check for context cancellation
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			// Continue processing
+		}
+
 		line, err := reader.ReadBytes('\n')
 		if err != nil {
 			if err == io.EOF {
 				fmt.Println("EOF reached in OpenRouter stream")
 				break
 			}
+
+			// Check if this was due to context cancellation
+			if ctx.Err() != nil {
+				fmt.Printf("Stream read cancelled: %v\n", ctx.Err())
+				return ctx.Err()
+			}
+
 			return fmt.Errorf("error reading response: %w", err)
 		}
 
 		// Log the raw line for debugging
 		fmt.Printf("RAW STREAM LINE (%d bytes): %s\n", len(line), string(line))
 
-		// Skip empty lines and comments
+		// Immediately process each line as it arrives
 		line = bytes.TrimSpace(line)
-		if len(line) == 0 || bytes.HasPrefix(line, []byte(":")) {
-			fmt.Println("Skipping empty line or comment in stream")
+		if len(line) == 0 {
+			continue
+		}
+
+		// Check if this is a comment line (e.g., ": OPENROUTER PROCESSING")
+		if bytes.HasPrefix(line, []byte(":")) {
+			commentText := string(bytes.TrimSpace(line[1:])) // Remove the ":" prefix
+			fmt.Printf("OpenRouter comment: %s\n", commentText)
+
+			// Forward comment to the callback with isComment=true
+			if err := callback(StreamResponse{}, true, commentText); err != nil {
+				fmt.Printf("Callback error (comment): %v\n", err)
+				return fmt.Errorf("callback error: %w", err)
+			}
 			continue
 		}
 
@@ -275,6 +322,10 @@ func (c *Client) ChatCompletionsStream(req ChatCompletionRequest, callback func(
 		// Check for the [DONE] message
 		if string(data) == "[DONE]" {
 			fmt.Println("Received [DONE] message from OpenRouter")
+			if err := callback(StreamResponse{}, false, "[DONE]"); err != nil {
+				fmt.Printf("Callback error ([DONE]): %v\n", err)
+				return fmt.Errorf("callback error: %w", err)
+			}
 			break
 		}
 
@@ -298,8 +349,8 @@ func (c *Client) ChatCompletionsStream(req ChatCompletionRequest, callback func(
 		fmt.Printf("STREAM CHUNK #%d: ID=%s, Content=%q, FinishReason=%q\n",
 			chunkCount, chunk.ID, deltaContent, finishReason)
 
-		// Call the callback function with the chunk
-		if err := callback(chunk); err != nil {
+		// Call the callback function with the chunk - regular data chunk
+		if err := callback(chunk, false, ""); err != nil {
 			fmt.Printf("Callback error: %v\n", err)
 			return fmt.Errorf("callback error: %w", err)
 		}
@@ -307,4 +358,11 @@ func (c *Client) ChatCompletionsStream(req ChatCompletionRequest, callback func(
 
 	fmt.Printf("Finished processing OpenRouter stream with %d chunks total\n", chunkCount)
 	return nil
+}
+
+// ChatCompletionsStream sends a streaming chat completion request to the OpenRouter API
+// and calls the callback function for each chunk received, including comment lines.
+// This is a backward compatibility wrapper for the context-aware version.
+func (c *Client) ChatCompletionsStream(req ChatCompletionRequest, callback func(StreamResponse, bool, string) error) error {
+	return c.ChatCompletionsStreamWithContext(context.Background(), req, callback)
 }
