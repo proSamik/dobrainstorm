@@ -60,7 +60,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
   // Function to scroll to bottom of chat
   const scrollToBottom = () => {
     if (!isUserScrollingRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
   }
 
@@ -678,13 +678,13 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
             Stop
           </Button>
         ) : (
-          <Button 
-            onClick={handleSendMessage} 
-            disabled={!connected}
-            className="rounded-l-none"
-          >
-            Send
-          </Button>
+        <Button 
+          onClick={handleSendMessage} 
+          disabled={!connected}
+          className="rounded-l-none"
+        >
+          Send
+        </Button>
         )}
       </div>
     </Card>
