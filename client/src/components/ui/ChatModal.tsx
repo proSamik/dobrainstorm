@@ -1,9 +1,11 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect, lazy, Suspense } from 'react'
 import { Button } from './button'
 import { Plus } from 'lucide-react'
-import ChatWindow from './ChatWindow'
+import { authService } from '@/services/auth'
+
+const LazyChatWindow = lazy(() => import('./ChatWindow'))
 
 /**
  * Main modal component that displays chat windows
@@ -19,8 +21,18 @@ export default function ChatModal({
   // Start with just one chat window
   const [chatWindows, setChatWindows] = useState<number[]>([1])
   const [nextWindowId, setNextWindowId] = useState(2)
-  
+  const [loading, setLoading] = useState(true)
+
   console.log("Rendering ChatModal", { isOpen, chatWindows });
+
+  useEffect(() => {
+    // Verify user and update state
+    authService.verifyUser().catch(error => {
+      console.error('User verification failed:', error)
+    }).finally(() => {
+      setLoading(false)
+    })
+  }, [])
 
   if (!isOpen) return null
 
@@ -61,11 +73,17 @@ export default function ChatModal({
         ) : (
           <div className="flex flex-col space-y-4">
             {chatWindows.map(id => (
-              <ChatWindow 
-                key={id} 
-                windowId={id} 
-                onClose={() => handleCloseWindow(id)} 
-              />
+              <Suspense fallback={<div>Loading...</div>}>
+                {loading ? (
+                  <div>Loading...</div>
+                ) : (
+                  <LazyChatWindow 
+                    key={id} 
+                    windowId={id} 
+                    onClose={() => handleCloseWindow(id)} 
+                  />
+                )}
+              </Suspense>
             ))}
           </div>
         )}
