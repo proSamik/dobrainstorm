@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import FeedbackButton from '@/components/ui/FeedbackButton'
 import ApiProviderList from '@/components/settings/ApiProviderList'
 import ApiKeyModal from '@/components/settings/ApiKeyModal'
+import ChatModal from '@/components/ui/ChatModal'
 import { ApiProvider } from '@/lib/models/providers' 
 import { useUserData } from '@/contexts/UserDataContext'
 import { useApiKeys } from '@/hooks/useApiKeys'
@@ -29,6 +30,9 @@ export default function BoardsSettings() {
   const [selectedProvider, setSelectedProvider] = useState<ApiProvider | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   
+  // Chat Modal state
+  const [isChatModalOpen, setIsChatModalOpen] = useState(false)
+  
   // Check if user is on basic tier
   const isBasicTier = userData?.subscription?.productId === process.env.NEXT_PUBLIC_CREEM_PRODUCT_ID_1
 
@@ -48,6 +52,16 @@ export default function BoardsSettings() {
   const handleCloseModal = () => {
     setIsModalOpen(false)
     setSelectedProvider(null)
+  }
+  
+  // Handle opening the chat modal
+  const handleOpenChatModal = () => {
+    setIsChatModalOpen(true)
+  }
+  
+  // Handle closing the chat modal
+  const handleCloseChatModal = () => {
+    setIsChatModalOpen(false)
   }
   
   // Handle saving API key changes
@@ -78,9 +92,14 @@ export default function BoardsSettings() {
       
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">API Settings</h1>
-        <Button variant="outline" onClick={() => router.push('/boards')}>
-          Back to Boards
-        </Button>
+        <div className="space-x-2">
+          <Button variant="outline" onClick={() => router.push('/boards')}>
+            Back to Boards
+          </Button>
+          <Button onClick={handleOpenChatModal}>
+            Open Chat
+          </Button>
+        </div>
       </div>
       
       {error && (
@@ -114,6 +133,12 @@ export default function BoardsSettings() {
           onSave={handleSaveApiKey}
         />
       )}
+      
+      {/* Chat Modal */}
+      <ChatModal 
+        isOpen={isChatModalOpen} 
+        onClose={handleCloseChatModal} 
+      />
     </div>
   )
 } 
