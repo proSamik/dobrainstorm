@@ -100,6 +100,7 @@ type StreamResponse struct {
 
 // StreamChoiceData represents a choice in a stream response
 type StreamChoiceData struct {
+	Index        int         `json:"index"`
 	Delta        StreamDelta `json:"delta"`
 	FinishReason string      `json:"finish_reason,omitempty"`
 }
