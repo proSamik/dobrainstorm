@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, lazy, Suspense } from 'react'
+import React, { useState, useEffect, lazy, Suspense, useRef } from 'react'
 import { Button } from './button'
 import { Plus } from 'lucide-react'
 import { authService } from '@/services/auth'
@@ -22,6 +22,9 @@ export default function ChatModal({
   const [chatWindows, setChatWindows] = useState<number[]>([1])
   const [nextWindowId, setNextWindowId] = useState(2)
   const [loading, setLoading] = useState(true)
+  
+  // Ref to store references to chat windows' closeFn
+  const chatWindowRefs = useRef<Map<number, () => void>>(new Map())
 
   console.log("Rendering ChatModal", { isOpen, chatWindows });
 
@@ -33,6 +36,25 @@ export default function ChatModal({
       setLoading(false)
     })
   }, [])
+  
+  // Close all websockets and then call the parent onClose function
+  const handleCloseAll = () => {
+    console.log("Closing all chat windows and websockets")
+    // Close all registered websocket connections
+    chatWindowRefs.current.forEach((closeFn, windowId) => {
+      console.log(`Closing chat window ${windowId}`)
+      closeFn()
+    })
+    
+    // Clear the refs map
+    chatWindowRefs.current.clear()
+    
+    // Clear the windows state
+    setChatWindows([])
+    
+    // Call the parent onClose function
+    onClose()
+  }
 
   if (!isOpen) return null
 
@@ -44,7 +66,15 @@ export default function ChatModal({
 
   // Close a specific chat window
   const handleCloseWindow = (windowId: number) => {
+    // Clean up the ref for this window
+    chatWindowRefs.current.delete(windowId)
     setChatWindows(prev => prev.filter(id => id !== windowId))
+  }
+  
+  // Register a chat window's close function
+  const registerChatWindow = (windowId: number, closeFn: () => void) => {
+    console.log(`Registering close function for window ${windowId}`)
+    chatWindowRefs.current.set(windowId, closeFn)
   }
 
   return (
@@ -61,26 +91,27 @@ export default function ChatModal({
               <Plus className="h-4 w-4" />
               New Chat
             </Button>
-            <Button variant="outline" onClick={onClose}>Close All</Button>
+            <Button variant="outline" onClick={handleCloseAll}>Close All</Button>
           </div>
         </div>
         
         {chatWindows.length === 0 ? (
           <div className="text-center p-8">
             <p>All chat windows closed.</p>
-            <Button className="mt-4" onClick={onClose}>Close Modal</Button>
+            <Button className="mt-4" onClick={handleCloseAll}>Close Modal</Button>
           </div>
         ) : (
           <div className="flex flex-col space-y-4">
             {chatWindows.map(id => (
-              <Suspense fallback={<div>Loading...</div>}>
+              <Suspense key={id} fallback={<div>Loading...</div>}>
                 {loading ? (
                   <div>Loading...</div>
                 ) : (
                   <LazyChatWindow 
                     key={id} 
                     windowId={id} 
-                    onClose={() => handleCloseWindow(id)} 
+                    onClose={() => handleCloseWindow(id)}
+                    registerCloseFn={(closeFn) => registerChatWindow(id, closeFn)}
                   />
                 )}
               </Suspense>
