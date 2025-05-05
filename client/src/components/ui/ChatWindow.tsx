@@ -174,14 +174,24 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
             break
             
           case 'message':
-            console.log(`Received message type with isStreaming=${data.isStreaming}`)
+            console.log(`Received message type with isStreaming=${data.isStreaming}`);
             
             if (typeof data.value !== 'string') {
               console.error('Invalid message value type:', typeof data.value);
               break;
             }
             
-            // The message is from the user (message sent to server that gets echoed back)
+            // Check if this is a user message echo from the server
+            const isUserMessageEcho = !data.isStreaming && 
+              messages.some(m => m.sender === 'user' && m.content === data.value);
+            
+            // Skip processing if this is just an echo of our own message
+            if (isUserMessageEcho) {
+              console.log('Ignoring echo of user message:', data.value);
+              break;
+            }
+            
+            // The message is from the user (new message, not an echo)
             if (data.isStreaming === undefined && !lastMessageIsUserRef.current) {
               console.log('User message received');
               setMessages(prev => [
@@ -263,9 +273,9 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
               streamMessageIdRef.current = null;
               lastMessageIsUserRef.current = false;
             } else {
-              // Treat as user message if isStreaming is undefined and not lastMessageIsUser (already handled above)
-              if (data.isStreaming === undefined) {
-                console.log('User message received');
+              // Handle user messages that don't fit the patterns above
+              if (data.isStreaming === undefined && !isUserMessageEcho) {
+                console.log('Processing new user message');
                 setMessages(prev => [
                   ...prev, 
                   { sender: 'user', content: data.value }
@@ -525,18 +535,22 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
     }
 
     try {
-      // Send the message to the server
-      socketRef.current.send(JSON.stringify({
-        type: 'message',
-        value: inputValue,
-        sessionId: sessionId
-      }));
-
+      // Store the message content for deduplication
+      const messageContent = inputValue.trim();
+      
       // Add the message to the UI immediately (don't wait for server echo)
       setMessages(prev => [
         ...prev,
-        { sender: 'user', content: inputValue }
+        { sender: 'user', content: messageContent }
       ]);
+      
+      // Send the message to the server
+      // Note: the server should ideally use 'user' type for user messages and 'assistant' for AI responses
+      socketRef.current.send(JSON.stringify({
+        type: 'message', // This should ideally be 'user' for clarity, but keeping for compatibility
+        value: messageContent,
+        sessionId: sessionId
+      }));
 
       // Clear input field
       setInputValue('');
