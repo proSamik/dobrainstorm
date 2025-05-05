@@ -5,6 +5,12 @@ import { Button } from './button'
 import { Card } from './card'
 import { X, StopCircle } from 'lucide-react'
 
+interface MessageItem {
+  sender: string;
+  content: string;
+  isIncomplete?: boolean;
+}
+
 interface ChatWindowProps {
   windowId: number
   onClose: () => void
@@ -15,7 +21,7 @@ interface ChatWindowProps {
  * Manages a single websocket connection and chat session
  */
 export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
-  const [messages, setMessages] = useState<{ sender: string; content: string }[]>([])
+  const [messages, setMessages] = useState<MessageItem[]>([])
   const [inputValue, setInputValue] = useState('')
   const [connected, setConnected] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
@@ -102,14 +108,29 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
                 const newMessages = [...prev]
                 // Find and remove any system "typing" message
                 const typingIndex = newMessages.findIndex(
-                  m => m.sender === 'system' && m.content === 'AI is typing...'
+                  m => m.sender === 'system' && 
+                  (m.content === 'AI is typing...' || m.content.includes('Processing'))
                 )
                 if (typingIndex !== -1) {
                   newMessages.splice(typingIndex, 1)
                 }
+                
+                // Check if the message indicates a timeout or incomplete response
+                const content = data.value.toString()
+                const isIncomplete = content.includes('(response incomplete due to timeout)')
+                
+                // Remove the timeout suffix from content if present
+                const cleanContent = isIncomplete 
+                  ? content.replace(' (response incomplete due to timeout)', '')
+                  : content
+                
                 return [
                   ...newMessages,
-                  { sender: 'assistant', content: data.value }
+                  { 
+                    sender: 'assistant', 
+                    content: cleanContent,
+                    isIncomplete: isIncomplete
+                  }
                 ]
               })
             } else {
@@ -315,9 +336,16 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
                 ? 'bg-blue-500 text-white'
                 : msg.sender === 'system'
                   ? 'bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                  : msg.isIncomplete 
+                    ? 'bg-yellow-100 dark:bg-yellow-900 text-gray-800 dark:text-gray-200 border border-yellow-300 dark:border-yellow-700'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
             }`}>
               {msg.content}
+              {msg.isIncomplete && (
+                <div className="text-xs text-yellow-600 dark:text-yellow-400 mt-1 italic">
+                  (Response incomplete due to timeout)
+                </div>
+              )}
             </span>
           </div>
         ))}
