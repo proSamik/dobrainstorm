@@ -9,6 +9,7 @@ import { X, StopCircle, MessageSquare, Bot, Info, BrainCircuit } from 'lucide-re
 interface BaseMessage {
   sender: string;
   content: string;
+  id?: string; // Add unique identifier for messages
 }
 
 interface UserMessage extends BaseMessage {
@@ -52,6 +53,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
   const lastMessageIsUserRef = useRef(false) // Track if the last sent message was from user
   const streamMessageIdRef = useRef<number | null>(null) // Track the ID of the current stream message
   const isShowingReasoningUI = useRef(false) // Track if reasoning UI is currently shown
+  const sentMessagesRef = useRef<Set<string>>(new Set()) // Track sent message contents
 
   // Function to scroll to bottom of chat
   const scrollToBottom = () => {
@@ -182,27 +184,23 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
               break;
             }
             
-            // Check if this is a user message echo from the server
-            const isUserMessageEcho = messages.some(m => 
-              m.sender === 'user' && m.content === data.value
-            );
-            
-            // Skip processing if this is just an echo of our own message
-            if (isUserMessageEcho) {
-              console.log('Ignoring echo of user message:', data.value);
-              break;
+            // With server echo removed, we should only reach this code if 
+            // we somehow receive a user message from the server that didn't originate
+            // from this client - very rare case
+            if (!sentMessagesRef.current.has(data.value)) {
+              console.log('Adding user message from server:', data.value);
+              setMessages(prev => [
+                ...prev, 
+                { sender: 'user', content: data.value, id: data.messageId || `server-${Date.now()}` }
+              ]);
+              
+              // Update state to expect an AI response
+              lastMessageIsUserRef.current = true;
+              // Reset stream message ID as we're starting a new conversation turn
+              streamMessageIdRef.current = null;
+            } else {
+              console.log('Ignoring duplicate user message:', data.value);
             }
-            
-            // Otherwise add a new user message (this should rarely happen)
-            setMessages(prev => [
-              ...prev, 
-              { sender: 'user', content: data.value }
-            ]);
-            
-            // Update state to expect an AI response
-            lastMessageIsUserRef.current = true;
-            // Reset stream message ID as we're starting a new conversation turn
-            streamMessageIdRef.current = null;
             break;
             
           case 'assistant':
@@ -289,14 +287,21 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
               break;
             }
             
-            // Check if this is a user message echo from the server
-            const isLegacyUserMessageEcho = !data.isStreaming && 
-              messages.some(m => m.sender === 'user' && m.content === data.value);
-            
-            // Skip processing if this is just an echo of our own message
-            if (isLegacyUserMessageEcho) {
-              console.log('Ignoring echo of user message:', data.value);
-              break;
+            // Legacy message type with no streaming flag is a user message from server
+            // Now that server doesn't echo, this should rarely happen
+            if (data.isStreaming === undefined) {
+              // Only add if this isn't a message we've already sent ourselves
+              if (!sentMessagesRef.current.has(data.value)) {
+                console.log('Processing user message from server:', data.value);
+                setMessages(prev => [
+                  ...prev, 
+                  { sender: 'user', content: data.value, id: data.messageId || `server-${Date.now()}` }
+                ]);
+                lastMessageIsUserRef.current = true;
+                streamMessageIdRef.current = null;
+              } else {
+                console.log('Ignoring duplicate legacy user message:', data.value);
+              }
             }
             
             // Handle as assistant message if streaming is false and we're expecting a response
@@ -628,19 +633,30 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
     try {
       // Store the message content for deduplication
       const messageContent = inputValue.trim();
+      const messageId = `user-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      
+      // Check if this message content was already sent
+      if (sentMessagesRef.current.has(messageContent)) {
+        console.log(`Preventing duplicate send of message: ${messageContent}`);
+        setInputValue('');
+        return;
+      }
+      
+      // Add to tracking set
+      sentMessagesRef.current.add(messageContent);
       
       // Add the message to the UI immediately (don't wait for server echo)
       setMessages(prev => [
         ...prev,
-        { sender: 'user', content: messageContent }
+        { sender: 'user', content: messageContent, id: messageId }
       ]);
       
       // Send the message to the server
-      // Note: we're still using "message" as the type for backward compatibility
       socketRef.current.send(JSON.stringify({
         type: "message", 
         value: messageContent,
-        sessionId: sessionId
+        sessionId: sessionId,
+        messageId: messageId // Send ID to server to help with deduplication
       }));
 
       // Clear input field
