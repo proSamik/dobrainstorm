@@ -30,13 +30,14 @@ type MessageItem = UserMessage | AssistantMessage | SystemMessage;
 interface ChatWindowProps {
   windowId: number
   onClose: () => void
+  registerCloseFn?: (closeFn: () => void) => void
 }
 
 /**
  * Individual chat window component
  * Manages a single websocket connection and chat session
  */
-export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
+export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatWindowProps) {
   const [messages, setMessages] = useState<MessageItem[]>([])
   const [inputValue, setInputValue] = useState('')
   const [connected, setConnected] = useState(false)
@@ -54,6 +55,21 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
+  // Handle closing the chat window
+  const handleClose = () => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.close();
+    }
+    onClose();
+  };
+
+  // Register the close function with the parent component
+  useEffect(() => {
+    if (registerCloseFn) {
+      registerCloseFn(handleClose);
+    }
+  }, [registerCloseFn]);
+
   // Connect to WebSocket when component mounts
   useEffect(() => {
     // Prevent duplicate connections in StrictMode
@@ -68,7 +84,6 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
       ? process.env.NEXT_PUBLIC_API_URL.replace(/^http/, 'ws')
       : 'ws://localhost:8080'
     
-
     // Create new WebSocket connection
     const socket = new WebSocket(`${wsBaseUrl}/ws/chat`)
     socketRef.current = socket
@@ -437,14 +452,6 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
       default:
         return null;
     }
-  };
-
-  // Handle closing the chat window
-  const handleClose = () => {
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.close();
-    }
-    onClose();
   };
 
   return (
