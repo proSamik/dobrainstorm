@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Button } from './button'
 import { Card } from './card'
 import { X, StopCircle, MessageSquare, Bot, Info, BrainCircuit } from 'lucide-react'
@@ -71,19 +71,19 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
   }
 
   // Handle closing the chat window
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       socketRef.current.close();
     }
     onClose();
-  };
+  }, [onClose]);
 
   // Register the close function with the parent component
   useEffect(() => {
     if (registerCloseFn) {
       registerCloseFn(handleClose);
     }
-  }, [registerCloseFn]);
+  }, [registerCloseFn, handleClose]);
 
   // Update thinking timer for active message
   useEffect(() => {
@@ -456,6 +456,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
         socket.close();
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [windowId]);
 
   // Scroll to bottom when messages change
