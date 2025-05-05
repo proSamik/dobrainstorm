@@ -55,10 +55,19 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
   const sentMessagesRef = useRef<Set<string>>(new Set()) // Track sent message contents
   const activeMessageRef = useRef<number | null>(null) // Track active message index
   const reasoningStartTimeRef = useRef<number | null>(null) // Track reasoning start time
+  const isUserScrollingRef = useRef(false) // Track if the user is scrolling
 
   // Function to scroll to bottom of chat
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (!isUserScrollingRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }
+
+  // Handle user scroll
+  const handleUserScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    isUserScrollingRef.current = scrollTop + clientHeight < scrollHeight;
   }
 
   // Handle closing the chat window
@@ -643,7 +652,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
         </Button>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      <div className="flex-1 overflow-y-auto p-3 space-y-2" onScroll={handleUserScroll}>
         {/* Render all messages */}
         {messages.map((msg, idx) => renderMessage(msg, idx))}
         
