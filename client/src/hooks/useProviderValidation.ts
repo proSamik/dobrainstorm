@@ -50,7 +50,7 @@ export function useProviderValidation() {
       }
 
       // Extract model names
-      const models = data.data.map((model: any) => model.id)
+      const models = data.data.map((model: { id: string }) => model.id)
       
       return {
         isValid: true,
@@ -91,7 +91,7 @@ export function useProviderValidation() {
       }
 
       // Extract model names
-      const models = data.models?.map((model: any) => model.name.split('/').pop()) || []
+      const models = data.models?.map((model: { name: string }) => model.name.split('/').pop()) || []
       
       return {
         isValid: true,
@@ -163,7 +163,7 @@ export function useProviderValidation() {
       }
 
       // Extract model names
-      const models = modelsData.data?.map((model: any) => model.id) || []
+      const models = modelsData.data?.map((model: { id: string }) => model.id) || []
       
       return {
         isValid: true,
@@ -231,12 +231,12 @@ export function useProviderValidation() {
 
       // Filter models by modality (text->text) and extract model names
       const models = modelsData.data
-        ?.filter((model: any) => 
+        ?.filter((model: { architecture: { modality: string, input_modalities: string[], output_modalities: string[] } }) => 
           model.architecture?.modality === 'text->text' &&
           model.architecture?.input_modalities?.includes('text') && 
           model.architecture?.output_modalities?.includes('text')
         )
-        .map((model: any) => model.id) || []
+        .map((model: { id: string }) => model.id) || []
       
       return {
         isValid: true,
