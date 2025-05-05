@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Button } from './button'
 import { Card } from './card'
-import { X } from 'lucide-react'
+import { X, StopCircle } from 'lucide-react'
 
 interface ChatWindowProps {
   windowId: number
@@ -19,6 +19,8 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
   const [inputValue, setInputValue] = useState('')
   const [connected, setConnected] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [currentStreamContent, setCurrentStreamContent] = useState('')
   const socketRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -42,10 +44,6 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
     socket.addEventListener('open', () => {
       console.log(`Chat window ${windowId} connected`)
       setConnected(true)
-      // Add initial system message
-      setMessages([
-        { sender: 'system', content: 'Connected to chat. Send a number to start.' }
-      ])
     })
 
     // Connection closed
@@ -71,13 +69,96 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
           setSessionId(data.sessionId)
         }
 
-        if (data.type === 'number') {
-          // For number messages, show the value received
-          const newMessage = { 
-            sender: 'system', 
-            content: `Server says: ${data.value}`
-          }
-          setMessages(prev => [...prev, newMessage])
+        // Handle different message types
+        switch (data.type) {
+          case 'connected':
+            // System message for connection status
+            setMessages(prev => [
+              ...prev, 
+              { sender: 'system', content: data.value }
+            ])
+            break
+            
+          case 'message':
+            // Regular message from user or complete AI response
+            if (data.isStreaming === false) {
+              // This is the final complete AI response after streaming
+              setIsStreaming(false)
+              setCurrentStreamContent('')
+              
+              // Replace the current streaming content with the full content
+              setMessages(prev => {
+                const newMessages = [...prev]
+                // Find and remove any system "typing" message
+                const typingIndex = newMessages.findIndex(
+                  m => m.sender === 'system' && m.content === 'AI is typing...'
+                )
+                if (typingIndex !== -1) {
+                  newMessages.splice(typingIndex, 1)
+                }
+                return [
+                  ...newMessages,
+                  { sender: 'assistant', content: data.value }
+                ]
+              })
+            } else {
+              // Regular message (likely from user)
+              setMessages(prev => [
+                ...prev, 
+                { sender: 'user', content: data.value }
+              ])
+            }
+            break
+            
+          case 'stream':
+            // Partial AI response during streaming
+            setCurrentStreamContent(prev => prev + data.value)
+            break
+            
+          case 'status':
+            if (data.value === 'typing') {
+              // AI is starting to respond
+              setIsStreaming(true)
+              setMessages(prev => [
+                ...prev, 
+                { sender: 'system', content: 'AI is typing...' }
+              ])
+            } else if (data.value === 'stopped') {
+              // Streaming was stopped by user
+              setIsStreaming(false)
+              
+              // If we have partial content, add it as a complete message
+              if (currentStreamContent) {
+                setMessages(prev => {
+                  const newMessages = [...prev]
+                  // Find and remove any system "typing" message
+                  const typingIndex = newMessages.findIndex(
+                    m => m.sender === 'system' && m.content === 'AI is typing...'
+                  )
+                  if (typingIndex !== -1) {
+                    newMessages.splice(typingIndex, 1)
+                  }
+                  return [
+                    ...newMessages,
+                    { sender: 'assistant', content: currentStreamContent + ' (stopped)' }
+                  ]
+                })
+                setCurrentStreamContent('')
+              }
+            }
+            break
+            
+          case 'error':
+            // Error messages
+            setMessages(prev => [
+              ...prev, 
+              { sender: 'system', content: `Error: ${data.value}` }
+            ])
+            setIsStreaming(false)
+            break
+            
+          default:
+            console.log(`Unknown message type: ${data.type}`)
         }
       } catch (error) {
         console.error('Error parsing message:', error)
@@ -100,37 +181,24 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
   // Scroll to bottom when messages change
   useEffect(() => {
     scrollToBottom()
-  }, [messages])
+  }, [messages, currentStreamContent])
 
   // Handle sending a message
   const handleSendMessage = () => {
     if (!inputValue.trim() || !socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return
+    
+    if (isStreaming) {
+      // Don't send new messages while streaming
+      return
+    }
 
     try {
-      // Try to parse input as a number
-      const num = parseInt(inputValue, 10)
-      
-      // Check if input is a valid number
-      if (isNaN(num)) {
-        setMessages(prev => [...prev, { 
-          sender: 'system', 
-          content: 'Please enter a valid number.' 
-        }])
-        return
-      }
-
-      // Send the number to the server
+      // Send the message to the server
       socketRef.current.send(JSON.stringify({
-        type: 'number',
-        value: num,
+        type: 'message',
+        value: inputValue,
         sessionId: sessionId
       }))
-
-      // Add sent message to chat
-      setMessages(prev => [...prev, { 
-        sender: 'user', 
-        content: `You sent: ${num}` 
-      }])
 
       // Clear input field
       setInputValue('')
@@ -138,9 +206,24 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
       console.error('Error sending message:', error)
     }
   }
+  
+  // Handle stopping the AI response stream
+  const handleStopStream = () => {
+    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return
+    
+    try {
+      // Send stop command to the server
+      socketRef.current.send(JSON.stringify({
+        type: 'stop',
+        sessionId: sessionId
+      }))
+    } catch (error) {
+      console.error('Error sending stop command:', error)
+    }
+  }
 
   return (
-    <Card className="flex flex-col h-64 w-full shadow-md">
+    <Card className="flex flex-col h-96 w-full shadow-md">
       <div className="flex justify-between items-center p-3 border-b">
         <h3 className="font-medium">Chat Window {windowId}</h3>
         <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
@@ -150,16 +233,34 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
       
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {messages.map((msg, idx) => (
-          <div key={idx} className={`${msg.sender === 'user' ? 'text-right' : 'text-left'}`}>
+          <div key={idx} className={`${
+            msg.sender === 'user' 
+              ? 'text-right' 
+              : msg.sender === 'system' 
+                ? 'text-center' 
+                : 'text-left'
+          }`}>
             <span className={`inline-block px-3 py-1 rounded-lg ${
               msg.sender === 'user' 
                 ? 'bg-blue-500 text-white'
-                : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                : msg.sender === 'system'
+                  ? 'bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
             }`}>
               {msg.content}
             </span>
           </div>
         ))}
+        
+        {/* Show streaming content */}
+        {currentStreamContent && (
+          <div className="text-left">
+            <span className="inline-block px-3 py-1 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+              {currentStreamContent}
+            </span>
+          </div>
+        )}
+        
         <div ref={messagesEndRef} />
       </div>
       
@@ -169,17 +270,27 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-          placeholder="Enter a number..."
+          placeholder="Type a message..."
           className="flex-1 px-3 py-2 border rounded-l-md focus:outline-none"
-          disabled={!connected}
+          disabled={!connected || isStreaming}
         />
-        <Button 
-          onClick={handleSendMessage} 
-          disabled={!connected}
-          className="rounded-l-none"
-        >
-          Send
-        </Button>
+        {isStreaming ? (
+          <Button 
+            onClick={handleStopStream}
+            className="rounded-l-none bg-red-500 hover:bg-red-600"
+          >
+            <StopCircle className="h-4 w-4 mr-1" />
+            Stop
+          </Button>
+        ) : (
+          <Button 
+            onClick={handleSendMessage} 
+            disabled={!connected}
+            className="rounded-l-none"
+          >
+            Send
+          </Button>
+        )}
       </div>
     </Card>
   )
