@@ -35,10 +35,6 @@ func NewChatHandler(db *database.DB) *ChatHandler {
 			WriteBufferSize: 1024,
 			// Allow all origins for now
 			CheckOrigin: func(r *http.Request) bool { return true },
-			// Explicitly disable compression to fix RSV1 error
-			EnableCompression: false,
-			// Explicitly reject compression extensions
-			Subprotocols: []string{},
 		},
 	}
 }
