@@ -85,7 +85,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
             return {
               ...msg,
               content,
-              ...(reasoning ? { reasoning } : {})
+              reasoning: reasoning || (msg as AssistantMessage).reasoning
             } as AssistantMessage;
           }
           return msg;
@@ -109,7 +109,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
       newMessages.push({ 
         sender: 'assistant', 
         content,
-        ...(reasoning ? { reasoning } : {})
+        reasoning: reasoning
       });
       
       streamMessageIdRef.current = newMessages.length - 1;
@@ -415,9 +415,19 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
             if (streamMessageIdRef.current !== null) {
               // Update the existing stream message with new reasoning
               addOrUpdateStreamMessage(currentStreamContent, updatedReasoning);
+              
+              // Automatically show reasoning when it starts arriving during streaming
+              if (!showReasoning && data.value.trim().length > 0) {
+                setShowReasoning(true);
+              }
             } else if (isStreaming) {
               // Create a new stream message if we're streaming but don't have a message yet
               addOrUpdateStreamMessage("", updatedReasoning);
+              
+              // Automatically show reasoning when it starts arriving during streaming
+              if (!showReasoning && data.value.trim().length > 0) {
+                setShowReasoning(true);
+              }
             }
             break;
             
@@ -736,7 +746,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
                         {showReasoning ? 'Hide reasoning' : 'Show reasoning'}
                       </button>
                     )}
-                    {assistantMsg.reasoning && showReasoning && (
+                    {assistantMsg.reasoning && (idx === streamMessageIdRef.current || showReasoning) && (
                       <div className="mt-2 p-2 text-xs bg-gray-100 dark:bg-gray-800 rounded border-l-2 border-blue-500">
                         <div className="font-medium mb-1 text-blue-600 dark:text-blue-400">AI Reasoning:</div>
                         <div className="whitespace-pre-wrap">{assistantMsg.reasoning}</div>
