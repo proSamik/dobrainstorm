@@ -75,48 +75,6 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
     }
   }, [registerCloseFn]);
   
-  // Add or update a stream message in the messages array
-  const addOrUpdateStreamMessage = (content: string, reasoning?: string) => {
-    setMessages(prev => {
-      // If we already have a stream message ID, update it
-      if (streamMessageIdRef.current !== null) {
-        return prev.map((msg, index) => {
-          if (index === streamMessageIdRef.current) {
-            return {
-              ...msg,
-              content,
-              reasoning: reasoning || (msg as AssistantMessage).reasoning
-            } as AssistantMessage;
-          }
-          return msg;
-        });
-      } 
-      
-      // Otherwise, add a new stream message and store its ID
-      const newMessages = [...prev];
-      
-      // Find and remove any system "typing" message
-      const typingIndex = newMessages.findIndex(
-        m => m.sender === 'system' && 
-        (m.content === 'AI is typing...' || m.content.includes('Processing') || m.content.includes('thinking'))
-      );
-      
-      if (typingIndex !== -1) {
-        newMessages.splice(typingIndex, 1);
-      }
-      
-      // Add the new message and store its index
-      newMessages.push({ 
-        sender: 'assistant', 
-        content,
-        reasoning: reasoning
-      });
-      
-      streamMessageIdRef.current = newMessages.length - 1;
-      return newMessages;
-    });
-  };
-
   // Connect to WebSocket when component mounts
   useEffect(() => {
     // Prevent duplicate connections in StrictMode
@@ -396,8 +354,45 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
             const updatedContent = currentStreamContent + data.value;
             setCurrentStreamContent(updatedContent);
             
-            // Add or update the stream message
-            addOrUpdateStreamMessage(updatedContent, currentReasoning || undefined);
+            // Force a state update to ensure re-render
+            setMessages(prev => {
+              // If we have a stream message ID, update it
+              if (streamMessageIdRef.current !== null) {
+                return prev.map((msg, index) => {
+                  if (index === streamMessageIdRef.current) {
+                    return {
+                      ...msg,
+                      content: updatedContent,
+                      reasoning: currentReasoning || undefined
+                    } as AssistantMessage;
+                  }
+                  return msg;
+                });
+              } 
+              
+              // Otherwise, add a new stream message and store its ID
+              const newMessages = [...prev];
+              
+              // Find and remove any system "typing" message
+              const typingIndex = newMessages.findIndex(
+                m => m.sender === 'system' && 
+                (m.content === 'AI is typing...' || m.content.includes('Processing') || m.content.includes('thinking'))
+              );
+              
+              if (typingIndex !== -1) {
+                newMessages.splice(typingIndex, 1);
+              }
+              
+              // Add the new message
+              newMessages.push({ 
+                sender: 'assistant', 
+                content: updatedContent,
+                reasoning: currentReasoning || undefined
+              });
+              
+              streamMessageIdRef.current = newMessages.length - 1;
+              return newMessages;
+            });
             break;
             
           case 'reasoning':
@@ -411,24 +406,54 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
             const updatedReasoning = currentReasoning + data.value;
             setCurrentReasoning(updatedReasoning);
             
-            // If we have a stream message, update its reasoning
-            if (streamMessageIdRef.current !== null) {
-              // Update the existing stream message with new reasoning
-              addOrUpdateStreamMessage(currentStreamContent, updatedReasoning);
-              
-              // Automatically show reasoning when it starts arriving during streaming
-              if (!showReasoning && data.value.trim().length > 0) {
-                setShowReasoning(true);
-              }
-            } else if (isStreaming) {
-              // Create a new stream message if we're streaming but don't have a message yet
-              addOrUpdateStreamMessage("", updatedReasoning);
-              
-              // Automatically show reasoning when it starts arriving during streaming
-              if (!showReasoning && data.value.trim().length > 0) {
-                setShowReasoning(true);
-              }
+            // Automatically show reasoning when it starts arriving
+            if (!showReasoning && data.value.trim().length > 0) {
+              setShowReasoning(true);
             }
+            
+            // Force a state update to ensure re-render with reasoning
+            setMessages(prev => {
+              // If we have a stream message ID, update it
+              if (streamMessageIdRef.current !== null) {
+                return prev.map((msg, index) => {
+                  if (index === streamMessageIdRef.current) {
+                    return {
+                      ...msg,
+                      content: currentStreamContent,
+                      reasoning: updatedReasoning
+                    } as AssistantMessage;
+                  }
+                  return msg;
+                });
+              }
+              
+              // Otherwise, create a new message if we're streaming
+              if (isStreaming) {
+                const newMessages = [...prev];
+                
+                // Find and remove any system "typing" message
+                const typingIndex = newMessages.findIndex(
+                  m => m.sender === 'system' && 
+                  (m.content === 'AI is typing...' || m.content.includes('Processing') || m.content.includes('thinking'))
+                );
+                
+                if (typingIndex !== -1) {
+                  newMessages.splice(typingIndex, 1);
+                }
+                
+                // Add a new message with the reasoning
+                newMessages.push({
+                  sender: 'assistant',
+                  content: currentStreamContent,
+                  reasoning: updatedReasoning
+                });
+                
+                streamMessageIdRef.current = newMessages.length - 1;
+                return newMessages;
+              }
+              
+              return prev;
+            });
             break;
             
           case 'status':
@@ -631,6 +656,17 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
     scrollToBottom();
   }, [messages, currentStreamContent, currentReasoning, showReasoning]);
 
+  // Force re-render in streaming case to ensure latest content is always displayed
+  useEffect(() => {
+    if (isStreaming && streamMessageIdRef.current !== null) {
+      // Small timeout to trigger re-render after React has processed state updates
+      const timer = setTimeout(() => {
+        setMessages(messages => [...messages]);
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [currentStreamContent, currentReasoning, isStreaming]);
+
   // Handle sending a message
   const handleSendMessage = () => {
     if (!inputValue.trim() || !socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return;
@@ -809,13 +845,13 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
             Stop
           </Button>
         ) : (
-          <Button 
-            onClick={handleSendMessage} 
-            disabled={!connected}
-            className="rounded-l-none"
-          >
-            Send
-          </Button>
+        <Button 
+          onClick={handleSendMessage} 
+          disabled={!connected}
+          className="rounded-l-none"
+        >
+          Send
+        </Button>
         )}
       </div>
     </Card>
