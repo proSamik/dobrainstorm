@@ -9,7 +9,7 @@ import { X, StopCircle, MessageSquare, Bot, Info, BrainCircuit } from 'lucide-re
 interface BaseMessage {
   sender: string;
   content: string;
-  id?: string; // Add unique identifier for messages
+  id?: string; // Unique identifier for messages
 }
 
 interface UserMessage extends BaseMessage {
@@ -20,6 +20,9 @@ interface AssistantMessage extends BaseMessage {
   sender: 'assistant';
   isIncomplete?: boolean;
   reasoning?: string;
+  reasoningTime?: number; // Time spent thinking in seconds
+  isThinking?: boolean;   // Currently in thinking phase
+  isStreaming?: boolean;  // Currently streaming content
 }
 
 interface SystemMessage extends BaseMessage {
@@ -43,17 +46,15 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
   const [inputValue, setInputValue] = useState('')
   const [connected, setConnected] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
-  const [isStreaming, setIsStreaming] = useState(false)
-  const [currentStreamContent, setCurrentStreamContent] = useState('')
-  const [currentReasoning, setCurrentReasoning] = useState('')
-  const [showReasoning, setShowReasoning] = useState(false)
+  const [showReasoning, setShowReasoning] = useState(true) // Start with reasoning visible
+  
+  // Refs
   const socketRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const hasConnectedRef = useRef(false) // Track if we've already connected
-  const lastMessageIsUserRef = useRef(false) // Track if the last sent message was from user
-  const streamMessageIdRef = useRef<number | null>(null) // Track the ID of the current stream message
-  const isShowingReasoningUI = useRef(false) // Track if reasoning UI is currently shown
   const sentMessagesRef = useRef<Set<string>>(new Set()) // Track sent message contents
+  const activeMessageRef = useRef<number | null>(null) // Track active message index
+  const reasoningStartTimeRef = useRef<number | null>(null) // Track reasoning start time
 
   // Function to scroll to bottom of chat
   const scrollToBottom = () => {
@@ -74,7 +75,44 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
       registerCloseFn(handleClose);
     }
   }, [registerCloseFn]);
-  
+
+  // Update thinking timer for active message
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+    
+    // Find active thinking message
+    const activeThinkingMessage = activeMessageRef.current !== null
+      ? messages[activeMessageRef.current] as AssistantMessage
+      : null;
+      
+    if (activeThinkingMessage?.isThinking && reasoningStartTimeRef.current) {
+      // Update timer every second
+      intervalId = setInterval(() => {
+        setMessages(prev => {
+          const newMessages = [...prev];
+          if (activeMessageRef.current !== null && activeMessageRef.current < newMessages.length) {
+            const currentTime = Math.round((Date.now() - reasoningStartTimeRef.current!) / 1000);
+            const assistantMessage = newMessages[activeMessageRef.current] as AssistantMessage;
+            
+            // Only update if time has changed to minimize rerenders
+            if (assistantMessage.reasoningTime !== currentTime) {
+              newMessages[activeMessageRef.current] = {
+                ...assistantMessage,
+                reasoningTime: currentTime
+              };
+              return newMessages;
+            }
+          }
+          return prev;
+        });
+      }, 1000);
+    }
+    
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [messages]);
+
   // Connect to WebSocket when component mounts
   useEffect(() => {
     // Prevent duplicate connections in StrictMode
@@ -125,8 +163,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
         // Handle different message types
         switch (data.type) {
           case 'connected':
-            console.log('Connected to chat server')
-            // System message for connection status
+            // Connection established
             setMessages(prev => [
               ...prev, 
               { sender: 'system', content: data.value }
@@ -134,489 +171,243 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
             break
             
           case 'user':
-            // Handle user message echoed back from server
-            console.log('User message received from server');
-            
+            // User message from server - should rarely happen with our modifications
             if (typeof data.value !== 'string') {
               console.error('Invalid message value type:', typeof data.value);
               break;
             }
             
-            // With server echo removed, we should only reach this code if 
-            // we somehow receive a user message from the server that didn't originate
-            // from this client - very rare case
+            // Only add if not a duplicate
             if (!sentMessagesRef.current.has(data.value)) {
-              console.log('Adding user message from server:', data.value);
               setMessages(prev => [
                 ...prev, 
                 { sender: 'user', content: data.value, id: data.messageId || `server-${Date.now()}` }
               ]);
-              
-              // Update state to expect an AI response
-              lastMessageIsUserRef.current = true;
-              // Reset stream message ID as we're starting a new conversation turn
-              streamMessageIdRef.current = null;
-            } else {
-              console.log('Ignoring duplicate user message:', data.value);
             }
             break;
             
-          case 'assistant':
-            // Handle AI response from server
-            console.log('Assistant message received from server');
-            console.log('Reasoning received:', data.reasoning);
+          case 'status':
+            const statusValue = data.value;
+            console.log(`Received status: ${statusValue}`);
             
-            if (typeof data.value !== 'string') {
-              console.error('Invalid message value type:', typeof data.value);
-              break;
-            }
-            
-            // Mark streaming as finished
-            setIsStreaming(false);
-            
-            // Get full reasoning if available
-            const reasoning = data.reasoning || currentReasoning || '';
-            
-            // Check if the message indicates a timeout or incomplete response
-            const content = data.value;
-            const isIncomplete = content.includes('(response incomplete due to timeout)');
-            
-            // Remove the timeout suffix from content if present
-            const cleanContent = isIncomplete 
-              ? content.replace(' (response incomplete due to timeout)', '')
-              : content;
-            
-            // If we have a stream message, update it with the final content
-            if (streamMessageIdRef.current !== null) {
-              console.log(`Updating stream message #${streamMessageIdRef.current} with final content`);
+            if (statusValue === 'typing') {
+              // AI is starting to think - create a new message in thinking state
+              console.log('AI is starting to think');
+              reasoningStartTimeRef.current = Date.now();
+              
+              // Remove any processing/thinking system messages
               setMessages(prev => {
-                return prev.map((msg, index) => {
-                  if (index === streamMessageIdRef.current) {
-                    return {
-                      sender: 'assistant',
-                      content: cleanContent,
-                      isIncomplete,
-                      reasoning: reasoning || undefined
-                    } as AssistantMessage;
-                  }
-                  return msg;
+                const newMessages = [...prev];
+                const processingIndex = newMessages.findIndex(
+                  m => m.sender === 'system' && 
+                     (m.content === 'AI is typing...' || 
+                      m.content.includes('Processing') || 
+                      m.content.includes('thinking'))
+                );
+                
+                if (processingIndex !== -1) {
+                  newMessages.splice(processingIndex, 1);
+                }
+                
+                // Add new assistant message in thinking state
+                newMessages.push({
+                  sender: 'assistant',
+                  content: '',
+                  reasoning: '',
+                  isThinking: true,
+                  reasoningTime: 0
                 });
+                
+                // Set active message to the new message
+                activeMessageRef.current = newMessages.length - 1;
+                
+                return newMessages;
               });
-            } else {
-              // No stream message exists, create a new one
-              console.log('Creating new assistant message from final content');
+            } 
+            else if (statusValue === 'processing') {
+              // Show processing message if no active message yet
+              if (activeMessageRef.current === null) {
+                reasoningStartTimeRef.current = Date.now();
+                
+                setMessages(prev => {
+                  // Check if we already have a processing indicator
+                  const hasProcessingMsg = prev.some(
+                    m => m.sender === 'system' && 
+                    (m.content.includes('Processing') || m.content.includes('thinking'))
+                  );
+                  
+                  if (!hasProcessingMsg) {
+                    return [
+                      ...prev,
+                      { sender: 'system', content: 'Processing your request...' }
+                    ];
+                  }
+                  return prev;
+                });
+              }
+            }
+            else if (statusValue === 'stopped') {
+              // Streaming was stopped by user
+              console.log('Stream stopped by user');
               
               setMessages(prev => {
                 const newMessages = [...prev];
-                // Find and remove any system "typing" message
-                const typingIndex = newMessages.findIndex(
-                  m => m.sender === 'system' && 
-                  (m.content === 'AI is typing...' || m.content.includes('Processing') || m.content.includes('thinking'))
-                );
-                
-                if (typingIndex !== -1) {
-                  newMessages.splice(typingIndex, 1);
+                if (activeMessageRef.current !== null) {
+                  const current = newMessages[activeMessageRef.current] as AssistantMessage;
+                  newMessages[activeMessageRef.current] = {
+                    ...current,
+                    isThinking: false,
+                    isStreaming: false,
+                    content: current.content + ' (stopped)'
+                  };
                 }
-                
-                return [
-                  ...newMessages,
-                  { 
-                    sender: 'assistant', 
-                    content: cleanContent,
-                    isIncomplete,
-                    reasoning: reasoning || undefined
-                  }
-                ];
+                return newMessages;
               });
+              
+              // Reset active message
+              activeMessageRef.current = null;
+              reasoningStartTimeRef.current = null;
             }
-            
-            // Reset states
-            setCurrentStreamContent('');
-            streamMessageIdRef.current = null;
-            lastMessageIsUserRef.current = false;
+            else if (statusValue === 'stream_end') {
+              // Streaming has completed naturally
+              console.log('Stream ended naturally');
+              
+              // Finalize the active message
+              setMessages(prev => {
+                const newMessages = [...prev];
+                if (activeMessageRef.current !== null) {
+                  const current = newMessages[activeMessageRef.current] as AssistantMessage;
+                  newMessages[activeMessageRef.current] = {
+                    ...current,
+                    isThinking: false,
+                    isStreaming: false
+                  };
+                }
+                return newMessages;
+              });
+              
+              // Reset active message
+              activeMessageRef.current = null;
+              reasoningStartTimeRef.current = null;
+            }
             break;
             
-          case 'message':
-            // Handle legacy message type for backward compatibility
-            console.log(`Received legacy message type with isStreaming=${data.isStreaming}`);
-            
+          case 'reasoning':
+            // Received reasoning chunk
             if (typeof data.value !== 'string') {
-              console.error('Invalid message value type:', typeof data.value);
+              console.error('Invalid reasoning value type:', typeof data.value);
               break;
             }
             
-            // Legacy message type with no streaming flag is a user message from server
-            // Now that server doesn't echo, this should rarely happen
-            if (data.isStreaming === undefined) {
-              // Only add if this isn't a message we've already sent ourselves
-              if (!sentMessagesRef.current.has(data.value)) {
-                console.log('Processing user message from server:', data.value);
-                setMessages(prev => [
-                  ...prev, 
-                  { sender: 'user', content: data.value, id: data.messageId || `server-${Date.now()}` }
-                ]);
-                lastMessageIsUserRef.current = true;
-                streamMessageIdRef.current = null;
-              } else {
-                console.log('Ignoring duplicate legacy user message:', data.value);
-              }
+            console.log(`Received reasoning chunk: "${data.value}"`);
+            
+            // Initialize thinking time if not yet set
+            if (reasoningStartTimeRef.current === null) {
+              reasoningStartTimeRef.current = Date.now();
             }
             
-            // Handle as assistant message if streaming is false and we're expecting a response
-            if (data.isStreaming === false && lastMessageIsUserRef.current) {
-              // Process as an assistant message
-              console.log('Processing as assistant message');
-              
-              // Mark streaming as finished
-              setIsStreaming(false);
-              
-              // Get full reasoning if available
-              const legacyReasoning = data.reasoning || currentReasoning || '';
-              
-              // Check for timeout/incomplete
-              const legacyContent = data.value;
-              const legacyIsIncomplete = legacyContent.includes('(response incomplete due to timeout)');
-              
-              // Update message state
-              if (streamMessageIdRef.current !== null) {
-                setMessages(prev => {
-                  return prev.map((msg, index) => {
-                    if (index === streamMessageIdRef.current) {
-                      return {
-                        sender: 'assistant',
-                        content: legacyIsIncomplete 
-                          ? legacyContent.replace(' (response incomplete due to timeout)', '')
-                          : legacyContent,
-                        isIncomplete: legacyIsIncomplete,
-                        reasoning: legacyReasoning || undefined
-                      } as AssistantMessage;
-                    }
-                    return msg;
-                  });
-                });
-              } else {
-                setMessages(prev => {
-                  const newMessages = [...prev];
-                  const typingIndex = newMessages.findIndex(
-                    m => m.sender === 'system' && 
-                    (m.content === 'AI is typing...' || m.content.includes('Processing') || m.content.includes('thinking'))
-                  );
-                  
-                  if (typingIndex !== -1) {
-                    newMessages.splice(typingIndex, 1);
-                  }
-                  
-                  return [
-                    ...newMessages,
-                    { 
-                      sender: 'assistant', 
-                      content: legacyIsIncomplete 
-                        ? legacyContent.replace(' (response incomplete due to timeout)', '')
-                        : legacyContent,
-                      isIncomplete: legacyIsIncomplete,
-                      reasoning: legacyReasoning || undefined
-                    }
-                  ];
-                });
-              }
-              
-              // Reset states
-              setCurrentStreamContent('');
-              streamMessageIdRef.current = null;
-              lastMessageIsUserRef.current = false;
-            } else if (data.isStreaming === undefined) {
-              // Process as a user message
-              console.log('Processing as user message');
-              
-              // Check for duplicate
-              const isDuplicate = messages.some(m => m.sender === 'user' && m.content === data.value);
-              if (!isDuplicate) {
-                setMessages(prev => [
-                  ...prev, 
-                  { sender: 'user', content: data.value }
-                ]);
-                lastMessageIsUserRef.current = true;
-                streamMessageIdRef.current = null;
-              }
-            }
-            break;
-            
-          case 'stream':
-            // Partial AI response during streaming - server is streaming content
-            console.log(`Received stream chunk: "${data.value}"`);
-            
-            if (!isStreaming) {
-              console.log('First stream chunk received, setting isStreaming to true');
-              setIsStreaming(true);
-            }
-            
-            // Accumulate stream content
-            const updatedContent = currentStreamContent + data.value;
-            setCurrentStreamContent(updatedContent);
-            
-            // Force a state update to ensure re-render
+            // Update the active message with new reasoning content
             setMessages(prev => {
-              // If we have a stream message ID, update it
-              if (streamMessageIdRef.current !== null) {
-                return prev.map((msg, index) => {
-                  if (index === streamMessageIdRef.current) {
-                    return {
-                      ...msg,
-                      content: updatedContent,
-                      reasoning: currentReasoning || undefined
-                    } as AssistantMessage;
-                  }
-                  return msg;
-                });
-              } 
-              
-              // Otherwise, add a new stream message and store its ID
               const newMessages = [...prev];
               
-              // Find and remove any system "typing" message
-              const typingIndex = newMessages.findIndex(
-                m => m.sender === 'system' && 
-                (m.content === 'AI is typing...' || m.content.includes('Processing') || m.content.includes('thinking'))
-              );
-              
-              if (typingIndex !== -1) {
-                newMessages.splice(typingIndex, 1);
+              // If no active message, create one or find the most recent assistant message
+              if (activeMessageRef.current === null) {
+                // Remove any processing messages
+                const processingIndex = newMessages.findIndex(
+                  m => m.sender === 'system' && 
+                     (m.content === 'AI is typing...' || 
+                      m.content.includes('Processing') || 
+                      m.content.includes('thinking'))
+                );
+                
+                if (processingIndex !== -1) {
+                  newMessages.splice(processingIndex, 1);
+                }
+                
+                // Create a new assistant message
+                newMessages.push({
+                  sender: 'assistant',
+                  content: '',
+                  reasoning: data.value,
+                  isThinking: true,
+                  reasoningTime: reasoningStartTimeRef.current 
+                    ? Math.round((Date.now() - reasoningStartTimeRef.current) / 1000)
+                    : 0
+                });
+                
+                activeMessageRef.current = newMessages.length - 1;
+              } else {
+                // Update existing message
+                const current = newMessages[activeMessageRef.current] as AssistantMessage;
+                newMessages[activeMessageRef.current] = {
+                  ...current,
+                  reasoning: (current.reasoning || '') + data.value,
+                  isThinking: true,
+                  reasoningTime: reasoningStartTimeRef.current 
+                    ? Math.round((Date.now() - reasoningStartTimeRef.current) / 1000)
+                    : 0
+                };
               }
               
-              // Add the new message
-              newMessages.push({ 
-                sender: 'assistant', 
-                content: updatedContent,
-                reasoning: currentReasoning || undefined
-              });
-              
-              streamMessageIdRef.current = newMessages.length - 1;
               return newMessages;
             });
             break;
             
-          case 'reasoning':
-            // Handle reasoning content - store it separately
-            console.log(`Received reasoning chunk: "${data.value}"`);
-            
-            // Show the reasoning UI if we're receiving reasoning
-            isShowingReasoningUI.current = true;
-            
-            // Accumulate reasoning content
-            const updatedReasoning = currentReasoning + data.value;
-            setCurrentReasoning(updatedReasoning);
-            
-            // Automatically show reasoning when it starts arriving
-            if (!showReasoning && data.value.trim().length > 0) {
-              setShowReasoning(true);
+          case 'stream':
+            // Received content chunk
+            if (typeof data.value !== 'string') {
+              console.error('Invalid stream value type:', typeof data.value);
+              break;
             }
             
-            // Force a state update to ensure re-render with reasoning
+            console.log(`Received stream chunk: "${data.value}"`);
+            
+            // Update the active message with new content
             setMessages(prev => {
-              // If we have a stream message ID, update it
-              if (streamMessageIdRef.current !== null) {
-                return prev.map((msg, index) => {
-                  if (index === streamMessageIdRef.current) {
-                    return {
-                      ...msg,
-                      content: currentStreamContent,
-                      reasoning: updatedReasoning
-                    } as AssistantMessage;
-                  }
-                  return msg;
-                });
-              }
+              const newMessages = [...prev];
               
-              // Otherwise, create a new message if we're streaming
-              if (isStreaming) {
-                const newMessages = [...prev];
-                
-                // Find and remove any system "typing" message
-                const typingIndex = newMessages.findIndex(
+              if (activeMessageRef.current === null) {
+                // No active message - create one
+                // Remove any processing messages
+                const processingIndex = newMessages.findIndex(
                   m => m.sender === 'system' && 
-                  (m.content === 'AI is typing...' || m.content.includes('Processing') || m.content.includes('thinking'))
+                     (m.content === 'AI is typing...' || 
+                      m.content.includes('Processing') || 
+                      m.content.includes('thinking'))
                 );
                 
-                if (typingIndex !== -1) {
-                  newMessages.splice(typingIndex, 1);
+                if (processingIndex !== -1) {
+                  newMessages.splice(processingIndex, 1);
                 }
                 
-                // Add a new message with the reasoning
+                // Create a new assistant message
                 newMessages.push({
                   sender: 'assistant',
-                  content: currentStreamContent,
-                  reasoning: updatedReasoning
+                  content: data.value,
+                  isStreaming: true
                 });
                 
-                streamMessageIdRef.current = newMessages.length - 1;
-                return newMessages;
+                activeMessageRef.current = newMessages.length - 1;
+              } else {
+                // Update existing message
+                const current = newMessages[activeMessageRef.current] as AssistantMessage;
+                
+                // If transitioning from thinking to streaming, store thinking time
+                const finalReasoningTime = current.isThinking && reasoningStartTimeRef.current
+                  ? Math.round((Date.now() - reasoningStartTimeRef.current) / 1000)
+                  : current.reasoningTime;
+                
+                newMessages[activeMessageRef.current] = {
+                  ...current,
+                  content: (current.content || '') + data.value,
+                  isThinking: false,
+                  isStreaming: true,
+                  reasoningTime: finalReasoningTime
+                };
               }
               
-              return prev;
+              return newMessages;
             });
-            break;
-            
-          case 'status':
-            console.log(`Received status: ${data.value}`);
-            
-            if (data.value === 'typing') {
-              // AI is starting to respond
-              console.log('AI is starting to type');
-              setIsStreaming(true);
-              
-              // Clear previous stream states when starting a new response
-              setCurrentStreamContent('');
-              setCurrentReasoning('');
-              streamMessageIdRef.current = null;
-              isShowingReasoningUI.current = false;
-              
-              // Update system message to indicate AI is thinking/typing
-              setMessages(prev => {
-                // Check if we already have a typing message
-                const hasTypingMsg = prev.some(
-                  m => m.sender === 'system' && 
-                  (m.content === 'AI is typing...' || m.content.includes('thinking'))
-                );
-                
-                if (!hasTypingMsg) {
-                  return [
-                    ...prev, 
-                    { sender: 'system', content: 'AI is thinking...' }
-                  ];
-                }
-                return prev;
-              });
-            } else if (data.value === 'processing') {
-              // OpenRouter is processing - update UI to indicate this
-              console.log('OpenRouter is processing');
-              
-              // Keep streaming state, just update the typing indicator if needed
-              if (!isStreaming) {
-                setIsStreaming(true);
-              }
-              
-              // Check if we already have a processing indicator
-              setMessages(prev => {
-                const hasProcessingMsg = prev.some(
-                  m => m.sender === 'system' && 
-                  (m.content === 'AI is typing...' || m.content.includes('Processing') || m.content.includes('thinking'))
-                );
-                
-                if (!hasProcessingMsg) {
-                  return [
-                    ...prev,
-                    { sender: 'system', content: 'Processing your request...' }
-                  ];
-                }
-                return prev;
-              });
-            } else if (data.value === 'stopped') {
-              // Streaming was stopped by user
-              console.log('Stream stopped by user');
-              setIsStreaming(false);
-              
-              // If we have partial content, update the stream message as final
-              if (currentStreamContent || currentReasoning) {
-                console.log(`Adding stopped content as message: ${currentStreamContent.length} chars`);
-                console.log(`With reasoning: ${currentReasoning.length} chars`);
-                
-                // If we have a stream message, update it as final
-                if (streamMessageIdRef.current !== null) {
-                  setMessages(prev => {
-                    return prev.map((msg, index) => {
-                      if (index === streamMessageIdRef.current) {
-                        return {
-                          sender: 'assistant',
-                          content: currentStreamContent + ' (stopped)',
-                          reasoning: currentReasoning || undefined
-                        } as AssistantMessage;
-                      }
-                      return msg;
-                    });
-                  });
-                } else {
-                  // No stream message exists, create a new one
-                  setMessages(prev => {
-                    const newMessages = [...prev];
-                    // Find and remove any system "typing" message
-                    const typingIndex = newMessages.findIndex(
-                      m => m.sender === 'system' && 
-                      (m.content === 'AI is typing...' || m.content.includes('Processing') || m.content.includes('thinking'))
-                    );
-                    
-                    if (typingIndex !== -1) {
-                      newMessages.splice(typingIndex, 1);
-                    }
-                    
-                    return [
-                      ...newMessages,
-                      { 
-                        sender: 'assistant', 
-                        content: currentStreamContent + ' (stopped)',
-                        reasoning: currentReasoning || undefined
-                      }
-                    ];
-                  });
-                }
-                
-                // Reset states
-                setCurrentStreamContent('');
-                streamMessageIdRef.current = null;
-                lastMessageIsUserRef.current = false;
-              }
-            } else if (data.value === 'stream_end') {
-              // Server signals end of stream - all content delivered
-              console.log('Stream ended naturally');
-              setIsStreaming(false);
-              
-              // If we have stream content, update the stream message as final
-              if (currentStreamContent || currentReasoning) {
-                console.log(`Adding complete streamed content: ${currentStreamContent.length} chars`);
-                console.log(`With reasoning: ${currentReasoning.length} chars`);
-                
-                // If we have a stream message, update it as final
-                if (streamMessageIdRef.current !== null) {
-                  setMessages(prev => {
-                    return prev.map((msg, index) => {
-                      if (index === streamMessageIdRef.current) {
-                        return {
-                          sender: 'assistant',
-                          content: currentStreamContent,
-                          reasoning: currentReasoning || undefined
-                        } as AssistantMessage;
-                      }
-                      return msg;
-                    });
-                  });
-                } else {
-                  // No stream message exists, create a new one
-                  setMessages(prev => {
-                    const newMessages = [...prev];
-                    // Find and remove any system "typing" message
-                    const typingIndex = newMessages.findIndex(
-                      m => m.sender === 'system' && 
-                      (m.content === 'AI is typing...' || m.content.includes('Processing') || m.content.includes('thinking'))
-                    );
-                    
-                    if (typingIndex !== -1) {
-                      newMessages.splice(typingIndex, 1);
-                    }
-                    
-                    return [
-                      ...newMessages,
-                      { 
-                        sender: 'assistant', 
-                        content: currentStreamContent,
-                        reasoning: currentReasoning || undefined
-                      }
-                    ];
-                  });
-                }
-                
-                // Don't clear content yet as we might need it for the final message
-                streamMessageIdRef.current = null;
-              }
-            }
             break;
             
           case 'error':
@@ -625,9 +416,10 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
               ...prev, 
               { sender: 'system', content: `Error: ${data.value}` }
             ]);
-            setIsStreaming(false);
-            lastMessageIsUserRef.current = false;
-            streamMessageIdRef.current = null;
+            
+            // Reset active message
+            activeMessageRef.current = null;
+            reasoningStartTimeRef.current = null;
             break;
             
           default:
@@ -654,27 +446,11 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
   // Scroll to bottom when messages change
   useEffect(() => {
     scrollToBottom();
-  }, [messages, currentStreamContent, currentReasoning, showReasoning]);
-
-  // Force re-render in streaming case to ensure latest content is always displayed
-  useEffect(() => {
-    if (isStreaming && streamMessageIdRef.current !== null) {
-      // Small timeout to trigger re-render after React has processed state updates
-      const timer = setTimeout(() => {
-        setMessages(messages => [...messages]);
-      }, 50);
-      return () => clearTimeout(timer);
-    }
-  }, [currentStreamContent, currentReasoning, isStreaming]);
+  }, [messages, showReasoning]);
 
   // Handle sending a message
   const handleSendMessage = () => {
     if (!inputValue.trim() || !socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return;
-    
-    if (isStreaming) {
-      // Don't send new messages while streaming
-      return;
-    }
 
     try {
       // Store the message content for deduplication
@@ -708,10 +484,9 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
       // Clear input field
       setInputValue('');
       
-      // Set the flag indicating we're expecting an AI response
-      lastMessageIsUserRef.current = true;
-      // Reset stream message ID as we're starting a new conversation turn
-      streamMessageIdRef.current = null;
+      // Reset references
+      activeMessageRef.current = null;
+      reasoningStartTimeRef.current = null;
     } catch (error) {
       console.error('Error sending message:', error);
     }
@@ -756,36 +531,76 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
         
       case 'assistant':
         const assistantMsg = msg as AssistantMessage;
+        const isActiveMessage = idx === activeMessageRef.current;
+        const hasReasoning = !!assistantMsg.reasoning && assistantMsg.reasoning.length > 0;
+        
         return (
           <div key={idx} className="text-left mb-3">
             <div className="flex justify-start items-start gap-2">
               <div className={`inline-block px-3 py-2 rounded-lg max-w-[80%] ${
                 assistantMsg.isIncomplete 
                   ? 'bg-yellow-100 dark:bg-yellow-900 text-gray-800 dark:text-gray-200 border border-yellow-300 dark:border-yellow-700'
-                  : 'bg-slate-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200'
+                  : assistantMsg.isThinking
+                    ? 'bg-purple-50 dark:bg-purple-900 text-gray-800 dark:text-gray-200 border border-purple-200 dark:border-purple-800'
+                    : assistantMsg.isStreaming
+                      ? 'bg-blue-50 dark:bg-blue-900 text-gray-800 dark:text-gray-200 border border-blue-200 dark:border-blue-800' 
+                      : 'bg-slate-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200'
               }`}>
                 <div className="flex items-start gap-2">
                   <Bot className="h-4 w-4 mt-1 flex-shrink-0 text-slate-700 dark:text-slate-300" />
-                  <div>
-                    <div className="text-left">{assistantMsg.content}</div>
+                  <div className="w-full">
+                    {/* Reasoning Section - Always show first */}
+                    {hasReasoning && (
+                      <div className="mb-3">
+                        {/* Thinking indicator with live timer */}
+                        {assistantMsg.isThinking && (
+                          <div className="text-xs text-purple-500 mb-1 flex items-center animate-pulse">
+                            <div className="mr-1">●</div> 
+                            Thinking for {assistantMsg.reasoningTime || 0}s
+                          </div>
+                        )}
+                        
+                        {/* Toggle button with reasoning time if not thinking */}
+                        <button 
+                          onClick={toggleAllReasoning} 
+                          className="text-xs text-blue-500 hover:text-blue-700 mb-1 flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900 rounded-md"
+                        >
+                          <BrainCircuit className="h-3 w-3" />
+                          {showReasoning ? 'Hide reasoning' : 'Show reasoning'}
+                          
+                          {!assistantMsg.isThinking && assistantMsg.reasoningTime !== undefined && (
+                            <span className="ml-1 text-xs text-gray-500">
+                              (thought for {assistantMsg.reasoningTime}s)
+                            </span>
+                          )}
+                        </button>
+                        
+                        {/* Reasoning content */}
+                        {showReasoning && (
+                          <div className="mb-2 p-2 text-xs bg-gray-100 dark:bg-gray-800 rounded border-l-2 border-blue-500">
+                            <div className="font-medium mb-1 text-blue-600 dark:text-blue-400">
+                              AI Reasoning:
+                            </div>
+                            <div className="whitespace-pre-wrap">{assistantMsg.reasoning}</div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Content Section */}
+                    <div className="text-left break-words">{assistantMsg.content}</div>
+                    
+                    {/* Incomplete response indicator */}
                     {assistantMsg.isIncomplete && (
                       <div className="text-xs text-yellow-600 dark:text-yellow-400 mt-1 italic">
                         (Response incomplete due to timeout)
                       </div>
                     )}
-                    {assistantMsg.reasoning && (
-                      <button 
-                        onClick={toggleAllReasoning} 
-                        className="text-xs text-blue-500 hover:text-blue-700 mt-2 flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900 rounded-md"
-                      >
-                        <BrainCircuit className="h-3 w-3" />
-                        {showReasoning ? 'Hide reasoning' : 'Show reasoning'}
-                      </button>
-                    )}
-                    {assistantMsg.reasoning && (idx === streamMessageIdRef.current || showReasoning) && (
-                      <div className="mt-2 p-2 text-xs bg-gray-100 dark:bg-gray-800 rounded border-l-2 border-blue-500">
-                        <div className="font-medium mb-1 text-blue-600 dark:text-blue-400">AI Reasoning:</div>
-                        <div className="whitespace-pre-wrap">{assistantMsg.reasoning}</div>
+                    
+                    {/* Streaming indicator */}
+                    {assistantMsg.isStreaming && (
+                      <div className="text-xs text-blue-500 mt-1 flex items-center animate-pulse">
+                        <div className="mr-1">●</div> Streaming...
                       </div>
                     )}
                   </div>
@@ -809,6 +624,9 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
         return null;
     }
   };
+
+  // Determine if we're in a state where we can't send new messages
+  const isResponding = activeMessageRef.current !== null;
 
   return (
     <Card className="flex flex-col h-96 w-full shadow-md">
@@ -834,9 +652,9 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
           onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
           placeholder="Type a message..."
           className="flex-1 px-3 py-2 border rounded-l-md focus:outline-none"
-          disabled={!connected || isStreaming}
+          disabled={!connected || isResponding}
         />
-        {isStreaming ? (
+        {isResponding ? (
           <Button 
             onClick={handleStopStream}
             className="rounded-l-none bg-red-500 hover:bg-red-600"
@@ -845,13 +663,13 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
             Stop
           </Button>
         ) : (
-        <Button 
-          onClick={handleSendMessage} 
-          disabled={!connected}
-          className="rounded-l-none"
-        >
-          Send
-        </Button>
+          <Button 
+            onClick={handleSendMessage} 
+            disabled={!connected}
+            className="rounded-l-none"
+          >
+            Send
+          </Button>
         )}
       </div>
     </Card>
