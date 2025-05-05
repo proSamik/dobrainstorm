@@ -152,6 +152,159 @@ func (h *ChatHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	go h.handleConnectionWithMutex(conn, sessionID, userID, &wsWriteMutex)
 }
 
+// Create a reusable function for creating and managing the context
+func (h *ChatHandler) streamWithContext(conn *websocket.Conn, sessionID string, wsWriteMutex *sync.Mutex,
+	req openrouter.ChatCompletionRequest, _ *[]openrouter.Message) (string, error) {
+
+	// Track streaming state and content
+	isStreaming := true
+	responseContent := ""
+	chunkCounter := 0
+
+	// Create a cancellable context
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // Ensure context is always cancelled when function exits
+
+	// Log streaming start
+	log.Printf("Starting OpenRouter streaming for session %s", sessionID)
+
+	// Process the stream response
+	streamErr := h.openRouter.ChatCompletionsStreamWithContext(
+		ctx,
+		req,
+		func(resp openrouter.StreamResponse, isComment bool, commentText string) error {
+			// Check if streaming was cancelled
+			if !isStreaming {
+				log.Printf("Stream cancelled by client")
+				return fmt.Errorf("streaming canceled by client")
+			}
+
+			// Handle OpenRouter comments (like processing indicators)
+			if isComment {
+				log.Printf("OpenRouter comment: %s", commentText)
+
+				// Send a processing indicator to client
+				processingMsg := ChatMessage{
+					Type:        "status",
+					Value:       "processing",
+					SessionID:   sessionID,
+					IsStreaming: true,
+				}
+				if err := h.writeJSON(conn, wsWriteMutex, processingMsg); err != nil {
+					log.Printf("Error sending processing status: %v", err)
+					return err
+				}
+				return nil
+			}
+
+			// Handle [DONE] marker
+			if commentText == "[DONE]" {
+				log.Printf("Received [DONE] marker")
+				// Stream is complete - send end marker and final content
+				streamEndMsg := ChatMessage{
+					Type:        "status",
+					Value:       "stream_end",
+					SessionID:   sessionID,
+					IsStreaming: false,
+				}
+				if err := h.writeJSON(conn, wsWriteMutex, streamEndMsg); err != nil {
+					log.Printf("Error sending stream end status: %v", err)
+					return err
+				}
+				return nil
+			}
+
+			// Handle normal streaming chunks
+			chunkCounter++
+			log.Printf("Processing stream chunk #%d for session %s", chunkCounter, sessionID)
+
+			if len(resp.Choices) > 0 {
+				choice := resp.Choices[0]
+
+				// Check if this is the end of the stream by finish_reason
+				if choice.FinishReason != "" {
+					log.Printf("Stream naturally finished (finish_reason=%s) after %d chunks",
+						choice.FinishReason, chunkCounter)
+
+					// Stream has ended naturally
+					streamEndMsg := ChatMessage{
+						Type:        "status",
+						Value:       "stream_end",
+						SessionID:   sessionID,
+						IsStreaming: false,
+					}
+					log.Printf("Sending stream_end status message")
+					if err := h.writeJSON(conn, wsWriteMutex, streamEndMsg); err != nil {
+						log.Printf("Error sending stream end status: %v", err)
+						return err
+					}
+					return nil
+				}
+
+				// Process content delta - immediately send to client
+				content := choice.Delta.Content
+				if content != "" {
+					responseContent += content
+					log.Printf("Stream chunk #%d content: %q (total length so far: %d)",
+						chunkCounter, content, len(responseContent))
+
+					// Send the stream chunk to client IMMEDIATELY
+					streamMsg := ChatMessage{
+						Type:        "stream",
+						Value:       content,
+						SessionID:   sessionID,
+						IsStreaming: true,
+					}
+
+					// Use WriteMessage instead of WriteJSON for lower latency
+					// This bypasses the JSON marshal/unmarshal cycle
+					jsonData, err := json.Marshal(streamMsg)
+					if err != nil {
+						log.Printf("Error marshaling stream chunk: %v", err)
+						return err
+					}
+
+					// Use thread-safe method to write to websocket
+					if err := h.writeMessage(conn, wsWriteMutex, websocket.TextMessage, jsonData); err != nil {
+						log.Printf("Error sending stream chunk: %v", err)
+						isStreaming = false
+						return err
+					}
+
+					log.Printf("Stream chunk #%d sent to client", chunkCounter)
+				} else {
+					log.Printf("Stream chunk #%d had empty content", chunkCounter)
+				}
+			} else {
+				log.Printf("Stream chunk #%d had no choices", chunkCounter)
+			}
+
+			// Check if final usage data is being sent (end of stream)
+			if resp.Usage != nil {
+				log.Printf("Received final usage data after %d chunks: %+v", chunkCounter, resp.Usage)
+				streamEndMsg := ChatMessage{
+					Type:        "status",
+					Value:       "stream_end",
+					SessionID:   sessionID,
+					IsStreaming: false,
+				}
+				if err := h.writeJSON(conn, wsWriteMutex, streamEndMsg); err != nil {
+					log.Printf("Error sending stream end status: %v", err)
+					return err
+				}
+				log.Printf("Sent stream_end status message with usage data")
+			}
+
+			return nil
+		})
+
+	// Log streaming completion
+	log.Printf("Streaming completed for session %s. Total chunks: %d, Content length: %d",
+		sessionID, chunkCounter, len(responseContent))
+
+	return responseContent, streamErr
+}
+
 // handleConnectionWithMutex processes messages for a single websocket connection with mutex protection
 func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID string, userID string, wsWriteMutex *sync.Mutex) {
 	// Track chat history
@@ -160,19 +313,10 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 	// Keep track of streaming state
 	isStreaming := false
 
-	// Context for stream cancellation
-	var streamCtx context.Context
-	var cancelStream context.CancelFunc
-
 	// Recover from panics to prevent crashing the server
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("Recovered from panic in handleConnection: %v", r)
-		}
-
-		// Cancel any ongoing stream if we're exiting
-		if cancelStream != nil {
-			cancelStream()
 		}
 
 		// Log the chat session when it's closed
@@ -271,152 +415,11 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 				Stream:   true,
 			}
 
-			// Build response content as we receive stream chunks
-			responseContent := ""
-
-			// Add log for streaming start
-			log.Printf("Starting OpenRouter streaming for session %s", sessionID)
-
-			// Track stream chunks
-			chunkCounter := 0
-
-			// Create a cancellable context for the stream
-			streamCtx, cancelStream = context.WithCancel(context.Background())
-
-			// Process the stream response
-			streamErr := h.openRouter.ChatCompletionsStreamWithContext(
-				streamCtx,
-				req,
-				func(resp openrouter.StreamResponse, isComment bool, commentText string) error {
-					// Check if streaming was cancelled by client first
-					if !isStreaming {
-						log.Printf("Stream cancelled by client")
-						return fmt.Errorf("streaming canceled by client")
-					}
-
-					// Handle OpenRouter comments (like processing indicators)
-					if isComment {
-						log.Printf("OpenRouter comment: %s", commentText)
-
-						// Send a processing indicator to client
-						processingMsg := ChatMessage{
-							Type:        "status",
-							Value:       "processing",
-							SessionID:   sessionID,
-							IsStreaming: true,
-						}
-						if err := h.writeJSON(conn, wsWriteMutex, processingMsg); err != nil {
-							log.Printf("Error sending processing status: %v", err)
-							return err
-						}
-						return nil
-					}
-
-					// Handle [DONE] marker
-					if commentText == "[DONE]" {
-						log.Printf("Received [DONE] marker")
-						// Stream is complete - send end marker and final content
-						streamEndMsg := ChatMessage{
-							Type:        "status",
-							Value:       "stream_end",
-							SessionID:   sessionID,
-							IsStreaming: false,
-						}
-						if err := h.writeJSON(conn, wsWriteMutex, streamEndMsg); err != nil {
-							log.Printf("Error sending stream end status: %v", err)
-							return err
-						}
-						return nil
-					}
-
-					// Handle normal streaming chunks
-					chunkCounter++
-					log.Printf("Processing stream chunk #%d for session %s", chunkCounter, sessionID)
-
-					if len(resp.Choices) > 0 {
-						choice := resp.Choices[0]
-
-						// Check if this is the end of the stream by finish_reason
-						if choice.FinishReason != "" {
-							log.Printf("Stream naturally finished (finish_reason=%s) after %d chunks",
-								choice.FinishReason, chunkCounter)
-
-							// Stream has ended naturally
-							streamEndMsg := ChatMessage{
-								Type:        "status",
-								Value:       "stream_end",
-								SessionID:   sessionID,
-								IsStreaming: false,
-							}
-							log.Printf("Sending stream_end status message")
-							if err := h.writeJSON(conn, wsWriteMutex, streamEndMsg); err != nil {
-								log.Printf("Error sending stream end status: %v", err)
-								return err
-							}
-							return nil
-						}
-
-						// Process content delta - immediately send to client
-						content := choice.Delta.Content
-						if content != "" {
-							responseContent += content
-							log.Printf("Stream chunk #%d content: %q (total length so far: %d)",
-								chunkCounter, content, len(responseContent))
-
-							// Send the stream chunk to client IMMEDIATELY
-							streamMsg := ChatMessage{
-								Type:        "stream",
-								Value:       content,
-								SessionID:   sessionID,
-								IsStreaming: true,
-							}
-
-							// Use WriteMessage instead of WriteJSON for lower latency
-							// This bypasses the JSON marshal/unmarshal cycle
-							jsonData, err := json.Marshal(streamMsg)
-							if err != nil {
-								log.Printf("Error marshaling stream chunk: %v", err)
-								return err
-							}
-
-							// Use thread-safe method to write to websocket
-							if err := h.writeMessage(conn, wsWriteMutex, websocket.TextMessage, jsonData); err != nil {
-								log.Printf("Error sending stream chunk: %v", err)
-								isStreaming = false
-								return err
-							}
-
-							log.Printf("Stream chunk #%d sent to client", chunkCounter)
-						} else {
-							log.Printf("Stream chunk #%d had empty content", chunkCounter)
-						}
-					} else {
-						log.Printf("Stream chunk #%d had no choices", chunkCounter)
-					}
-
-					// Check if final usage data is being sent (end of stream)
-					if resp.Usage != nil {
-						log.Printf("Received final usage data after %d chunks: %+v", chunkCounter, resp.Usage)
-						streamEndMsg := ChatMessage{
-							Type:        "status",
-							Value:       "stream_end",
-							SessionID:   sessionID,
-							IsStreaming: false,
-						}
-						if err := h.writeJSON(conn, wsWriteMutex, streamEndMsg); err != nil {
-							log.Printf("Error sending stream end status: %v", err)
-							return err
-						}
-						log.Printf("Sent stream_end status message with usage data")
-					}
-
-					return nil
-				})
+			// Process stream with proper context handling
+			responseContent, streamErr := h.streamWithContext(conn, sessionID, wsWriteMutex, req, &chatHistory)
 
 			// Streaming has ended
 			isStreaming = false
-			log.Printf("Streaming completed for session %s. Total chunks: %d, Content length: %d",
-				sessionID, chunkCounter, len(responseContent))
 
 			if streamErr != nil {
 				// Check if this was a client-initiated cancellation
@@ -509,21 +512,18 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 			}
 		} else if message.Type == "stop" {
 			// Client wants to stop streaming
-			if isStreaming && cancelStream != nil {
+			if isStreaming {
 				log.Printf("Cancelling stream by client request")
-				cancelStream() // This will cancel the ongoing stream
-				cancelStream = nil
-			}
-
-			isStreaming = false
-			stopMsg := ChatMessage{
-				Type:      "status",
-				Value:     "stopped",
-				SessionID: sessionID,
-			}
-			if err := h.writeJSON(conn, wsWriteMutex, stopMsg); err != nil {
-				log.Printf("Error sending stop confirmation: %v", err)
-				break
+				isStreaming = false
+				stopMsg := ChatMessage{
+					Type:      "status",
+					Value:     "stopped",
+					SessionID: sessionID,
+				}
+				if err := h.writeJSON(conn, wsWriteMutex, stopMsg); err != nil {
+					log.Printf("Error sending stop confirmation: %v", err)
+					break
+				}
 			}
 		} else {
 			log.Printf("Unsupported message type: %s", message.Type)
