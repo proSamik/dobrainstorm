@@ -69,21 +69,6 @@ func NewChatHandler(db *database.DB, allowedOrigins []string) *ChatHandler {
 					return true
 				}
 
-				// Optional: Handle cases like localhost with different ports if necessary,
-				// but be cautious as it can weaken security.
-				// Example (use carefully):
-				// u, err := url.Parse(origin)
-				// if err == nil && u.Hostname() == "localhost" {
-				//   // Check if any allowed origin is a localhost variant
-				//   for allowed := range originMap {
-				//     allowedU, allowedErr := url.Parse(allowed)
-				//     if allowedErr == nil && allowedU.Hostname() == "localhost" {
-				//       log.Printf("[WebSocket CORS] Allowing localhost variant origin '%s'.", origin)
-				// 		 return true
-				//     }
-				//   }
-				// }
-
 				log.Printf("[WebSocket CORS] Origin '%s' is NOT allowed.", origin)
 				return false
 			},
@@ -412,7 +397,7 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 
 			// Add the client message to response for display
 			clientMessage := ChatMessage{
-				Type:      "message",
+				Type:      "user",
 				Value:     messageContent,
 				SessionID: sessionID,
 			}
@@ -493,7 +478,7 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 
 						// Send final message
 						completeMsg := ChatMessage{
-							Type:        "message",
+							Type:        "assistant",
 							Value:       responseContent + " (response incomplete due to timeout)",
 							SessionID:   sessionID,
 							IsStreaming: false,
@@ -528,7 +513,7 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 
 			// Send final complete message with reasoning if available
 			completeMsg := ChatMessage{
-				Type:        "message",
+				Type:        "assistant",
 				Value:       responseContent,
 				Reasoning:   reasoningContent,
 				SessionID:   sessionID,
