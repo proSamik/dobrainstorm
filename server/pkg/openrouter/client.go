@@ -225,6 +225,9 @@ func (c *Client) ChatCompletionsStream(req ChatCompletionRequest, callback func(
 		httpReq.Header.Set("X-Title", c.frontendTitle)
 	}
 
+	// Log the request being sent
+	fmt.Printf("Sending streaming request to OpenRouter API: %s with %d messages\n", req.Model, len(req.Messages))
+
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("error sending request: %w", err)
@@ -236,24 +239,33 @@ func (c *Client) ChatCompletionsStream(req ChatCompletionRequest, callback func(
 		return fmt.Errorf("error from OpenRouter API: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
+	fmt.Println("Starting to read OpenRouter stream response")
+
+	chunkCount := 0
 	reader := bufio.NewReader(resp.Body)
 	for {
 		line, err := reader.ReadBytes('\n')
 		if err != nil {
 			if err == io.EOF {
+				fmt.Println("EOF reached in OpenRouter stream")
 				break
 			}
 			return fmt.Errorf("error reading response: %w", err)
 		}
 
+		// Log the raw line for debugging
+		fmt.Printf("RAW STREAM LINE (%d bytes): %s\n", len(line), string(line))
+
 		// Skip empty lines and comments
 		line = bytes.TrimSpace(line)
 		if len(line) == 0 || bytes.HasPrefix(line, []byte(":")) {
+			fmt.Println("Skipping empty line or comment in stream")
 			continue
 		}
 
 		// Lines should start with "data: "
 		if !bytes.HasPrefix(line, []byte("data: ")) {
+			fmt.Printf("Unexpected line format in stream: %s\n", string(line))
 			continue
 		}
 
@@ -262,20 +274,37 @@ func (c *Client) ChatCompletionsStream(req ChatCompletionRequest, callback func(
 
 		// Check for the [DONE] message
 		if string(data) == "[DONE]" {
+			fmt.Println("Received [DONE] message from OpenRouter")
 			break
 		}
 
 		// Parse the JSON data
 		var chunk StreamResponse
 		if err := json.Unmarshal(data, &chunk); err != nil {
+			fmt.Printf("Error unmarshaling chunk: %v\nRaw data: %s\n", err, string(data))
 			return fmt.Errorf("error unmarshaling chunk: %w", err)
 		}
 
+		chunkCount++
+
+		// Log chunk info
+		deltaContent := ""
+		finishReason := ""
+		if len(chunk.Choices) > 0 {
+			deltaContent = chunk.Choices[0].Delta.Content
+			finishReason = chunk.Choices[0].FinishReason
+		}
+
+		fmt.Printf("STREAM CHUNK #%d: ID=%s, Content=%q, FinishReason=%q\n",
+			chunkCount, chunk.ID, deltaContent, finishReason)
+
 		// Call the callback function with the chunk
 		if err := callback(chunk); err != nil {
+			fmt.Printf("Callback error: %v\n", err)
 			return fmt.Errorf("callback error: %w", err)
 		}
 	}
 
+	fmt.Printf("Finished processing OpenRouter stream with %d chunks total\n", chunkCount)
 	return nil
 }
