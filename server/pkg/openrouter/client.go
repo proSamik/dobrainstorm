@@ -242,7 +242,7 @@ func (c *Client) ChatCompletionsStreamWithContext(
 	}
 
 	// Log the request being sent
-	fmt.Printf("Sending streaming request to OpenRouter API: %s with %d messages\n", req.Model, len(req.Messages))
+	// fmt.Printf("Sending streaming request to OpenRouter API: %s with %d messages\n", req.Model, len(req.Messages))
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -299,7 +299,7 @@ func (c *Client) ChatCompletionsStreamWithContext(
 		}
 
 		// Log the raw line for debugging
-		fmt.Printf("RAW STREAM LINE (%d bytes): %s\n", len(line), string(line))
+		// fmt.Printf("RAW STREAM LINE (%d bytes): %s\n", len(line), string(line))
 
 		// Immediately process each line as it arrives
 		line = bytes.TrimSpace(line)
@@ -310,11 +310,11 @@ func (c *Client) ChatCompletionsStreamWithContext(
 		// Check if this is a comment line (e.g., ": OPENROUTER PROCESSING")
 		if bytes.HasPrefix(line, []byte(":")) {
 			commentText := string(bytes.TrimSpace(line[1:])) // Remove the ":" prefix
-			fmt.Printf("OpenRouter comment: %s\n", commentText)
+			// fmt.Printf("OpenRouter comment: %s\n", commentText)
 
 			// Forward comment to the callback with isComment=true
 			if err := callback(StreamResponse{}, true, commentText); err != nil {
-				fmt.Printf("Callback error (comment): %v\n", err)
+				// fmt.Printf("Callback error (comment): %v\n", err)
 				return fmt.Errorf("callback error: %w", err)
 			}
 			continue
@@ -322,7 +322,7 @@ func (c *Client) ChatCompletionsStreamWithContext(
 
 		// Lines should start with "data: "
 		if !bytes.HasPrefix(line, []byte("data: ")) {
-			fmt.Printf("Unexpected line format in stream: %s\n", string(line))
+			// fmt.Printf("Unexpected line format in stream: %s\n", string(line))
 			continue
 		}
 
@@ -331,7 +331,7 @@ func (c *Client) ChatCompletionsStreamWithContext(
 
 		// Check for the [DONE] message
 		if string(data) == "[DONE]" {
-			fmt.Println("Received [DONE] message from OpenRouter")
+			// fmt.Println("Received [DONE] message from OpenRouter")
 			if err := callback(StreamResponse{}, false, "[DONE]"); err != nil {
 				fmt.Printf("Callback error ([DONE]): %v\n", err)
 				return fmt.Errorf("callback error: %w", err)
@@ -342,31 +342,31 @@ func (c *Client) ChatCompletionsStreamWithContext(
 		// Parse the JSON data
 		var chunk StreamResponse
 		if err := json.Unmarshal(data, &chunk); err != nil {
-			fmt.Printf("Error unmarshaling chunk: %v\nRaw data: %s\n", err, string(data))
+			// fmt.Printf("Error unmarshaling chunk: %v\nRaw data: %s\n", err, string(data))
 			return fmt.Errorf("error unmarshaling chunk: %w", err)
 		}
 
 		chunkCount++
 
 		// Log chunk info
-		deltaContent := ""
-		finishReason := ""
-		if len(chunk.Choices) > 0 {
-			deltaContent = chunk.Choices[0].Delta.Content
-			finishReason = chunk.Choices[0].FinishReason
-		}
+		// deltaContent := ""
+		// finishReason := ""
+		// if len(chunk.Choices) > 0 {
+		// 	deltaContent = chunk.Choices[0].Delta.Content
+		// 	finishReason = chunk.Choices[0].FinishReason
+		// }
 
-		fmt.Printf("STREAM CHUNK #%d: ID=%s, Content=%q, FinishReason=%q\n",
-			chunkCount, chunk.ID, deltaContent, finishReason)
+		// fmt.Printf("STREAM CHUNK #%d: ID=%s, Content=%q, FinishReason=%q\n",
+		// 	chunkCount, chunk.ID, deltaContent, finishReason)
 
 		// Call the callback function with the chunk - regular data chunk
 		if err := callback(chunk, false, ""); err != nil {
-			fmt.Printf("Callback error: %v\n", err)
+			// fmt.Printf("Callback error: %v\n", err)
 			return fmt.Errorf("callback error: %w", err)
 		}
 	}
 
-	fmt.Printf("Finished processing OpenRouter stream with %d chunks total\n", chunkCount)
+	// fmt.Printf("Finished processing OpenRouter stream with %d chunks total\n", chunkCount)
 	return nil
 }
 
