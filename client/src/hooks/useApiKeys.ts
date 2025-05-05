@@ -15,11 +15,11 @@ export function useApiKeys() {
   const storeApiKeys = useSelector((state: RootState) => state.settings.apiKeys)
   const keysFetched = useSelector((state: RootState) => state.settings.keysFetched)
   
-  const [isLoading, setIsLoading] = useState(!keysFetched)
+  const [isLoading, setIsLoading] = useState<boolean>(!keysFetched)
   const [error, setError] = useState<string | null>(null)
 
   // Load API keys from server
-  const loadApiKeys = async () => {
+  const loadApiKeys = async (): Promise<Record<ApiProvider, ApiKeyData>> => {
     // If keys are already fetched, no need to fetch again
     if (keysFetched) {
       return storeApiKeys
@@ -69,7 +69,7 @@ export function useApiKeys() {
   }
 
   // Save API key
-  const saveApiKey = async (provider: ApiProvider, data: ApiKeyData) => {
+  const saveApiKey = async (provider: ApiProvider, data: ApiKeyData): Promise<boolean> => {
     try {
       // Get all existing keys from the Redux store
       const allKeys = { ...storeApiKeys }
@@ -78,7 +78,7 @@ export function useApiKeys() {
       allKeys[provider] = data
       
       // Prepare all keys to be sent to the server
-      const keysToSave: Record<string, any> = {}
+      const keysToSave: Record<string, unknown> = {}
       
       // Format all keys for the server
       Object.entries(allKeys).forEach(([keyProvider, keyData]) => {
