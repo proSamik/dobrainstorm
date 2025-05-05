@@ -142,6 +142,29 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
                 ...prev, 
                 { sender: 'system', content: 'AI is typing...' }
               ])
+            } else if (data.value === 'processing') {
+              // OpenRouter is processing - update UI to indicate this
+              console.log('OpenRouter is processing')
+              // Keep streaming state, just update the typing indicator if needed
+              if (!isStreaming) {
+                setIsStreaming(true)
+              }
+              
+              // Check if we already have a processing indicator
+              setMessages(prev => {
+                const hasProcessingMsg = prev.some(
+                  m => m.sender === 'system' && 
+                       (m.content === 'AI is typing...' || m.content.includes('Processing'))
+                )
+                
+                if (!hasProcessingMsg) {
+                  return [
+                    ...prev,
+                    { sender: 'system', content: 'Processing your request...' }
+                  ]
+                }
+                return prev
+              })
             } else if (data.value === 'stopped') {
               // Streaming was stopped by user
               console.log('Stream stopped by user')
@@ -154,7 +177,8 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
                   const newMessages = [...prev]
                   // Find and remove any system "typing" message
                   const typingIndex = newMessages.findIndex(
-                    m => m.sender === 'system' && m.content === 'AI is typing...'
+                    m => m.sender === 'system' && 
+                    (m.content === 'AI is typing...' || m.content.includes('Processing'))
                   )
                   if (typingIndex !== -1) {
                     newMessages.splice(typingIndex, 1)
@@ -178,7 +202,8 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
                   const newMessages = [...prev]
                   // Find and remove any system "typing" message
                   const typingIndex = newMessages.findIndex(
-                    m => m.sender === 'system' && m.content === 'AI is typing...'
+                    m => m.sender === 'system' && 
+                    (m.content === 'AI is typing...' || m.content.includes('Processing'))
                   )
                   if (typingIndex !== -1) {
                     newMessages.splice(typingIndex, 1)
