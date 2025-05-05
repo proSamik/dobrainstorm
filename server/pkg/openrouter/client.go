@@ -54,13 +54,21 @@ type Message struct {
 	Content string `json:"content"`
 }
 
+// ReasoningConfig represents options for model reasoning
+type ReasoningConfig struct {
+	Effort    string `json:"effort,omitempty"`     // "low", "medium", "high"
+	MaxTokens int    `json:"max_tokens,omitempty"` // Specific token budget for reasoning
+	Exclude   bool   `json:"exclude,omitempty"`    // Whether to exclude reasoning from response
+}
+
 // ChatCompletionRequest represents a request to the chat completions endpoint
 type ChatCompletionRequest struct {
-	Model       string    `json:"model"`
-	Messages    []Message `json:"messages"`
-	Stream      bool      `json:"stream"`
-	MaxTokens   int       `json:"max_tokens,omitempty"`
-	Temperature float64   `json:"temperature,omitempty"`
+	Model       string           `json:"model"`
+	Messages    []Message        `json:"messages"`
+	Stream      bool             `json:"stream"`
+	MaxTokens   int              `json:"max_tokens,omitempty"`
+	Temperature float64          `json:"temperature,omitempty"`
+	Reasoning   *ReasoningConfig `json:"reasoning,omitempty"`
 }
 
 // ChatCompletionResponse represents a response from the chat completions endpoint
@@ -78,8 +86,9 @@ type ChatCompletionChoice struct {
 
 // ChatCompletionMessage represents a message in a chat completion choice
 type ChatCompletionMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role      string `json:"role"`
+	Content   string `json:"content"`
+	Reasoning string `json:"reasoning,omitempty"`
 }
 
 // ChatCompletionUsage represents the token usage in a chat completion response
@@ -108,8 +117,9 @@ type StreamChoiceData struct {
 
 // StreamDelta represents the delta in a stream choice
 type StreamDelta struct {
-	Role    string `json:"role,omitempty"`
-	Content string `json:"content,omitempty"`
+	Role      string `json:"role,omitempty"`
+	Content   string `json:"content,omitempty"`
+	Reasoning string `json:"reasoning,omitempty"`
 }
 
 // ChatCompletions sends a chat completion request to the OpenRouter API
