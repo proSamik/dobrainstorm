@@ -29,13 +29,15 @@ export default function ChatModal({
   console.log("Rendering ChatModal", { isOpen, chatWindows });
 
   useEffect(() => {
-    // Verify user and update state
-    authService.verifyUser().catch(error => {
-      console.error('User verification failed:', error)
-    }).finally(() => {
-      setLoading(false)
-    })
-  }, [])
+    if (isOpen) {
+      // Verify user and update state when modal is opened
+      authService.verifyUser().catch(error => {
+        console.error('User verification failed:', error)
+      }).finally(() => {
+        setLoading(false)
+      })
+    }
+  }, [isOpen])
   
   // Close all websockets and then call the parent onClose function
   const handleCloseAll = () => {
