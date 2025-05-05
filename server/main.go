@@ -140,6 +140,10 @@ func main() {
 		subscriptionMiddleware.HasActiveSubscription(
 			boardWriteRateLimiter.Limit(http.HandlerFunc(boardHandler.DeleteBoard)))))
 
+	// Chat websocket route
+	chatHandler := handlers.NewChatHandler(db)
+	mux.Handle("/ws/chat", authMiddleware.RequireAuth(http.HandlerFunc(chatHandler.HandleChat)))
+
 	// Analytics routes (public)
 	mux.HandleFunc("/api/analytics/pageview", analyticsHandler.TrackPageView)
 
