@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Button } from './button'
 import { Card } from './card'
 import { X, StopCircle, MessageSquare, Bot, Info, BrainCircuit } from 'lucide-react'
+import { authService } from '@/services/auth'
 
 // Define different message types
 interface BaseMessage {
@@ -68,6 +69,7 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
       ? process.env.NEXT_PUBLIC_API_URL.replace(/^http/, 'ws')
       : 'ws://localhost:8080'
     
+    authService.verifyUser()
     // Create new WebSocket connection
     const socket = new WebSocket(`${wsBaseUrl}/ws/chat`)
     socketRef.current = socket
@@ -117,14 +119,13 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
             // Regular message from user or complete AI response
             if (data.isStreaming === false) {
               console.log('Received complete AI response after streaming')
+              console.log('Reasoning received:', data.reasoning)
+              
               // This is the final complete AI response after streaming
               setIsStreaming(false)
               
-              // Clear the streaming content since we now have the complete message
-              setCurrentStreamContent('')
-              
               // Get reasoning if available
-              const reasoning = data.reasoning || '';
+              const reasoning = data.reasoning || currentReasoning || '';
               
               // Replace the current streaming content with the full content
               setMessages(prev => {
@@ -153,10 +154,14 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
                     sender: 'assistant', 
                     content: cleanContent,
                     isIncomplete: isIncomplete,
-                    reasoning: reasoning
+                    reasoning: reasoning || undefined
                   }
                 ]
               })
+              
+              // Clear streaming content after adding to messages
+              setCurrentStreamContent('')
+              // Don't clear reasoning as we want to keep it
             } else {
               console.log('Received user message')
               // Regular message (likely from user)
@@ -178,7 +183,7 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
             break
             
           case 'reasoning':
-            // Handle reasoning content
+            // Handle reasoning content - store it separately
             console.log(`Received reasoning chunk: "${data.value}"`)
             setCurrentReasoning(prev => prev + data.value)
             break
@@ -189,6 +194,8 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
               // AI is starting to respond
               console.log('AI is starting to type')
               setIsStreaming(true)
+              // Clear any previous reasoning when starting new response
+              setCurrentReasoning('')
               setMessages(prev => [
                 ...prev, 
                 { sender: 'system', content: 'AI is typing...' }
@@ -224,6 +231,7 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
               // If we have partial content, add it as a complete message
               if (currentStreamContent) {
                 console.log(`Adding partial content as message: ${currentStreamContent.length} chars`)
+                console.log(`Adding reasoning: ${currentReasoning.length} chars`)
                 setMessages(prev => {
                   const newMessages = [...prev]
                   // Find and remove any system "typing" message
@@ -244,7 +252,7 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
                   ]
                 })
                 setCurrentStreamContent('')
-                setCurrentReasoning('')
+                // Don't clear reasoning as it may be needed for the final message
               }
             } else if (data.value === 'stream_end') {
               // Server signals end of stream - all content delivered
@@ -254,6 +262,7 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
               // If we have partial content, add it as a complete message
               if (currentStreamContent) {
                 console.log(`Adding complete streamed content: ${currentStreamContent.length} chars`)
+                console.log(`With reasoning: ${currentReasoning.length} chars`)
                 setMessages(prev => {
                   const newMessages = [...prev]
                   // Find and remove any system "typing" message
@@ -274,7 +283,7 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
                   ]
                 })
                 setCurrentStreamContent('')
-                setCurrentReasoning('')
+                // Don't clear reasoning as it may be needed for the final message
               }
             }
             break
@@ -312,7 +321,7 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
   // Scroll to bottom when messages change
   useEffect(() => {
     scrollToBottom()
-  }, [messages, currentStreamContent])
+  }, [messages, currentStreamContent, currentReasoning, showReasoning])
 
   // Handle sending a message
   const handleSendMessage = () => {
@@ -353,6 +362,11 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
     }
   }
 
+  // Toggle reasoning visibility for all messages
+  const toggleAllReasoning = () => {
+    setShowReasoning(prev => !prev)
+  }
+
   // Render a message based on its type
   const renderMessage = (msg: MessageItem, idx: number) => {
     switch(msg.sender) {
@@ -371,36 +385,37 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
         );
         
       case 'assistant':
+        const assistantMsg = msg as AssistantMessage;
         return (
           <div key={idx} className="text-left mb-2">
             <div className="flex justify-start items-start gap-2">
               <div className={`inline-block px-3 py-2 rounded-lg max-w-[80%] ${
-                msg.isIncomplete 
+                assistantMsg.isIncomplete 
                   ? 'bg-yellow-100 dark:bg-yellow-900 text-gray-800 dark:text-gray-200 border border-yellow-300 dark:border-yellow-700'
                   : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
               }`}>
                 <div className="flex items-start gap-2">
                   <Bot className="h-4 w-4 mt-1 flex-shrink-0" />
                   <div>
-                    <div>{msg.content}</div>
-                    {msg.isIncomplete && (
+                    <div>{assistantMsg.content}</div>
+                    {assistantMsg.isIncomplete && (
                       <div className="text-xs text-yellow-600 dark:text-yellow-400 mt-1 italic">
                         (Response incomplete due to timeout)
                       </div>
                     )}
-                    {msg.reasoning && (
+                    {assistantMsg.reasoning && (
                       <button 
-                        onClick={() => setShowReasoning(prev => !prev)} 
+                        onClick={toggleAllReasoning} 
                         className="text-xs text-blue-500 hover:text-blue-700 mt-1 flex items-center gap-1"
                       >
                         <BrainCircuit className="h-3 w-3" />
                         {showReasoning ? 'Hide reasoning' : 'Show reasoning'}
                       </button>
                     )}
-                    {msg.reasoning && showReasoning && (
+                    {assistantMsg.reasoning && showReasoning && (
                       <div className="mt-2 p-2 text-xs bg-gray-100 dark:bg-gray-800 rounded border-l-2 border-blue-500">
                         <div className="font-medium mb-1 text-blue-600 dark:text-blue-400">AI Reasoning:</div>
-                        <div className="whitespace-pre-wrap">{msg.reasoning}</div>
+                        <div className="whitespace-pre-wrap">{assistantMsg.reasoning}</div>
                       </div>
                     )}
                   </div>
@@ -452,7 +467,7 @@ export default function ChatWindow({ windowId, onClose }: ChatWindowProps) {
                     </div>
                     {currentReasoning && (
                       <button 
-                        onClick={() => setShowReasoning(prev => !prev)} 
+                        onClick={toggleAllReasoning} 
                         className="text-xs text-blue-500 hover:text-blue-700 mt-1 flex items-center gap-1"
                       >
                         <BrainCircuit className="h-3 w-3" />
