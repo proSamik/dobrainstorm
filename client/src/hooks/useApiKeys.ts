@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { ApiProvider } from '@/lib/models/providers'
 import { ApiKeyData, updateApiKey, setApiKeys } from '@/store/settingsSlice'
@@ -19,7 +19,7 @@ export function useApiKeys() {
   const [error, setError] = useState<string | null>(null)
 
   // Load API keys from server
-  const loadApiKeys = async (): Promise<Record<ApiProvider, ApiKeyData>> => {
+  const loadApiKeys = useCallback(async (): Promise<Record<ApiProvider, ApiKeyData>> => {
     // If keys are already fetched, no need to fetch again
     if (keysFetched) {
       return storeApiKeys
@@ -66,7 +66,7 @@ export function useApiKeys() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [dispatch, keysFetched, storeApiKeys])
 
   // Save API key
   const saveApiKey = async (provider: ApiProvider, data: ApiKeyData): Promise<boolean> => {
@@ -114,7 +114,7 @@ export function useApiKeys() {
     } else {
       setIsLoading(false)
     }
-  }, [keysFetched])
+  }, [keysFetched, loadApiKeys])
 
   return {
     isLoading,
