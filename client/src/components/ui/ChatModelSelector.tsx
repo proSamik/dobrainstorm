@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useEffect } from 'react'
-import { Check, RefreshCcw, Loader2 } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { Check, RefreshCcw, Loader2, Search, X } from 'lucide-react'
 import { 
   Select, 
   SelectContent, 
@@ -14,18 +14,23 @@ import {
 import { Button } from '@/components/ui/button'
 import { useAppDispatch, useAppSelector } from '@/hooks/useRedux'
 import { fetchModels, setSelectedModel } from '@/store/modelsSlice'
+import { Input } from '@/components/ui/input'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 interface ChatModelSelectorProps {
   className?: string;
   onSelectModel?: (modelId: string) => void;
+  compact?: boolean;
 }
 
 /**
  * Model selector component for chat interface
  * Allows selecting models from OpenRouter grouped by type
  */
-export default function ChatModelSelector({ className, onSelectModel }: ChatModelSelectorProps) {
+export default function ChatModelSelector({ className, onSelectModel, compact = false }: ChatModelSelectorProps) {
   const dispatch = useAppDispatch()
+  const [searchTerm, setSearchTerm] = useState('')
+  const [activeTab, setActiveTab] = useState('all')
   
   // Get models from Redux store
   const { 
@@ -62,11 +67,40 @@ export default function ChatModelSelector({ className, onSelectModel }: ChatMode
     dispatch(fetchModels())
   }
 
+  // Filter models based on search term
+  const filterModels = (modelList: any[]) => {
+    if (!searchTerm) return modelList;
+    return modelList.filter(model => 
+      model.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }
+
+  // Get the current filtered models based on category tab and search
+  const getFilteredModels = () => {
+    switch (activeTab) {
+      case 'free':
+        return filterModels(freeModels);
+      case 'text':
+        return filterModels(textToTextModels);
+      case 'image':
+        return filterModels(textImageToTextModels);
+      default:
+        return filterModels(models);
+    }
+  }
+
+  // Get the selected model name for display
+  const getSelectedModelName = () => {
+    if (!selectedModel) return "Select model";
+    const model = models.find(m => m.id === selectedModel);
+    return model ? model.name : "Selected model";
+  }
+
   // Show loading spinner while fetching models
   if (loading && models.length === 0) {
     return (
       <Select disabled>
-        <SelectTrigger className={`h-9 ${className}`}>
+        <SelectTrigger className={`h-9 ${className} bg-gray-100 dark:bg-gray-800`}>
           <div className="flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
             <span>Loading models...</span>
@@ -81,15 +115,15 @@ export default function ChatModelSelector({ className, onSelectModel }: ChatMode
     return (
       <div className={`flex items-center gap-2 ${className}`}>
         <Select disabled>
-          <SelectTrigger className="h-9 flex-1">
+          <SelectTrigger className="h-9 flex-1 bg-gray-100 dark:bg-gray-800">
             <span className="text-red-500">Failed to load models</span>
           </SelectTrigger>
         </Select>
         <Button 
           variant="ghost" 
-          size="lg" // Changed from "icon" to "lg"
+          size="sm"
           onClick={handleRefresh} 
-          className="h-9 w-9"
+          className="h-9 w-9 p-0"
           title="Retry loading models"
         >
           <RefreshCcw className="h-4 w-4" />
@@ -98,18 +132,133 @@ export default function ChatModelSelector({ className, onSelectModel }: ChatMode
     )
   }
 
+  // Compact version just shows the selected model and a dropdown
+  if (compact) {
+    return (
+      <div className={`flex items-center gap-2 ${className}`}>
+        <Select 
+          value={selectedModel || undefined} 
+          onValueChange={handleModelSelect}
+        >
+          <SelectTrigger className="h-9 flex-1 bg-gray-100 dark:bg-gray-800 min-w-[180px]">
+            <SelectValue placeholder="Select a model">
+              {getSelectedModelName()}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent className="max-h-[300px]">
+            {/* Search input */}
+            <div className="p-2 border-b">
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
+                <Input
+                  placeholder="Search models..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8 h-9"
+                />
+                {searchTerm && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-1 top-1 h-7 w-7 p-0"
+                    onClick={() => setSearchTerm('')}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Category tabs */}
+            <Tabs defaultValue="all" className="w-full" onValueChange={setActiveTab}>
+              <TabsList className="w-full grid grid-cols-4">
+                <TabsTrigger value="all">All</TabsTrigger>
+                <TabsTrigger value="free">Free</TabsTrigger>
+                <TabsTrigger value="text">Text</TabsTrigger>
+                <TabsTrigger value="image">Img+Text</TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            {/* Models list based on selected tab */}
+            {getFilteredModels().length > 0 ? (
+              <SelectGroup>
+                {getFilteredModels().map(model => (
+                  <SelectItem key={model.id} value={model.id}>
+                    <div className="flex items-center justify-between w-full">
+                      <span className="truncate">{model.name}</span>
+                      {model.isFree && <span className="text-xs text-blue-500 ml-1">(free)</span>}
+                      {model.id === selectedModel && <Check className="h-4 w-4 ml-2 flex-shrink-0" />}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ) : (
+              <div className="p-2 text-center text-gray-500">No models found</div>
+            )}
+          </SelectContent>
+        </Select>
+        
+        {/* Refresh button */}
+        <Button 
+          variant="ghost" 
+          size="sm"
+          onClick={handleRefresh} 
+          className="h-9 w-9 p-0"
+          disabled={loading}
+          title="Refresh models list"
+        >
+          <RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+        </Button>
+      </div>
+    )
+  }
+
+  // Full version with separate sections (not used in this layout)
   return (
     <div className={`flex items-center gap-2 ${className}`}>
       <Select 
         value={selectedModel || undefined} 
         onValueChange={handleModelSelect}
       >
-        <SelectTrigger className="h-9 flex-1">
+        <SelectTrigger className="h-9 flex-1 bg-gray-100 dark:bg-gray-800">
           <SelectValue placeholder="Select a model" />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="max-h-[300px]">
+          {/* Search input */}
+          <div className="p-2 border-b">
+            <div className="relative">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
+              <Input
+                placeholder="Search models..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8 h-9"
+              />
+              {searchTerm && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-1 top-1 h-7 w-7 p-0"
+                  onClick={() => setSearchTerm('')}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Category tabs */}
+          <Tabs defaultValue="all" className="w-full" onValueChange={setActiveTab}>
+            <TabsList className="w-full grid grid-cols-4">
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="free">Free</TabsTrigger>
+              <TabsTrigger value="text">Text</TabsTrigger>
+              <TabsTrigger value="image">Img+Text</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
           {/* Free models group */}
-          {freeModels.length > 0 && (
+          {activeTab === 'all' && freeModels.length > 0 && searchTerm === '' && (
             <SelectGroup>
               <SelectLabel>Free Models</SelectLabel>
               {freeModels.map(model => (
@@ -123,38 +272,21 @@ export default function ChatModelSelector({ className, onSelectModel }: ChatMode
             </SelectGroup>
           )}
 
-          {/* Text to Text models */}
-          {textToTextModels.filter(m => !m.isFree).length > 0 && (
+          {/* Models based on active tab and search */}
+          {getFilteredModels().length > 0 ? (
             <SelectGroup>
-              <SelectLabel>Text → Text</SelectLabel>
-              {textToTextModels
-                .filter(m => !m.isFree)
-                .map(model => (
-                  <SelectItem key={model.id} value={model.id}>
-                    <div className="flex items-center justify-between w-full">
-                      <span className="truncate">{model.name}</span>
-                      {model.id === selectedModel && <Check className="h-4 w-4 ml-2" />}
-                    </div>
-                  </SelectItem>
-                ))}
+              {getFilteredModels().map(model => (
+                <SelectItem key={model.id} value={model.id}>
+                  <div className="flex items-center justify-between w-full">
+                    <span className="truncate">{model.name}</span>
+                    {model.isFree && <span className="text-xs text-blue-500 ml-1">(free)</span>}
+                    {model.id === selectedModel && <Check className="h-4 w-4 ml-2" />}
+                  </div>
+                </SelectItem>
+              ))}
             </SelectGroup>
-          )}
-
-          {/* Text+Image to Text models */}
-          {textImageToTextModels.filter(m => !m.isFree).length > 0 && (
-            <SelectGroup>
-              <SelectLabel>Text+Image → Text</SelectLabel>
-              {textImageToTextModels
-                .filter(m => !m.isFree)
-                .map(model => (
-                  <SelectItem key={model.id} value={model.id}>
-                    <div className="flex items-center justify-between w-full">
-                      <span className="truncate">{model.name}</span>
-                      {model.id === selectedModel && <Check className="h-4 w-4 ml-2" />}
-                    </div>
-                  </SelectItem>
-                ))}
-            </SelectGroup>
+          ) : (
+            <div className="p-2 text-center text-gray-500">No models found</div>
           )}
         </SelectContent>
       </Select>
@@ -162,9 +294,9 @@ export default function ChatModelSelector({ className, onSelectModel }: ChatMode
       {/* Refresh button */}
       <Button 
         variant="ghost" 
-        size="lg" // Changed from "icon" to "lg"
+        size="sm"
         onClick={handleRefresh} 
-        className="h-9 w-9"
+        className="h-9 w-9 p-0"
         disabled={loading}
         title="Refresh models list"
       >
