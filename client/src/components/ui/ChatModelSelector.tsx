@@ -220,7 +220,7 @@ export default function ChatModelSelector({ className, onSelectModel, compact = 
 
   // Full version with separate sections (not used in this layout)
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
+    <div className={`flex items-center gap-2 ${className} z-10`}>
       <Select 
         value={selectedModel || undefined} 
         onValueChange={handleModelSelect}
@@ -266,7 +266,7 @@ export default function ChatModelSelector({ className, onSelectModel, compact = 
           </div>
 
           {/* Scrollable models list */}
-          <div className="max-h-[200px] overflow-y-auto">
+          <div className="max-h-[200px] overflow-y-auto z-10">
             {/* Free models group */}
             {activeTab === 'all' && freeModels.length > 0 && searchTerm === '' && (
               <SelectGroup>
