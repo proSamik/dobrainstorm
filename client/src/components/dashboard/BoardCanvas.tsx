@@ -538,7 +538,7 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
           <Panel position="top-right" className="flex items-center gap-2">
             <button 
               onClick={() => setShowShortcuts(true)}
-              className="bg-white/90 dark:bg-gray-800/90 p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors"
+              className="bg-white/90 dark:bg-dark-background p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors"
               title="Keyboard Shortcuts"
             >
               ?
@@ -547,21 +547,21 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
               <>
                 <button 
                   onClick={() => applyAutoLayout('TB')}
-                  className="bg-white/90 dark:bg-gray-800/90 p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
+                  className="bg-white/90 dark:bg-dark-background p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
                   title="Auto-layout (Vertical)"
                 >
                   Layout ↕
                 </button>
                 <button 
                   onClick={() => applyAutoLayout('LR')}
-                  className="bg-white/90 dark:bg-gray-800/90 p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
+                  className="bg-white/90 dark:bg-dark-background p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
                   title="Auto-layout (Horizontal)"
                 >
                   Layout ↔
                 </button>
                 <button 
                   onClick={() => applyAutoLayout('auto')}
-                  className="bg-white/90 dark:bg-gray-800/90 p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
+                  className="bg-white/90 dark:bg-dark-background p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
                   title="Smart Layout (Auto-detect)"
                 >
                   Smart Layout
@@ -575,21 +575,21 @@ const BoardCanvas = ({ boardId }: BoardCanvasProps) => {
             <Panel position="bottom-center" className="flex items-center gap-2 mb-2">
               <button 
                 onClick={() => applyAutoLayout('TB')}
-                className="bg-white/90 dark:bg-gray-800/90 p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
+                className="bg-white/90 dark:bg-dark-background p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
                 title="Auto-layout (Vertical)"
               >
                 Layout ↕
               </button>
               <button 
                 onClick={() => applyAutoLayout('LR')}
-                className="bg-white/90 dark:bg-gray-800/90 p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
+                className="bg-white/90 dark:bg-dark-background p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
                 title="Auto-layout (Horizontal)"
               >
                 Layout ↔
               </button>
               <button 
                 onClick={() => applyAutoLayout('auto')}
-                className="bg-white/90 dark:bg-gray-800/90 p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
+                className="bg-white/90 dark:bg-dark-background p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs"
                 title="Smart Layout (Auto-detect)"
               >
                 Smart
