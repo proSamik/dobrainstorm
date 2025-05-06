@@ -241,14 +241,33 @@ func (c *Client) ChatCompletionsStreamWithContext(
 		httpReq.Header.Set("X-Title", c.frontendTitle)
 	}
 
-	// Log the request being sent
-	// fmt.Printf("Sending streaming request to OpenRouter API: %s with %d messages\n", req.Model, len(req.Messages))
+	// Log that we're about to make a request that can be cancelled via the context
+	fmt.Println("Sending cancellable streaming request to OpenRouter API")
 
-	resp, err := c.httpClient.Do(httpReq)
+	// Use a client without any timeout as we're using context for cancellation
+	client := &http.Client{
+		// Remove timeout - we're controlling this with context
+		// Timeout: 60 * time.Second,
+		// Add a transport that will close idle connections
+		Transport: &http.Transport{
+			DisableKeepAlives: true,
+		},
+	}
+
+	resp, err := client.Do(httpReq)
 	if err != nil {
+		if ctx.Err() != nil {
+			fmt.Println("Request was cancelled via context before completion")
+			return ctx.Err()
+		}
 		return fmt.Errorf("error sending request: %w", err)
 	}
-	defer resp.Body.Close()
+
+	// Make sure we close the response body when we're done
+	defer func() {
+		fmt.Println("Closing OpenRouter response connection")
+		resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -260,48 +279,76 @@ func (c *Client) ChatCompletionsStreamWithContext(
 	chunkCount := 0
 	reader := bufio.NewReader(resp.Body)
 
-	// Monitor for context cancellation in a separate goroutine
-	done := make(chan struct{})
-	defer close(done)
+	// Create a separate goroutine to watch for context cancellation
+	// and close the response body when that happens
+	responseClosed := make(chan struct{})
+	defer close(responseClosed)
+
 	go func() {
 		select {
 		case <-ctx.Done():
-			fmt.Println("Request cancelled, closing connection")
+			fmt.Println("Context cancelled, aborting OpenRouter request")
 			resp.Body.Close() // This will cause the read loop to exit with an error
-		case <-done:
-			// Normal exit, do nothing
+		case <-responseClosed:
+			// Normal exit
 		}
 	}()
 
 	for {
-		// Check for context cancellation
-		select {
-		case <-ctx.Done():
+		// Check for context cancellation before each read
+		if ctx.Err() != nil {
+			fmt.Printf("Context cancelled (detected before read): %v\n", ctx.Err())
 			return ctx.Err()
-		default:
-			// Continue processing
+		}
+
+		// Set a read deadline to make sure we can exit if the context is cancelled
+		// while we're blocked on ReadBytes
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			// If context doesn't have a deadline, use a reasonable default
+			deadline = time.Now().Add(1 * time.Second)
+		} else {
+			// Add a small buffer to the context deadline
+			if time.Until(deadline) > 2*time.Second {
+				deadline = time.Now().Add(2 * time.Second)
+			}
+		}
+
+		// Set a deadline for the read operation if possible
+		if conn, ok := resp.Body.(interface{ SetReadDeadline(time.Time) error }); ok {
+			conn.SetReadDeadline(deadline)
 		}
 
 		line, err := reader.ReadBytes('\n')
+
+		// Check for context cancellation after each read
+		if ctx.Err() != nil {
+			fmt.Printf("Context cancelled (detected after read): %v\n", ctx.Err())
+			return ctx.Err()
+		}
+
 		if err != nil {
 			if err == io.EOF {
 				fmt.Println("EOF reached in OpenRouter stream")
 				break
 			}
 
-			// Check if this was due to context cancellation
+			// Check if this was due to context cancellation or deadline
 			if ctx.Err() != nil {
 				fmt.Printf("Stream read cancelled: %v\n", ctx.Err())
 				return ctx.Err()
 			}
 
+			if netErr, ok := err.(interface{ Timeout() bool }); ok && netErr.Timeout() {
+				// This was a timeout, but not a context cancellation - just retry
+				fmt.Println("Read timeout, retrying...")
+				continue
+			}
+
 			return fmt.Errorf("error reading response: %w", err)
 		}
 
-		// Log the raw line for debugging
-		// fmt.Printf("RAW STREAM LINE (%d bytes): %s\n", len(line), string(line))
-
-		// Immediately process each line as it arrives
+		// Process the line
 		line = bytes.TrimSpace(line)
 		if len(line) == 0 {
 			continue
@@ -310,11 +357,9 @@ func (c *Client) ChatCompletionsStreamWithContext(
 		// Check if this is a comment line (e.g., ": OPENROUTER PROCESSING")
 		if bytes.HasPrefix(line, []byte(":")) {
 			commentText := string(bytes.TrimSpace(line[1:])) // Remove the ":" prefix
-			// fmt.Printf("OpenRouter comment: %s\n", commentText)
 
 			// Forward comment to the callback with isComment=true
 			if err := callback(StreamResponse{}, true, commentText); err != nil {
-				// fmt.Printf("Callback error (comment): %v\n", err)
 				return fmt.Errorf("callback error: %w", err)
 			}
 			continue
@@ -322,7 +367,6 @@ func (c *Client) ChatCompletionsStreamWithContext(
 
 		// Lines should start with "data: "
 		if !bytes.HasPrefix(line, []byte("data: ")) {
-			// fmt.Printf("Unexpected line format in stream: %s\n", string(line))
 			continue
 		}
 
@@ -331,7 +375,6 @@ func (c *Client) ChatCompletionsStreamWithContext(
 
 		// Check for the [DONE] message
 		if string(data) == "[DONE]" {
-			// fmt.Println("Received [DONE] message from OpenRouter")
 			if err := callback(StreamResponse{}, false, "[DONE]"); err != nil {
 				fmt.Printf("Callback error ([DONE]): %v\n", err)
 				return fmt.Errorf("callback error: %w", err)
@@ -342,31 +385,18 @@ func (c *Client) ChatCompletionsStreamWithContext(
 		// Parse the JSON data
 		var chunk StreamResponse
 		if err := json.Unmarshal(data, &chunk); err != nil {
-			// fmt.Printf("Error unmarshaling chunk: %v\nRaw data: %s\n", err, string(data))
 			return fmt.Errorf("error unmarshaling chunk: %w", err)
 		}
 
 		chunkCount++
 
-		// Log chunk info
-		// deltaContent := ""
-		// finishReason := ""
-		// if len(chunk.Choices) > 0 {
-		// 	deltaContent = chunk.Choices[0].Delta.Content
-		// 	finishReason = chunk.Choices[0].FinishReason
-		// }
-
-		// fmt.Printf("STREAM CHUNK #%d: ID=%s, Content=%q, FinishReason=%q\n",
-		// 	chunkCount, chunk.ID, deltaContent, finishReason)
-
 		// Call the callback function with the chunk - regular data chunk
 		if err := callback(chunk, false, ""); err != nil {
-			// fmt.Printf("Callback error: %v\n", err)
 			return fmt.Errorf("callback error: %w", err)
 		}
 	}
 
-	// fmt.Printf("Finished processing OpenRouter stream with %d chunks total\n", chunkCount)
+	fmt.Printf("Finished processing OpenRouter stream with %d chunks total\n", chunkCount)
 	return nil
 }
 
