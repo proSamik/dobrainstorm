@@ -93,6 +93,11 @@ func main() {
 	mux.Handle("/user/profile/update", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.UpdateProfile)))
 	mux.Handle("/user/verify-user", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.VerifyUser)))
 
+	// User preferences routes (protected)
+	preferencesHandler := handlers.NewPreferencesHandler(db)
+	mux.Handle("/user/preferences", authMiddleware.RequireAuth(http.HandlerFunc(preferencesHandler.GetUserPreferences)))
+	mux.Handle("/user/preferences/update", authMiddleware.RequireAuth(http.HandlerFunc(preferencesHandler.UpdateUserPreferences)))
+
 	// Creem payment routes
 	creemHandler := handlers.NewCreemHandler(db)
 	mux.Handle("/creem/checkout", authMiddleware.RequireAuth(http.HandlerFunc(creemHandler.HandleCheckout)))
