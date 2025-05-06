@@ -31,6 +31,7 @@ type ChatMessage struct {
 	SessionID   string      `json:"sessionId"`
 	IsStreaming bool        `json:"isStreaming,omitempty"`
 	Reasoning   string      `json:"reasoning,omitempty"`
+	Model       string      `json:"model,omitempty"`
 }
 
 // StopStreamRequest represents a request to stop a stream
@@ -197,6 +198,9 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 
 		// Log the received message
 		log.Printf("Received message: %+v", message)
+		if message.Model != "" {
+			log.Printf("Received model parameter: %s", message.Model)
+		}
 
 		// Set the session ID if it's not in the message
 		if message.SessionID == "" {
@@ -264,7 +268,14 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 			// Create request to OpenRouter API
 			req := openrouter.ChatCompletionRequest{
 				Messages: chatHistory,
+				Model:   message.Model,
 				Stream:   true,
+			}
+
+			// Set the model if specified in the message
+			if message.Model != "" {
+				req.Model = message.Model
+				log.Printf("Using specified model from request: %s", message.Model)
 			}
 
 			// Create a cancellable context
