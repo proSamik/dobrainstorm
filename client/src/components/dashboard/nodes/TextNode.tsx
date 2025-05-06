@@ -249,7 +249,7 @@ const TextNode = ({ id, data, selected }: NodeProps<TextNodeData>) => {
           ? 'bg-blue-50 dark:bg-blue-900 border-2 border-blue-500' 
           : isMultiSelected
             ? 'bg-blue-50 dark:bg-blue-900 border-2 border-blue-300 dark:border-blue-700' 
-            : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700'
+            : 'bg-white dark:bg-dark-background border border-gray-200 dark:border-gray-700'
       }`}
       style={{ 
         minWidth: 180,
