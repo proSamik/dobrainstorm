@@ -1588,7 +1588,7 @@ This structure will be used to automatically create a mind map with meaningful c
   return (
     <div 
       ref={panelRef}
-      className="absolute right-0 top-0 bottom-0 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 shadow-lg z-10 flex flex-col"
+      className="absolute right-0 top-0 bottom-0 bg-white dark:bg-dark-background border-l border-gray-200 dark:border-gray-700 shadow-lg z-10 flex flex-col"
       style={{ width: panelWidth }}
     >
       {/* Resize handle */}
@@ -1611,7 +1611,7 @@ This structure will be used to automatically create a mind map with meaningful c
             type="text"
             value={label}
             onChange={handleLabelChange}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-background text-gray-900 dark:text-gray-100 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
             placeholder="Enter node label..."
           />
         </div>
@@ -1624,7 +1624,7 @@ This structure will be used to automatically create a mind map with meaningful c
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Content
           </label>
-          <div className="border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden cursor-text bg-white dark:bg-gray-800">
+          <div className="border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden cursor-text bg-white dark:bg-dark-background">
             <RichTextEditor
               content={text}
               onChange={handleTextChange}
@@ -1680,7 +1680,7 @@ This structure will be used to automatically create a mind map with meaningful c
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Ask AI</label>
           {/* Provider selector */}
           <select
-            className="block mt-1 mb-2 border border-gray-300 dark:border-gray-600 rounded p-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            className="block mt-1 mb-2 border border-gray-300 dark:border-gray-600 rounded p-1 bg-white dark:bg-dark-background text-gray-900 dark:text-gray-100"
             value={selectedProvider}
             onChange={(e) => {
               const p = e.target.value as ApiProvider;
@@ -1698,7 +1698,7 @@ This structure will be used to automatically create a mind map with meaningful c
           <textarea
             value={chatInput}
             onChange={e => setChatInput(e.target.value)}
-            className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-dark-background text-gray-900 dark:text-gray-100"
             placeholder="Type your request, e.g. 'suggest me 10 domain name ideas'"
           />
           <button
@@ -1710,7 +1710,7 @@ This structure will be used to automatically create a mind map with meaningful c
           
           {/* Editable AI Suggestions */}
           {editableSuggestions && (
-            <div className="mt-4 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-800">
+            <div className="mt-4 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-dark-background">
               <div className="flex justify-between items-center mb-2">
                 <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">AI Suggestions</h4>
                 <div className="flex gap-2">
@@ -1752,14 +1752,14 @@ This structure will be used to automatically create a mind map with meaningful c
                 <textarea 
                   value={editableSuggestions}
                   onChange={handleEditSuggestions}
-                  className="w-full h-64 p-2 bg-gray-50 dark:bg-gray-700 font-mono text-sm border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
+                  className="w-full h-64 p-2 bg-gray-50 dark:bg-dark-background font-mono text-sm border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-400"
                   placeholder='{
   "Category 1": ["Idea 1", "Idea 2"],
   "Category 2": ["Idea 3", "Idea 4"]
 }'
                 />
               ) : (
-                <div className="bg-gray-50 dark:bg-gray-700 p-2 rounded-b h-64 overflow-auto">
+                <div className="bg-gray-50 dark:bg-dark-background p-2 rounded-b h-64 overflow-auto">
                   <pre className="text-sm font-mono text-gray-800 dark:text-gray-200">{editableSuggestions}</pre>
                 </div>
               )}
@@ -1784,7 +1784,7 @@ This structure will be used to automatically create a mind map with meaningful c
               className={`px-3 py-1 rounded text-sm font-medium ${
                 isDirty
                   ? 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-300'
+                  : 'bg-gray-200 dark:bg-dark-background text-gray-500 dark:text-gray-300'
               }`}
               disabled={!isDirty}
             >
