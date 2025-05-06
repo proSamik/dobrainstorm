@@ -11,6 +11,7 @@ import rehypeSanitize from 'rehype-sanitize'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
+import { authService } from '@/services/auth'
 
 // Define different message types
 interface BaseMessage {
@@ -55,6 +56,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
   const [connected, setConnected] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [showReasoning, setShowReasoning] = useState(true) // Start with reasoning visible
+  const [isStopping, setIsStopping] = useState(false) // Track stop in progress for UI
   
   // Refs
   const socketRef = useRef<WebSocket | null>(null)
@@ -64,6 +66,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
   const activeMessageRef = useRef<number | null>(null) // Track active message index
   const reasoningStartTimeRef = useRef<number | null>(null) // Track reasoning start time
   const isUserScrollingRef = useRef(false) // Track if the user is scrolling
+  const stoppingRef = useRef(false) // Track stop in progress
 
   // Function to scroll to bottom of chat
   const scrollToBottom = () => {
@@ -302,8 +305,12 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
               }
             }
             else if (statusValue === 'stopped') {
-              // Streaming was stopped by user
-              console.log('Stream stopped by user');
+              // Streaming was stopped by user - server confirmed
+              console.log('Server confirmed stream stopped');
+              
+              // Reset stopping state
+              stoppingRef.current = false;
+              setIsStopping(false);
               
               setMessages(prev => {
                 const newMessages = [...prev];
@@ -316,7 +323,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
                     ...current,
                     isThinking: false,
                     isStreaming: false,
-                    content: current.content + ' (stopped)'
+                    content: current.content.replace(' (stopping...)', '') + ' (stopped)'
                   };
                 }
                 return newMessages;
@@ -353,6 +360,10 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
               // Reset active message
               activeMessageRef.current = null;
               reasoningStartTimeRef.current = null;
+              
+              // Also reset stopping state if it was set
+              stoppingRef.current = false;
+              setIsStopping(false);
             }
             break;
             
@@ -535,7 +546,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
 
   // Handle sending a message
   const handleSendMessage = () => {
-    if (!inputValue.trim() || !socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return;
+    if (!inputValue.trim() || !socketRef.current || socketRef.current.readyState !== WebSocket.OPEN || stoppingRef.current) return;
 
     try {
       // Store the message content for deduplication
@@ -579,15 +590,62 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
   
   // Handle stopping the AI response stream
   const handleStopStream = () => {
-    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return;
+    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN || stoppingRef.current || !sessionId) return;
     
     try {
-      // Send stop command to the server
-      socketRef.current.send(JSON.stringify({
-        type: 'stop',
-        sessionId: sessionId
-      }));
+      // Mark as stopping immediately - both for UI and internal tracking
+      stoppingRef.current = true;
+      setIsStopping(true);
+      
+      // Update the UI immediately - without waiting for server confirmation
+      setMessages(prev => {
+        const newMessages = [...prev];
+        if (activeMessageRef.current !== null && 
+            activeMessageRef.current < newMessages.length &&
+            newMessages[activeMessageRef.current] &&
+            newMessages[activeMessageRef.current].sender === 'assistant') {
+          const current = newMessages[activeMessageRef.current] as AssistantMessage;
+          newMessages[activeMessageRef.current] = {
+            ...current,
+            isThinking: false,
+            isStreaming: false,
+            content: current.content + ' (stopping...)'
+          };
+        }
+        return newMessages;
+      });
+      
+      // IMPORTANT: Use a direct HTTP call to stop the stream instead of WebSocket
+      // This bypasses the WebSocket message queue that might be blocked by incoming stream chunks
+      console.log('Sending stop request via direct HTTP call');
+      
+      // Use authService.post which handles auth headers and cookies automatically
+      authService.post('/api/chat/stop', { sessionId })
+        .then(response => {
+          // Axios response has data property instead of json() method
+          console.log('Stop request successful:', response.data);
+          // Note: We don't need to do anything here as we'll get a WebSocket message when the stop is processed
+        })
+        .catch(error => {
+          console.error('Error stopping stream via HTTP:', error);
+          // On error, reset the stopping state after a short delay
+          setTimeout(() => {
+            stoppingRef.current = false;
+            setIsStopping(false);
+          }, 1000);
+        });
+      
+      // Set a timeout to reset the stopping state if we don't get a server response
+      setTimeout(() => {
+        if (stoppingRef.current) {
+          stoppingRef.current = false;
+          setIsStopping(false);
+          console.log('Stop request timed out, resetting stopping state');
+        }
+      }, 5000); // 5 second timeout
     } catch (error) {
+      stoppingRef.current = false;
+      setIsStopping(false);
       console.error('Error sending stop command:', error);
     }
   };
@@ -782,20 +840,21 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
           onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
           placeholder="Type a message..."
           className="flex-1 px-3 py-2 border rounded-l-md focus:outline-none"
-          disabled={!connected || isResponding}
+          disabled={!connected || isResponding || isStopping}
         />
         {isResponding ? (
           <Button 
             onClick={handleStopStream}
-            className="rounded-l-none bg-red-500 hover:bg-red-600"
+            className={`rounded-l-none ${isStopping ? 'bg-gray-500 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'}`}
+            disabled={isStopping}
           >
             <StopCircle className="h-4 w-4 mr-1" />
-            Stop
+            {isStopping ? 'Stopping...' : 'Stop'}
           </Button>
         ) : (
         <Button 
           onClick={handleSendMessage} 
-          disabled={!connected}
+          disabled={!connected || isStopping}
           className="rounded-l-none"
         >
           Send
