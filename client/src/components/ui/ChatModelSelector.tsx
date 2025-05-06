@@ -27,7 +27,7 @@ interface ChatModelSelectorProps {
  * Model selector component for chat interface
  * Allows selecting models from OpenRouter grouped by type
  */
-export default function ChatModelSelector({ className, onSelectModel, compact = false }: ChatModelSelectorProps) {
+export default function ChatModelSelector({ className, onSelectModel }: ChatModelSelectorProps) {
   const dispatch = useAppDispatch()
   const [searchTerm, setSearchTerm] = useState('')
   const [activeTab, setActiveTab] = useState('all')
@@ -132,10 +132,8 @@ export default function ChatModelSelector({ className, onSelectModel, compact = 
     )
   }
 
-  // Compact version just shows the selected model and a dropdown
-  if (compact) {
     return (
-      <div className={`flex items-center gap-2 ${className}`}>
+      <div className={`flex items-center gap-2 ${className} z-10`}>
         <Select 
           value={selectedModel || undefined} 
           onValueChange={handleModelSelect}
@@ -174,10 +172,10 @@ export default function ChatModelSelector({ className, onSelectModel, compact = 
               {/* Category tabs */}
               <Tabs defaultValue="all" className="w-full" onValueChange={setActiveTab}>
                 <TabsList className="w-full grid grid-cols-4">
-                  <TabsTrigger value="all">All</TabsTrigger>
-                  <TabsTrigger value="free">Free</TabsTrigger>
-                  <TabsTrigger value="text">Text</TabsTrigger>
-                  <TabsTrigger value="image">Img+Text</TabsTrigger>
+                  <TabsTrigger value="all" className={activeTab === 'all' ? 'border-b-2 border-blue-500' : ''}>All</TabsTrigger>
+                  <TabsTrigger value="free" className={activeTab === 'free' ? 'border-b-2 border-blue-500' : ''}>Free</TabsTrigger>
+                  <TabsTrigger value="text" className={activeTab === 'text' ? 'border-b-2 border-blue-500' : ''}>Text</TabsTrigger>
+                  <TabsTrigger value="image" className={activeTab === 'image' ? 'border-b-2 border-blue-500' : ''}>Img+Text</TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
@@ -216,103 +214,4 @@ export default function ChatModelSelector({ className, onSelectModel, compact = 
         </Button>
       </div>
     )
-  }
-
-  // Full version with separate sections (not used in this layout)
-  return (
-    <div className={`flex items-center gap-2 ${className} z-10`}>
-      <Select 
-        value={selectedModel || undefined} 
-        onValueChange={handleModelSelect}
-      >
-        <SelectTrigger className="h-9 flex-1 bg-white dark:bg-dark-background">
-          <SelectValue placeholder="Select a model" />
-        </SelectTrigger>
-        <SelectContent className="max-h-[300px] overflow-hidden">
-          {/* Search input and tabs (sticky) */}
-          <div className="sticky top-0 z-10 bg-white dark:bg-dark-background">
-            {/* Search input */}
-            <div className="p-2 border-b">
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
-                <Input
-                  placeholder="Search models..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8 h-9"
-                />
-                {searchTerm && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-1 top-1 h-7 w-7 p-0"
-                    onClick={() => setSearchTerm('')}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {/* Category tabs */}
-            <Tabs defaultValue="all" className="w-full" onValueChange={setActiveTab}>
-              <TabsList className="w-full grid grid-cols-4">
-                <TabsTrigger value="all">All</TabsTrigger>
-                <TabsTrigger value="free">Free</TabsTrigger>
-                <TabsTrigger value="text">Text</TabsTrigger>
-                <TabsTrigger value="image">Img+Text</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-
-          {/* Scrollable models list */}
-          <div className="max-h-[200px] overflow-y-auto z-10">
-            {/* Free models group */}
-            {activeTab === 'all' && freeModels.length > 0 && searchTerm === '' && (
-              <SelectGroup>
-                <SelectLabel>Free Models</SelectLabel>
-                {freeModels.map(model => (
-                  <SelectItem key={model.id} value={model.id}>
-                    <div className="flex items-center justify-between w-full">
-                      <span className="truncate">{model.name}</span>
-                      {model.id === selectedModel && <Check className="h-4 w-4 ml-2" />}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            )}
-
-            {/* Models based on active tab and search */}
-            {getFilteredModels().length > 0 ? (
-              <SelectGroup>
-                {getFilteredModels().map(model => (
-                  <SelectItem key={model.id} value={model.id}>
-                    <div className="flex items-center justify-between w-full">
-                      <span className="truncate">{model.name}</span>
-                      {model.isFree && <span className="text-xs text-blue-500 ml-1">(free)</span>}
-                      {model.id === selectedModel && <Check className="h-4 w-4 ml-2" />}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            ) : (
-              <div className="p-2 text-center text-gray-500">No models found</div>
-            )}
-          </div>
-        </SelectContent>
-      </Select>
-      
-      {/* Refresh button */}
-      <Button 
-        variant="ghost" 
-        size="sm"
-        onClick={handleRefresh} 
-        className="h-9 w-9 p-0"
-        disabled={loading}
-        title="Refresh models list"
-      >
-        <RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-      </Button>
-    </div>
-  )
-} 
+}
