@@ -12,12 +12,14 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { authService } from '@/services/auth'
+import ChatModelSelector from './ChatModelSelector'
+import { useAppSelector } from '@/hooks/useRedux'
 
 // Define different message types
 interface BaseMessage {
   sender: string;
   content: string;
-  id?: string; // Unique identifier for messages
+  id?: string;
 }
 
 interface UserMessage extends BaseMessage {
@@ -57,6 +59,9 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [showReasoning, setShowReasoning] = useState(true) // Start with reasoning visible
   const [isStopping, setIsStopping] = useState(false) // Track stop in progress for UI
+  
+  // Get the selected model from Redux store
+  const selectedModel = useAppSelector(state => state.models.selectedModel);
   
   // Refs
   const socketRef = useRef<WebSocket | null>(null)
@@ -569,12 +574,13 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
         { sender: 'user', content: messageContent, id: messageId }
       ]);
       
-      // Send the message to the server
+      // Send the message to the server with model information
       socketRef.current.send(JSON.stringify({
         type: "message", 
         value: messageContent,
         sessionId: sessionId,
-        messageId: messageId // Send ID to server to help with deduplication
+        messageId: messageId, // Send ID to server to help with deduplication
+        model: selectedModel // Include selected model
       }));
 
       // Clear input field
@@ -832,34 +838,40 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
         <div ref={messagesEndRef} />
       </div>
       
-      <div className="p-3 border-t flex">
-        <input
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-          placeholder="Type a message..."
-          className="flex-1 px-3 py-2 border rounded-l-md focus:outline-none"
-          disabled={!connected || isResponding || isStopping}
-        />
-        {isResponding ? (
+      <div className="flex flex-col p-3 border-t gap-2">
+        {/* Input and send/stop button row */}
+        <div className="flex">
+          <input
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+            placeholder="Type a message..."
+            className="flex-1 px-3 py-2 border rounded-l-md focus:outline-none"
+            disabled={!connected || isResponding || isStopping}
+          />
+          {isResponding ? (
+            <Button 
+              onClick={handleStopStream}
+              className={`rounded-l-none ${isStopping ? 'bg-gray-500 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'}`}
+              disabled={isStopping}
+            >
+              <StopCircle className="h-4 w-4 mr-1" />
+              {isStopping ? 'Stopping...' : 'Stop'}
+            </Button>
+          ) : (
           <Button 
-            onClick={handleStopStream}
-            className={`rounded-l-none ${isStopping ? 'bg-gray-500 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'}`}
-            disabled={isStopping}
+            onClick={handleSendMessage} 
+            disabled={!connected || isStopping}
+            className="rounded-l-none"
           >
-            <StopCircle className="h-4 w-4 mr-1" />
-            {isStopping ? 'Stopping...' : 'Stop'}
+            Send
           </Button>
-        ) : (
-        <Button 
-          onClick={handleSendMessage} 
-          disabled={!connected || isStopping}
-          className="rounded-l-none"
-        >
-          Send
-        </Button>
-        )}
+          )}
+        </div>
+        
+        {/* Model selector row */}
+        <ChatModelSelector className="w-full" />
       </div>
     </Card>
   )
