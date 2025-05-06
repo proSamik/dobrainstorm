@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import ProfileLayout from '@/components/profile/ProfileLayout'
 import Settings from '@/components/profile/Settings'
 import Subscription from '@/components/profile/Subscription'
+import UserPreferences from '@/components/profile/UserPreferences'
 import { authService } from '@/services/auth'
 import { useRouter } from 'next/navigation'
 
@@ -105,7 +106,7 @@ const ProfileContent = memo(({
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
   onCancel: () => void
 }) => (
-  <div className="space-y-6 p-4">
+  <div className="space-y-6 mb-6">
     <div className="flex justify-between items-center">
       <h3 className="text-2xl font-semibold text-light-foreground dark:text-dark-foreground">
         Profile
@@ -254,17 +255,22 @@ export default function Profile() {
       settings={<Settings />}
       subscription={<Subscription />}
     >
-      <ProfileContent
-        auth={auth}
-        isEditing={isEditing}
-        formData={formData}
-        error={error}
-        isLoading={isLoading}
-        onEdit={() => setIsEditing(true)}
-        onSubmit={handleSubmit}
-        onChange={handleInputChange}
-        onCancel={handleCancel}
-      />
+      <div className="p-4">
+        <ProfileContent
+          auth={auth}
+          isEditing={isEditing}
+          formData={formData}
+          error={error}
+          isLoading={isLoading}
+          onEdit={() => setIsEditing(true)}
+          onSubmit={handleSubmit}
+          onChange={handleInputChange}
+          onCancel={handleCancel}
+        />
+        
+        {/* User Preferences */}
+        <UserPreferences />
+      </div>
     </ProfileLayout>
   )
 }
