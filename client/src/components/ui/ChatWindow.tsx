@@ -853,7 +853,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
         {/* Controls row - model selector on left, send/stop button on right */}
         <div className="flex justify-between items-center">
           {/* Model selector - left side */}
-          <ChatModelSelector compact={true} className="flex-1 max-w-[300px]" />
+          <ChatModelSelector className="flex-1 max-w-[300px] z-10" />
           
           {/* Send/Stop button - right side */}
           {isResponding ? (
