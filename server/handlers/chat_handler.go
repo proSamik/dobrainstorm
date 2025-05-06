@@ -17,10 +17,11 @@ import (
 
 // ChatHandler handles websocket connections for chat functionality
 type ChatHandler struct {
-	DB          *database.DB
-	connections sync.Map
-	upgrader    websocket.Upgrader
-	openRouter  *openrouter.Client
+	DB              *database.DB
+	connections     sync.Map
+	streamCancelers sync.Map // Map of sessionID -> cancel function
+	upgrader        websocket.Upgrader
+	openRouter      *openrouter.Client
 }
 
 // ChatMessage represents a message in the chat
@@ -30,6 +31,17 @@ type ChatMessage struct {
 	SessionID   string      `json:"sessionId"`
 	IsStreaming bool        `json:"isStreaming,omitempty"`
 	Reasoning   string      `json:"reasoning,omitempty"`
+}
+
+// StopStreamRequest represents a request to stop a stream
+type StopStreamRequest struct {
+	SessionID string `json:"sessionId"`
+}
+
+// StopStreamResponse represents a response to a stop stream request
+type StopStreamResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
 }
 
 // NewChatHandler creates a new instance of ChatHandler, configured with allowed CORS origins.
@@ -138,187 +150,6 @@ func (h *ChatHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	go h.handleConnectionWithMutex(conn, sessionID, userID, &wsWriteMutex)
 }
 
-// Create a reusable function for creating and managing the context
-func (h *ChatHandler) streamWithContext(conn *websocket.Conn, sessionID string, wsWriteMutex *sync.Mutex,
-	req openrouter.ChatCompletionRequest, _ *[]openrouter.Message) (string, string, error) {
-
-	// Track streaming state and content
-	isStreaming := true
-	responseContent := ""
-	reasoningContent := ""
-	chunkCounter := 0
-
-	// Create a cancellable context
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel() // Ensure context is always cancelled when function exits
-
-	// Log streaming start
-	// log.Printf("Starting OpenRouter streaming for session %s", sessionID)
-
-	// Process the stream response
-	streamErr := h.openRouter.ChatCompletionsStreamWithContext(
-		ctx,
-		req,
-		func(resp openrouter.StreamResponse, isComment bool, commentText string) error {
-			// Check if streaming was cancelled
-			if !isStreaming {
-				// log.Printf("Stream cancelled by client")
-				return fmt.Errorf("streaming canceled by client")
-			}
-
-			// Handle OpenRouter comments (like processing indicators)
-			if isComment {
-				// log.Printf("OpenRouter comment: %s", commentText)
-
-				// Send a processing indicator to client
-				processingMsg := ChatMessage{
-					Type:        "status",
-					Value:       "processing",
-					SessionID:   sessionID,
-					IsStreaming: true,
-				}
-				if err := h.writeJSON(conn, wsWriteMutex, processingMsg); err != nil {
-					// log.Printf("Error sending processing status: %v", err)
-					return err
-				}
-				return nil
-			}
-
-			// Handle [DONE] marker
-			if commentText == "[DONE]" {
-				// log.Printf("Received [DONE] marker")
-				// Stream is complete - send end marker and final content
-				streamEndMsg := ChatMessage{
-					Type:        "status",
-					Value:       "stream_end",
-					SessionID:   sessionID,
-					IsStreaming: false,
-				}
-				if err := h.writeJSON(conn, wsWriteMutex, streamEndMsg); err != nil {
-					log.Printf("Error sending stream end status: %v", err)
-					return err
-				}
-				return nil
-			}
-
-			// Handle normal streaming chunks
-			chunkCounter++
-			// log.Printf("Processing stream chunk #%d for session %s", chunkCounter, sessionID)
-
-			if len(resp.Choices) > 0 {
-				choice := resp.Choices[0]
-
-				// Check if this is the end of the stream by finish_reason
-				if choice.FinishReason != "" {
-					// log.Printf("Stream naturally finished (finish_reason=%s) after %d chunks",
-					// 	choice.FinishReason, chunkCounter)
-
-					// Stream has ended naturally
-					streamEndMsg := ChatMessage{
-						Type:        "status",
-						Value:       "stream_end",
-						SessionID:   sessionID,
-						IsStreaming: false,
-					}
-					// log.Printf("Sending stream_end status message")
-					if err := h.writeJSON(conn, wsWriteMutex, streamEndMsg); err != nil {
-						log.Printf("Error sending stream end status: %v", err)
-						return err
-					}
-					return nil
-				}
-
-				// Process reasoning delta
-				if reasoning := choice.Delta.Reasoning; reasoning != "" {
-					reasoningContent += reasoning
-					// log.Printf("Stream reasoning chunk: %q (total reasoning length: %d)",
-					// 	reasoning, len(reasoningContent))
-
-					// Send reasoning chunk to client
-					reasoningMsg := ChatMessage{
-						Type:        "reasoning",
-						Value:       reasoning,
-						SessionID:   sessionID,
-						IsStreaming: true,
-					}
-
-					// Use thread-safe method to write to websocket
-					jsonData, err := json.Marshal(reasoningMsg)
-					if err != nil {
-						log.Printf("Error marshaling reasoning chunk: %v", err)
-						return err
-					}
-
-					if err := h.writeMessage(conn, wsWriteMutex, websocket.TextMessage, jsonData); err != nil {
-						log.Printf("Error sending reasoning chunk: %v", err)
-						isStreaming = false
-						return err
-					}
-
-					// log.Printf("Reasoning chunk sent to client")
-				}
-
-				// Process content delta - immediately send to client
-				if content := choice.Delta.Content; content != "" {
-					responseContent += content
-					// log.Printf("Stream content chunk: %q (total content length: %d)",
-					// 	content, len(responseContent))
-
-					// Send the stream chunk to client IMMEDIATELY
-					streamMsg := ChatMessage{
-						Type:        "stream",
-						Value:       content,
-						SessionID:   sessionID,
-						IsStreaming: true,
-					}
-
-					// Use WriteMessage instead of WriteJSON for lower latency
-					// This bypasses the JSON marshal/unmarshal cycle
-					jsonData, err := json.Marshal(streamMsg)
-					if err != nil {
-						log.Printf("Error marshaling stream chunk: %v", err)
-						return err
-					}
-
-					// Use thread-safe method to write to websocket
-					if err := h.writeMessage(conn, wsWriteMutex, websocket.TextMessage, jsonData); err != nil {
-						log.Printf("Error sending stream chunk: %v", err)
-						isStreaming = false
-						return err
-					}
-
-					// log.Printf("Stream chunk #%d sent to client", chunkCounter)
-				}
-			} else {
-				// log.Printf("Stream chunk #%d had no choices", chunkCounter)
-			}
-
-			// Check if final usage data is being sent (end of stream)
-			if resp.Usage != nil {
-				// log.Printf("Received final usage data after %d chunks: %+v", chunkCounter, resp.Usage)
-				streamEndMsg := ChatMessage{
-					Type:        "status",
-					Value:       "stream_end",
-					SessionID:   sessionID,
-					IsStreaming: false,
-				}
-				if err := h.writeJSON(conn, wsWriteMutex, streamEndMsg); err != nil {
-					log.Printf("Error sending stream end status: %v", err)
-					return err
-				}
-				// log.Printf("Sent stream_end status message with usage data")
-			}
-
-			return nil
-		})
-
-	// Log streaming completion
-	// log.Printf("Streaming completed for session %s. Total chunks: %d, Content length: %d, Reasoning length: %d",
-	// 	sessionID, chunkCounter, len(responseContent), len(reasoningContent))
-
-	return responseContent, reasoningContent, streamErr
-}
-
 // handleConnectionWithMutex processes messages for a single websocket connection with mutex protection
 func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID string, userID string, wsWriteMutex *sync.Mutex) {
 	// Track chat history
@@ -327,11 +158,22 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 	// Keep track of streaming state
 	isStreaming := false
 
+	// Declare context and cancel function at this scope
+	var cancelStreamCtx context.CancelFunc
+
 	// Recover from panics to prevent crashing the server
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("Recovered from panic in handleConnection: %v", r)
 		}
+
+		// Cancel any ongoing stream before closing
+		if cancelStreamCtx != nil {
+			cancelStreamCtx()
+		}
+
+		// Remove from canceler map
+		h.streamCancelers.Delete(sessionID)
 
 		// Log the chat session when it's closed
 		log.Printf("Logging chat session %s for user %s with %d messages",
@@ -366,6 +208,14 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 			// If currently streaming, send stop command
 			if isStreaming {
 				isStreaming = false
+
+				// Cancel the stream if it's active
+				if cancelStreamCtx != nil {
+					cancelStreamCtx()
+					cancelStreamCtx = nil
+					h.streamCancelers.Delete(sessionID)
+				}
+
 				continue
 			}
 
@@ -417,101 +267,134 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 				Stream:   true,
 			}
 
+			// Create a cancellable context
+			var streamCtx context.Context
+			streamCtx, cancelStreamCtx = context.WithCancel(context.Background())
+
+			// Store the cancel function in the map
+			h.streamCancelers.Store(sessionID, cancelStreamCtx)
+
 			// Process stream with proper context handling
-			responseContent, reasoningContent, streamErr := h.streamWithContext(conn, sessionID, wsWriteMutex, req, &chatHistory)
+			go func() {
+				responseContent, reasoningContent, streamErr := h.processStreamWithContext(conn, sessionID, wsWriteMutex, req, streamCtx)
 
-			// Streaming has ended
-			isStreaming = false
+				// Stream is done, clean up
+				h.streamCancelers.Delete(sessionID)
+				cancelStreamCtx = nil
+				isStreaming = false
 
-			if streamErr != nil {
-				// Check if this was a client-initiated cancellation
-				if streamErr.Error() == "streaming canceled by client" {
-					log.Printf("Stream was intentionally canceled by client")
-				} else if streamErr.Error() == "context deadline exceeded" ||
-					streamErr.Error() == "context canceled" ||
-					streamErr.Error() == "read: connection reset by peer" ||
-					streamErr.Error() == "client disconnected" ||
-					streamErr.Error() == "websocket: close sent" ||
-					streamErr.Error() == "use of closed network connection" ||
-					// Handle Go's net/http timeout error pattern
-					streamErr.Error() == "net/http: timeout awaiting response headers" ||
-					streamErr.Error() == "http2: client connection force closed via ClientConn.Close" ||
-					streamErr.Error() == "http2: client connection lost" ||
-					// And the error we saw in the logs
-					streamErr.Error() == "error reading response: context deadline exceeded (Client.Timeout or context cancellation while reading body)" {
-					// These are expected errors when the client disconnects or the stream times out
-					// Treat them as normal completions
-					log.Printf("Stream ended due to timeout or disconnection: %v", streamErr)
+				if streamErr != nil {
+					// Check if this was a client-initiated cancellation
+					if streamErr.Error() == "streaming canceled by client" ||
+						streamErr.Error() == "context canceled" {
+						log.Printf("Stream was intentionally canceled by client")
 
-					// If we have partial content, send a completion message to client
-					if responseContent != "" {
-						// Send a stream end notification
-						streamEndMsg := ChatMessage{
-							Type:        "status",
-							Value:       "stream_end",
-							SessionID:   sessionID,
-							IsStreaming: false,
+						// Send a stopped status
+						stopMsg := ChatMessage{
+							Type:      "status",
+							Value:     "stopped",
+							SessionID: sessionID,
 						}
-						if err := h.writeJSON(conn, wsWriteMutex, streamEndMsg); err != nil {
-							// Just log the error, don't break the connection
-							log.Printf("Error sending stream end after timeout: %v", err)
+						if err := h.writeJSON(conn, wsWriteMutex, stopMsg); err != nil {
+							log.Printf("Error sending stop confirmation: %v", err)
 						}
+					} else if streamErr.Error() == "context deadline exceeded" ||
+						streamErr.Error() == "read: connection reset by peer" ||
+						streamErr.Error() == "client disconnected" ||
+						streamErr.Error() == "websocket: close sent" ||
+						streamErr.Error() == "use of closed network connection" ||
+						// Handle Go's net/http timeout error pattern
+						streamErr.Error() == "net/http: timeout awaiting response headers" ||
+						streamErr.Error() == "http2: client connection force closed via ClientConn.Close" ||
+						streamErr.Error() == "http2: client connection lost" ||
+						// And the error we saw in the logs
+						streamErr.Error() == "error reading response: context deadline exceeded (Client.Timeout or context cancellation while reading body)" {
+						// These are expected errors when the client disconnects or the stream times out
+						// Treat them as normal completions
+						log.Printf("Stream ended due to timeout or disconnection: %v", streamErr)
 
-						// Add AI message to history
-						aiMessage := openrouter.Message{
-							Role:    "assistant",
-							Content: responseContent,
+						// If we have partial content, send a completion message to client
+						if responseContent != "" {
+							// Send a stream end notification
+							streamEndMsg := ChatMessage{
+								Type:        "status",
+								Value:       "stream_end",
+								SessionID:   sessionID,
+								IsStreaming: false,
+							}
+							if err := h.writeJSON(conn, wsWriteMutex, streamEndMsg); err != nil {
+								// Just log the error, don't break the connection
+								log.Printf("Error sending stream end after timeout: %v", err)
+							}
+
+							// Add AI message to history
+							aiMessage := openrouter.Message{
+								Role:    "assistant",
+								Content: responseContent,
+							}
+							chatHistory = append(chatHistory, aiMessage)
+
+							// Log that we're not sending the complete message since client compiles it
+							log.Printf("Not sending complete message after timeout, client has compiled %d chars",
+								len(responseContent))
 						}
-						chatHistory = append(chatHistory, aiMessage)
-
-						// Log that we're not sending the complete message since client compiles it
-						log.Printf("Not sending complete message after timeout, client has compiled %d chars",
-							len(responseContent))
+					} else {
+						// This is an unexpected error
+						log.Printf("Error streaming response: %v", streamErr)
+						errorMsg := ChatMessage{
+							Type:      "error",
+							Value:     "Failed to get AI response",
+							SessionID: sessionID,
+						}
+						if err := h.writeJSON(conn, wsWriteMutex, errorMsg); err != nil {
+							log.Printf("Error sending error message: %v", err)
+						}
 					}
-				} else {
-					// This is an unexpected error
-					log.Printf("Error streaming response: %v", streamErr)
-					errorMsg := ChatMessage{
-						Type:      "error",
-						Value:     "Failed to get AI response",
-						SessionID: sessionID,
-					}
-					if err := h.writeJSON(conn, wsWriteMutex, errorMsg); err != nil {
-						log.Printf("Error sending error message: %v", err)
-						break
-					}
+					return
 				}
-				continue
-			}
 
-			// Add AI message to history with reasoning if available
-			aiMessage := openrouter.Message{
-				Role:    "assistant",
-				Content: responseContent,
-			}
-			chatHistory = append(chatHistory, aiMessage)
+				// Add AI message to history with reasoning if available
+				aiMessage := openrouter.Message{
+					Role:    "assistant",
+					Content: responseContent,
+				}
+				chatHistory = append(chatHistory, aiMessage)
 
-			// Don't send a final complete message, just a stream_end status
-			// Client will use the accumulated chunks as the final message
-			streamEndMsg := ChatMessage{
-				Type:        "status",
-				Value:       "stream_end",
-				SessionID:   sessionID,
-				IsStreaming: false,
-			}
-			if err := h.writeJSON(conn, wsWriteMutex, streamEndMsg); err != nil {
-				log.Printf("Error sending stream end status: %v", err)
-				break
-			}
+				// Don't send a final complete message, just a stream_end status
+				// Client will use the accumulated chunks as the final message
+				streamEndMsg := ChatMessage{
+					Type:        "status",
+					Value:       "stream_end",
+					SessionID:   sessionID,
+					IsStreaming: false,
+				}
+				if err := h.writeJSON(conn, wsWriteMutex, streamEndMsg); err != nil {
+					log.Printf("Error sending stream end status: %v", err)
+				}
 
-			// Log that we're not sending the complete message since client compiles it
-			log.Printf("Not sending complete message, client has compiled %d chars of content and %d chars of reasoning",
-				len(responseContent), len(reasoningContent))
+				// Log that we're not sending the complete message since client compiles it
+				log.Printf("Not sending complete message, client has compiled %d chars of content and %d chars of reasoning",
+					len(responseContent), len(reasoningContent))
+			}()
+
 		} else if message.Type == "stop" {
 			// Client wants to stop streaming
 			if isStreaming {
 				log.Printf("Cancelling stream by client request")
 				isStreaming = false
+
+				// Get and call the cancel function for this session
+				if cancel, ok := h.streamCancelers.Load(sessionID); ok {
+					log.Printf("Found cancel function, aborting OpenRouter request for session %s", sessionID)
+					cancelerFunc := cancel.(context.CancelFunc)
+					cancelerFunc()
+					h.streamCancelers.Delete(sessionID)
+					cancelStreamCtx = nil
+				} else {
+					log.Printf("No cancel function found for session %s", sessionID)
+				}
+
+				// Send confirmation to client that streaming was stopped
 				stopMsg := ChatMessage{
 					Type:      "status",
 					Value:     "stopped",
@@ -537,6 +420,159 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 	}
 }
 
+// Create a reusable function for processing streams with context
+func (h *ChatHandler) processStreamWithContext(conn *websocket.Conn, sessionID string, wsWriteMutex *sync.Mutex,
+	req openrouter.ChatCompletionRequest, ctx context.Context) (string, string, error) {
+
+	// Track streaming state and content
+	responseContent := ""
+	reasoningContent := ""
+	chunkCounter := 0
+
+	// Log streaming start
+	log.Printf("Starting OpenRouter streaming for session %s with cancellable context", sessionID)
+
+	// Process the stream response
+	streamErr := h.openRouter.ChatCompletionsStreamWithContext(
+		ctx,
+		req,
+		func(resp openrouter.StreamResponse, isComment bool, commentText string) error {
+			// Check if context was cancelled
+			if ctx.Err() != nil {
+				log.Printf("Streaming context was cancelled")
+				return ctx.Err()
+			}
+
+			// Handle OpenRouter comments (like processing indicators)
+			if isComment {
+				// Send a processing indicator to client
+				processingMsg := ChatMessage{
+					Type:        "status",
+					Value:       "processing",
+					SessionID:   sessionID,
+					IsStreaming: true,
+				}
+				if err := h.writeJSON(conn, wsWriteMutex, processingMsg); err != nil {
+					return err
+				}
+				return nil
+			}
+
+			// Handle [DONE] marker
+			if commentText == "[DONE]" {
+				// Stream is complete - send end marker and final content
+				streamEndMsg := ChatMessage{
+					Type:        "status",
+					Value:       "stream_end",
+					SessionID:   sessionID,
+					IsStreaming: false,
+				}
+				if err := h.writeJSON(conn, wsWriteMutex, streamEndMsg); err != nil {
+					log.Printf("Error sending stream end status: %v", err)
+					return err
+				}
+				return nil
+			}
+
+			// Handle normal streaming chunks
+			chunkCounter++
+
+			if len(resp.Choices) > 0 {
+				choice := resp.Choices[0]
+
+				// Check if this is the end of the stream by finish_reason
+				if choice.FinishReason != "" {
+					// Stream has ended naturally
+					streamEndMsg := ChatMessage{
+						Type:        "status",
+						Value:       "stream_end",
+						SessionID:   sessionID,
+						IsStreaming: false,
+					}
+					if err := h.writeJSON(conn, wsWriteMutex, streamEndMsg); err != nil {
+						log.Printf("Error sending stream end status: %v", err)
+						return err
+					}
+					return nil
+				}
+
+				// Process reasoning delta
+				if reasoning := choice.Delta.Reasoning; reasoning != "" {
+					reasoningContent += reasoning
+
+					// Send reasoning chunk to client
+					reasoningMsg := ChatMessage{
+						Type:        "reasoning",
+						Value:       reasoning,
+						SessionID:   sessionID,
+						IsStreaming: true,
+					}
+
+					// Use thread-safe method to write to websocket
+					jsonData, err := json.Marshal(reasoningMsg)
+					if err != nil {
+						log.Printf("Error marshaling reasoning chunk: %v", err)
+						return err
+					}
+
+					if err := h.writeMessage(conn, wsWriteMutex, websocket.TextMessage, jsonData); err != nil {
+						log.Printf("Error sending reasoning chunk: %v", err)
+						return err
+					}
+				}
+
+				// Process content delta - immediately send to client
+				if content := choice.Delta.Content; content != "" {
+					responseContent += content
+
+					// Send the stream chunk to client IMMEDIATELY
+					streamMsg := ChatMessage{
+						Type:        "stream",
+						Value:       content,
+						SessionID:   sessionID,
+						IsStreaming: true,
+					}
+
+					// Use WriteMessage instead of WriteJSON for lower latency
+					// This bypasses the JSON marshal/unmarshal cycle
+					jsonData, err := json.Marshal(streamMsg)
+					if err != nil {
+						log.Printf("Error marshaling stream chunk: %v", err)
+						return err
+					}
+
+					// Use thread-safe method to write to websocket
+					if err := h.writeMessage(conn, wsWriteMutex, websocket.TextMessage, jsonData); err != nil {
+						log.Printf("Error sending stream chunk: %v", err)
+						return err
+					}
+				}
+			}
+
+			// Check if final usage data is being sent (end of stream)
+			if resp.Usage != nil {
+				streamEndMsg := ChatMessage{
+					Type:        "status",
+					Value:       "stream_end",
+					SessionID:   sessionID,
+					IsStreaming: false,
+				}
+				if err := h.writeJSON(conn, wsWriteMutex, streamEndMsg); err != nil {
+					log.Printf("Error sending stream end status: %v", err)
+					return err
+				}
+			}
+
+			return nil
+		})
+
+	// Log streaming completion
+	log.Printf("Streaming completed for session %s. Total chunks: %d, Content length: %d, Reasoning length: %d",
+		sessionID, chunkCounter, len(responseContent), len(reasoningContent))
+
+	return responseContent, reasoningContent, streamErr
+}
+
 // Variable to generate unique IDs
 var (
 	idCounter int64
@@ -549,4 +585,118 @@ func GetUniqueID() int64 {
 	defer idMutex.Unlock()
 	idCounter++
 	return idCounter
+}
+
+// HandleStopStream is a dedicated HTTP handler for stopping a stream via direct API call
+// This bypasses WebSocket message queuing issues for critical control messages
+func (h *ChatHandler) HandleStopStream(w http.ResponseWriter, r *http.Request) {
+	// Set headers
+	w.Header().Set("Content-Type", "application/json")
+
+	// Only accept POST requests
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(StopStreamResponse{
+			Success: false,
+			Message: "Method not allowed. Use POST.",
+		})
+		return
+	}
+
+	// Extract user ID from request context (set by auth middleware)
+	userID, ok := r.Context().Value("userID").(string)
+	if !ok {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(StopStreamResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	// Decode request body
+	var req StopStreamRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(StopStreamResponse{
+			Success: false,
+			Message: "Invalid request format",
+		})
+		return
+	}
+
+	// Validate session ID
+	if req.SessionID == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(StopStreamResponse{
+			Success: false,
+			Message: "Session ID is required",
+		})
+		return
+	}
+
+	// Verify that the session belongs to this user (basic security check)
+	if !h.validateSessionOwnership(req.SessionID, userID) {
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(StopStreamResponse{
+			Success: false,
+			Message: "Not authorized to stop this session",
+		})
+		return
+	}
+
+	// Try to cancel the stream
+	cancelSuccess := h.cancelStreamBySessionID(req.SessionID)
+
+	// Find the connection to send a stop notification
+	if conn, ok := h.connections.Load(req.SessionID); ok {
+		wsConn := conn.(*websocket.Conn)
+
+		// Create a stop message
+		stopMsg := ChatMessage{
+			Type:      "status",
+			Value:     "stopped",
+			SessionID: req.SessionID,
+		}
+
+		// Try to send it, but don't fail the overall operation if this fails
+		// The connection might be handling other messages
+		if err := wsConn.WriteJSON(stopMsg); err != nil {
+			log.Printf("Warning: Could not send stop notification via WebSocket: %v", err)
+		}
+	}
+
+	// Return success response
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(StopStreamResponse{
+		Success: cancelSuccess,
+		Message: "Stream cancellation request processed",
+	})
+}
+
+// validateSessionOwnership checks if a session belongs to a user
+func (h *ChatHandler) validateSessionOwnership(sessionID, userID string) bool {
+	// Simple check: sessions are named as userID-number
+	// So we just check if the session ID starts with the user ID
+	return len(sessionID) > len(userID) && sessionID[:len(userID)] == userID
+}
+
+// cancelStreamBySessionID tries to cancel a stream by session ID
+// Returns true if cancellation was successful, false otherwise
+func (h *ChatHandler) cancelStreamBySessionID(sessionID string) bool {
+	// Get the cancel function for this session
+	if cancelVal, ok := h.streamCancelers.Load(sessionID); ok {
+		log.Printf("Found cancel function, aborting OpenRouter request for session %s", sessionID)
+
+		// Call the cancel function
+		cancel := cancelVal.(context.CancelFunc)
+		cancel()
+
+		// Clean up
+		h.streamCancelers.Delete(sessionID)
+		return true
+	}
+
+	log.Printf("No cancel function found for session %s", sessionID)
+	return false
 }
