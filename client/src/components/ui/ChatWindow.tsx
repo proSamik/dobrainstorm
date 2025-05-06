@@ -839,21 +839,27 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
       </div>
       
       <div className="flex flex-col p-3 border-t gap-2">
-        {/* Input and send/stop button row */}
-        <div className="flex">
-          <input
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-            placeholder="Type a message..."
-            className="flex-1 px-3 py-2 border rounded-l-md focus:outline-none"
-            disabled={!connected || isResponding || isStopping}
-          />
+        {/* Input row - full width */}
+        <input
+          type="text"
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+          placeholder="Type a message..."
+          className="flex-1 px-3 py-2 border rounded-md focus:outline-none w-full"
+          disabled={!connected || isResponding || isStopping}
+        />
+        
+        {/* Controls row - model selector on left, send/stop button on right */}
+        <div className="flex justify-between items-center">
+          {/* Model selector - left side */}
+          <ChatModelSelector compact={true} className="flex-1 max-w-[300px]" />
+          
+          {/* Send/Stop button - right side */}
           {isResponding ? (
             <Button 
               onClick={handleStopStream}
-              className={`rounded-l-none ${isStopping ? 'bg-gray-500 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'}`}
+              className={`${isStopping ? 'bg-gray-500 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'}`}
               disabled={isStopping}
             >
               <StopCircle className="h-4 w-4 mr-1" />
@@ -863,15 +869,11 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
           <Button 
             onClick={handleSendMessage} 
             disabled={!connected || isStopping}
-            className="rounded-l-none"
           >
             Send
           </Button>
           )}
         </div>
-        
-        {/* Model selector row */}
-        <ChatModelSelector className="w-full" />
       </div>
     </Card>
   )
