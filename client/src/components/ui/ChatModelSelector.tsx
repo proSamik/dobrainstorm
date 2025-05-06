@@ -100,7 +100,7 @@ export default function ChatModelSelector({ className, onSelectModel, compact = 
   if (loading && models.length === 0) {
     return (
       <Select disabled>
-        <SelectTrigger className={`h-9 ${className} bg-white dark:bg-gray-800`}>
+        <SelectTrigger className={`h-9 ${className} bg-white dark:bg-dark-background`}>
           <div className="flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
             <span>Loading models...</span>
@@ -115,7 +115,7 @@ export default function ChatModelSelector({ className, onSelectModel, compact = 
     return (
       <div className={`flex items-center gap-2 ${className}`}>
         <Select disabled>
-          <SelectTrigger className="h-9 flex-1 bg-white dark:bg-gray-800">
+          <SelectTrigger className="h-9 flex-1 bg-white dark:bg-dark-background">
             <span className="text-red-500">Failed to load models</span>
           </SelectTrigger>
         </Select>
@@ -140,14 +140,14 @@ export default function ChatModelSelector({ className, onSelectModel, compact = 
           value={selectedModel || undefined} 
           onValueChange={handleModelSelect}
         >
-          <SelectTrigger className="h-9 flex-1 bg-white dark:bg-gray-800 min-w-[180px]">
+          <SelectTrigger className="h-9 flex-1 bg-white dark:bg-dark-background min-w-[180px]">
             <SelectValue placeholder="Select a model">
               {getSelectedModelName()}
             </SelectValue>
           </SelectTrigger>
           <SelectContent className="max-h-[300px] overflow-hidden">
             {/* Search input and tabs (sticky) */}
-            <div className="sticky top-0 z-10 bg-white dark:bg-gray-800">
+            <div className="sticky top-0 z-10 bg-white dark:bg-dark-background">
               {/* Search input */}
               <div className="p-2 border-b">
                 <div className="relative">
@@ -183,7 +183,7 @@ export default function ChatModelSelector({ className, onSelectModel, compact = 
             </div>
 
             {/* Scrollable models list */}
-            <div className="max-h-[200px] overflow-y-auto">
+            <div className="max-h-[200px] overflow-y-auto top-0 z-10 bg-white dark:bg-dark-background">
               {getFilteredModels().length > 0 ? (
                 <SelectGroup>
                   {getFilteredModels().map(model => (
@@ -225,12 +225,12 @@ export default function ChatModelSelector({ className, onSelectModel, compact = 
         value={selectedModel || undefined} 
         onValueChange={handleModelSelect}
       >
-        <SelectTrigger className="h-9 flex-1 bg-white dark:bg-gray-800">
+        <SelectTrigger className="h-9 flex-1 bg-white dark:bg-dark-background">
           <SelectValue placeholder="Select a model" />
         </SelectTrigger>
         <SelectContent className="max-h-[300px] overflow-hidden">
           {/* Search input and tabs (sticky) */}
-          <div className="sticky top-0 z-10 bg-white dark:bg-gray-800">
+          <div className="sticky top-0 z-10 bg-white dark:bg-dark-background">
             {/* Search input */}
             <div className="p-2 border-b">
               <div className="relative">
