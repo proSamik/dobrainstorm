@@ -691,8 +691,8 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
                   : assistantMsg.isThinking
                     ? 'bg-purple-50 dark:bg-purple-900 text-gray-800 dark:text-gray-200 border border-purple-200 dark:border-purple-800'
                     : assistantMsg.isStreaming
-                      ? 'bg-blue-50 dark:bg-blue-900 text-gray-800 dark:text-gray-200 border border-blue-200 dark:border-blue-800' 
-                      : 'bg-slate-200 dark:bg-slate-700 text-gray-800 dark:text-gray-200'
+                      ? 'bg-blue-50 dark:bg-gray-400 text-gray-800 dark:text-white border border-blue-200 dark:border-blue-800' 
+                      : 'bg-slate-200 dark:bg-gray-400 text-gray-800 dark:text-white'
               }`}>
                 <div className="flex items-start gap-2">
                   <Bot className="h-4 w-4 mt-1 flex-shrink-0 text-slate-700 dark:text-slate-300" />
@@ -846,7 +846,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
           placeholder="Type a message..."
-          className="flex-1 px-3 py-2 border rounded-md focus:outline-none w-full"
+          className="flex-1 px-3 py-2 border rounded-md focus:outline-none w-full dark:bg-dark-background"
           disabled={!connected || isResponding || isStopping}
         />
         
