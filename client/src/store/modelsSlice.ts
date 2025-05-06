@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import { authService } from '@/services/auth';
 
 /**
  * Type for the OpenRouter model architecture
@@ -50,6 +51,19 @@ export interface OpenRouterModel {
 }
 
 /**
+ * Interface for user preferences data
+ */
+export interface UserPreferences {
+  id?: string;
+  userId?: string;
+  userPreferences: string;
+  defaultModel: string;
+  defaultProvider: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/**
  * Interface for the models state
  */
 interface ModelsState {
@@ -58,6 +72,7 @@ interface ModelsState {
   textToTextModels: OpenRouterModel[];
   textImageToTextModels: OpenRouterModel[];
   freeModels: OpenRouterModel[];
+  userPreferences: UserPreferences | null;
   loading: boolean;
   error: string | null;
   lastFetched: number | null;
@@ -72,6 +87,7 @@ const initialState: ModelsState = {
   textToTextModels: [],
   textImageToTextModels: [],
   freeModels: [],
+  userPreferences: null,
   loading: false,
   error: null,
   lastFetched: null
@@ -79,21 +95,70 @@ const initialState: ModelsState = {
 
 /**
  * Async thunk for fetching models from OpenRouter API
+ * Also loads user preferences if authenticated
  */
 export const fetchModels = createAsyncThunk(
   'models/fetchModels',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await fetch('https://openrouter.ai/api/v1/models', {
+      // Fetch models from OpenRouter
+      const modelsResponse = await fetch('https://openrouter.ai/api/v1/models', {
         method: 'GET',
       });
 
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      if (!modelsResponse.ok) {
+        throw new Error(`Error ${modelsResponse.status}: ${modelsResponse.statusText}`);
       }
 
-      const data = await response.json();
-      return data.data as OpenRouterModel[];
+      const modelsData = await modelsResponse.json();
+      const models = modelsData.data as OpenRouterModel[];
+      
+      // Try to fetch user preferences if user is authenticated
+      let userPreferences = null;
+      try {
+        const prefsResponse = await authService.get('/user/preferences');
+        if (prefsResponse.status === 200) {
+          userPreferences = prefsResponse.data;
+        }
+      } catch (error) {
+        console.warn('Error loading user preferences:', error);
+        // Continue with models data even if preferences failed to load
+      }
+      
+      return {
+        models,
+        userPreferences
+      };
+    } catch (error) {
+      return rejectWithValue((error as Error).message);
+    }
+  }
+);
+
+/**
+ * Async thunk for fetching user preferences
+ */
+export const fetchUserPreferences = createAsyncThunk(
+  'models/fetchUserPreferences',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await authService.get('/user/preferences');
+      return response as UserPreferences;
+    } catch (error) {
+      return rejectWithValue((error as Error).message);
+    }
+  }
+);
+
+/**
+ * Async thunk for saving user preferences
+ */
+export const saveUserPreferences = createAsyncThunk(
+  'models/saveUserPreferences',
+  async (preferences: Partial<UserPreferences>, { rejectWithValue }) => {
+    try {
+      const response = await authService.post('/user/preferences/update', preferences);
+      return response.data as UserPreferences;
     } catch (error) {
       return rejectWithValue((error as Error).message);
     }
@@ -114,8 +179,13 @@ const modelsSlice = createSlice({
     
     // Reset selected model to default
     resetSelectedModel: (state) => {
-      // Set to first free model if available, otherwise first model
-      if (state.freeModels.length > 0) {
+      // Try to use saved user preferences first
+      if (state.userPreferences?.defaultModel && 
+          state.models.some(m => m.id === state.userPreferences?.defaultModel)) {
+        state.selectedModel = state.userPreferences.defaultModel;
+      } 
+      // Otherwise fall back to first free model if available, or first model
+      else if (state.freeModels.length > 0) {
         state.selectedModel = state.freeModels[0].id;
       } else if (state.models.length > 0) {
         state.selectedModel = state.models[0].id;
@@ -136,17 +206,28 @@ const modelsSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      // Handle fetchModels actions
       .addCase(fetchModels.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
       .addCase(fetchModels.fulfilled, (state, action) => {
         state.loading = false;
-        state.models = action.payload;
+        const { models, userPreferences } = action.payload as { 
+          models: OpenRouterModel[], 
+          userPreferences: UserPreferences | null 
+        };
+        
+        state.models = models;
         state.lastFetched = Date.now();
         
+        // Store user preferences if received
+        if (userPreferences) {
+          state.userPreferences = userPreferences;
+        }
+        
         // Process models into categories and mark free models
-        const processedModels = action.payload.map(model => ({
+        const processedModels = models.map(model => ({
           ...model,
           isFree: model.pricing.prompt === "0" && model.pricing.completion === "0"
         }));
@@ -169,8 +250,13 @@ const modelsSlice = createSlice({
         // Filter free models
         state.freeModels = processedModels.filter(model => model.isFree);
         
-        // Set default selected model to first free model if available
-        if (state.selectedModel === null) {
+        // Set selected model based on user preferences if available
+        if (userPreferences?.defaultModel && 
+            models.some(m => m.id === userPreferences.defaultModel)) {
+          state.selectedModel = userPreferences.defaultModel;
+        }
+        // Otherwise set default selected model if not already set
+        else if (state.selectedModel === null) {
           if (state.freeModels.length > 0) {
             state.selectedModel = state.freeModels[0].id;
           } else if (state.models.length > 0) {
@@ -181,6 +267,28 @@ const modelsSlice = createSlice({
       .addCase(fetchModels.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+      })
+      
+      // Handle fetchUserPreferences actions
+      .addCase(fetchUserPreferences.fulfilled, (state, action) => {
+        state.userPreferences = action.payload;
+        
+        // Update selected model if preferences include default model that exists in our models list
+        if (action.payload?.defaultModel && 
+            state.models.some(m => m.id === action.payload.defaultModel)) {
+          state.selectedModel = action.payload.defaultModel;
+        }
+      })
+      
+      // Handle saveUserPreferences actions
+      .addCase(saveUserPreferences.fulfilled, (state, action) => {
+        state.userPreferences = action.payload;
+        
+        // Update selected model if it was changed
+        if (action.payload?.defaultModel && 
+            state.models.some(m => m.id === action.payload.defaultModel)) {
+          state.selectedModel = action.payload.defaultModel;
+        }
       });
   }
 });
