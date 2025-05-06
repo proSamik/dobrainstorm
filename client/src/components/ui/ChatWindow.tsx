@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Button } from './button'
 import { Card } from './card'
 import { X, StopCircle, MessageSquare, Bot, Info, BrainCircuit } from 'lucide-react'
@@ -10,7 +10,6 @@ import rehypeRaw from 'rehype-raw'
 import rehypeSanitize from 'rehype-sanitize'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
-import 'katex/dist/katex.min.css'
 
 // Define different message types
 interface BaseMessage {
@@ -45,6 +44,14 @@ interface ChatWindowProps {
   registerCloseFn?: (closeFn: () => void) => void
 }
 
+// Precompile regex patterns for better performance
+const REGEX_CARRIAGE_RETURN_NEWLINE = /\r\n/g;
+const REGEX_CARRIAGE_RETURN = /\r/g;
+const REGEX_MATH_OPEN = /\\\(/g;
+const REGEX_MATH_CLOSE = /\\\)/g;
+const REGEX_CODE_BLOCK_WITH_LANG = /```(.+?)\n/g;
+const REGEX_CODE_BLOCK_EMPTY = /```\n/g;
+
 /**
  * Individual chat window component
  * Manages a single websocket connection and chat session
@@ -64,6 +71,12 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
   const activeMessageRef = useRef<number | null>(null) // Track active message index
   const reasoningStartTimeRef = useRef<number | null>(null) // Track reasoning start time
   const isUserScrollingRef = useRef(false) // Track if the user is scrolling
+
+  // Create memoized markdown processing components
+  const markdownComponents = useMemo(() => ({
+    remarkPlugins: [remarkGfm, remarkMath],
+    rehypePlugins: [rehypeRaw, rehypeSanitize, rehypeKatex]
+  }), []);
 
   // Function to scroll to bottom of chat
   const scrollToBottom = () => {
@@ -105,14 +118,14 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
             const assistantMsg = message as AssistantMessage;
             // Normalize line breaks for proper markdown rendering
             const normalizedContent = content
-              .replace(/\r\n/g, '\n')
-              .replace(/\r/g, '\n')
+              .replace(REGEX_CARRIAGE_RETURN_NEWLINE, '\n')
+              .replace(REGEX_CARRIAGE_RETURN, '\n')
               // Fix for math formulas rendering 
-              .replace(/\\\(/g, '$')
-              .replace(/\\\)/g, '$')
+              .replace(REGEX_MATH_OPEN, '$')
+              .replace(REGEX_MATH_CLOSE, '$')
               // Format multiline code blocks properly
-              .replace(/```(.+?)\n/g, '```$1\n')
-              .replace(/```\n/g, '```\n');
+              .replace(REGEX_CODE_BLOCK_WITH_LANG, '```$1\n')
+              .replace(REGEX_CODE_BLOCK_EMPTY, '```\n');
               
             newMessages[messageIndex] = {
               ...assistantMsg,
@@ -676,8 +689,8 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
                       {assistantMsg && assistantMsg.processedContent ? (
                         <div className="prose dark:prose-invert prose-sm max-w-none markdown-container">
                           <ReactMarkdown 
-                            remarkPlugins={[remarkGfm, remarkMath]}
-                            rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeKatex]}
+                            remarkPlugins={markdownComponents.remarkPlugins}
+                            rehypePlugins={markdownComponents.rehypePlugins}
                           >
                             {assistantMsg.processedContent}
                           </ReactMarkdown>
@@ -724,21 +737,6 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
 
   // Determine if we're in a state where we can't send new messages
   const isResponding = activeMessageRef.current !== null;
-
-  // Add useEffect for markdown processing
-  useEffect(() => {
-    // Import KaTeX CSS dynamically
-    const link = document.createElement('link');
-    link.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.css';
-    link.rel = 'stylesheet';
-    link.integrity = 'sha384-Xi8rHCmBmhbuyyhbI88391ZKP2dmfnOl4rT9ZfRI7mLTdk1wblIUnrIq35nqwEvC';
-    link.crossOrigin = 'anonymous';
-    document.head.appendChild(link);
-    
-    return () => {
-      document.head.removeChild(link);
-    };
-  }, []);
 
   // Add custom styles for the markdown content
   const markdownStyles = `
