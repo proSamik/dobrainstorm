@@ -100,7 +100,7 @@ export default function ChatModelSelector({ className, onSelectModel, compact = 
   if (loading && models.length === 0) {
     return (
       <Select disabled>
-        <SelectTrigger className={`h-9 ${className} bg-gray-100 dark:bg-gray-800`}>
+        <SelectTrigger className={`h-9 ${className} bg-white dark:bg-gray-800`}>
           <div className="flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
             <span>Loading models...</span>
@@ -115,7 +115,7 @@ export default function ChatModelSelector({ className, onSelectModel, compact = 
     return (
       <div className={`flex items-center gap-2 ${className}`}>
         <Select disabled>
-          <SelectTrigger className="h-9 flex-1 bg-gray-100 dark:bg-gray-800">
+          <SelectTrigger className="h-9 flex-1 bg-white dark:bg-gray-800">
             <span className="text-red-500">Failed to load models</span>
           </SelectTrigger>
         </Select>
@@ -140,12 +140,97 @@ export default function ChatModelSelector({ className, onSelectModel, compact = 
           value={selectedModel || undefined} 
           onValueChange={handleModelSelect}
         >
-          <SelectTrigger className="h-9 flex-1 bg-gray-100 dark:bg-gray-800 min-w-[180px]">
+          <SelectTrigger className="h-9 flex-1 bg-white dark:bg-gray-800 min-w-[180px]">
             <SelectValue placeholder="Select a model">
               {getSelectedModelName()}
             </SelectValue>
           </SelectTrigger>
-          <SelectContent className="max-h-[300px]">
+          <SelectContent className="max-h-[300px] overflow-hidden">
+            {/* Search input and tabs (sticky) */}
+            <div className="sticky top-0 z-10 bg-white dark:bg-gray-800">
+              {/* Search input */}
+              <div className="p-2 border-b">
+                <div className="relative">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
+                  <Input
+                    placeholder="Search models..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-8 h-9"
+                  />
+                  {searchTerm && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-1 top-1 h-7 w-7 p-0"
+                      onClick={() => setSearchTerm('')}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Category tabs */}
+              <Tabs defaultValue="all" className="w-full" onValueChange={setActiveTab}>
+                <TabsList className="w-full grid grid-cols-4">
+                  <TabsTrigger value="all">All</TabsTrigger>
+                  <TabsTrigger value="free">Free</TabsTrigger>
+                  <TabsTrigger value="text">Text</TabsTrigger>
+                  <TabsTrigger value="image">Img+Text</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+
+            {/* Scrollable models list */}
+            <div className="max-h-[200px] overflow-y-auto">
+              {getFilteredModels().length > 0 ? (
+                <SelectGroup>
+                  {getFilteredModels().map(model => (
+                    <SelectItem key={model.id} value={model.id}>
+                      <div className="flex items-center justify-between w-full">
+                        <span className="truncate">{model.name}</span>
+                        {model.isFree && <span className="text-xs text-blue-500 ml-1">(free)</span>}
+                        {model.id === selectedModel && <Check className="h-4 w-4 ml-2 flex-shrink-0" />}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              ) : (
+                <div className="p-2 text-center text-gray-500">No models found</div>
+              )}
+            </div>
+          </SelectContent>
+        </Select>
+        
+        {/* Refresh button */}
+        <Button 
+          variant="ghost" 
+          size="sm"
+          onClick={handleRefresh} 
+          className="h-9 w-9 p-0"
+          disabled={loading}
+          title="Refresh models list"
+        >
+          <RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+        </Button>
+      </div>
+    )
+  }
+
+  // Full version with separate sections (not used in this layout)
+  return (
+    <div className={`flex items-center gap-2 ${className}`}>
+      <Select 
+        value={selectedModel || undefined} 
+        onValueChange={handleModelSelect}
+      >
+        <SelectTrigger className="h-9 flex-1 bg-white dark:bg-gray-800">
+          <SelectValue placeholder="Select a model" />
+        </SelectTrigger>
+        <SelectContent className="max-h-[300px] overflow-hidden">
+          {/* Search input and tabs (sticky) */}
+          <div className="sticky top-0 z-10 bg-white dark:bg-gray-800">
             {/* Search input */}
             <div className="p-2 border-b">
               <div className="relative">
@@ -178,8 +263,26 @@ export default function ChatModelSelector({ className, onSelectModel, compact = 
                 <TabsTrigger value="image">Img+Text</TabsTrigger>
               </TabsList>
             </Tabs>
+          </div>
 
-            {/* Models list based on selected tab */}
+          {/* Scrollable models list */}
+          <div className="max-h-[200px] overflow-y-auto">
+            {/* Free models group */}
+            {activeTab === 'all' && freeModels.length > 0 && searchTerm === '' && (
+              <SelectGroup>
+                <SelectLabel>Free Models</SelectLabel>
+                {freeModels.map(model => (
+                  <SelectItem key={model.id} value={model.id}>
+                    <div className="flex items-center justify-between w-full">
+                      <span className="truncate">{model.name}</span>
+                      {model.id === selectedModel && <Check className="h-4 w-4 ml-2" />}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            )}
+
+            {/* Models based on active tab and search */}
             {getFilteredModels().length > 0 ? (
               <SelectGroup>
                 {getFilteredModels().map(model => (
@@ -187,7 +290,7 @@ export default function ChatModelSelector({ className, onSelectModel, compact = 
                     <div className="flex items-center justify-between w-full">
                       <span className="truncate">{model.name}</span>
                       {model.isFree && <span className="text-xs text-blue-500 ml-1">(free)</span>}
-                      {model.id === selectedModel && <Check className="h-4 w-4 ml-2 flex-shrink-0" />}
+                      {model.id === selectedModel && <Check className="h-4 w-4 ml-2" />}
                     </div>
                   </SelectItem>
                 ))}
@@ -195,99 +298,7 @@ export default function ChatModelSelector({ className, onSelectModel, compact = 
             ) : (
               <div className="p-2 text-center text-gray-500">No models found</div>
             )}
-          </SelectContent>
-        </Select>
-        
-        {/* Refresh button */}
-        <Button 
-          variant="ghost" 
-          size="sm"
-          onClick={handleRefresh} 
-          className="h-9 w-9 p-0"
-          disabled={loading}
-          title="Refresh models list"
-        >
-          <RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-        </Button>
-      </div>
-    )
-  }
-
-  // Full version with separate sections (not used in this layout)
-  return (
-    <div className={`flex items-center gap-2 ${className}`}>
-      <Select 
-        value={selectedModel || undefined} 
-        onValueChange={handleModelSelect}
-      >
-        <SelectTrigger className="h-9 flex-1 bg-gray-100 dark:bg-gray-800">
-          <SelectValue placeholder="Select a model" />
-        </SelectTrigger>
-        <SelectContent className="max-h-[300px]">
-          {/* Search input */}
-          <div className="p-2 border-b">
-            <div className="relative">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
-              <Input
-                placeholder="Search models..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 h-9"
-              />
-              {searchTerm && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-1 top-1 h-7 w-7 p-0"
-                  onClick={() => setSearchTerm('')}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
           </div>
-
-          {/* Category tabs */}
-          <Tabs defaultValue="all" className="w-full" onValueChange={setActiveTab}>
-            <TabsList className="w-full grid grid-cols-4">
-              <TabsTrigger value="all">All</TabsTrigger>
-              <TabsTrigger value="free">Free</TabsTrigger>
-              <TabsTrigger value="text">Text</TabsTrigger>
-              <TabsTrigger value="image">Img+Text</TabsTrigger>
-            </TabsList>
-          </Tabs>
-
-          {/* Free models group */}
-          {activeTab === 'all' && freeModels.length > 0 && searchTerm === '' && (
-            <SelectGroup>
-              <SelectLabel>Free Models</SelectLabel>
-              {freeModels.map(model => (
-                <SelectItem key={model.id} value={model.id}>
-                  <div className="flex items-center justify-between w-full">
-                    <span className="truncate">{model.name}</span>
-                    {model.id === selectedModel && <Check className="h-4 w-4 ml-2" />}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          )}
-
-          {/* Models based on active tab and search */}
-          {getFilteredModels().length > 0 ? (
-            <SelectGroup>
-              {getFilteredModels().map(model => (
-                <SelectItem key={model.id} value={model.id}>
-                  <div className="flex items-center justify-between w-full">
-                    <span className="truncate">{model.name}</span>
-                    {model.isFree && <span className="text-xs text-blue-500 ml-1">(free)</span>}
-                    {model.id === selectedModel && <Check className="h-4 w-4 ml-2" />}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          ) : (
-            <div className="p-2 text-center text-gray-500">No models found</div>
-          )}
         </SelectContent>
       </Select>
       
