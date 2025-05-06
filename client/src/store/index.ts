@@ -1,6 +1,7 @@
 import { configureStore } from '@reduxjs/toolkit'
 import boardReducer from './boardSlice'
 import settingsReducer from './settingsSlice'
+import modelsReducer from './modelsSlice'
 import { persistStore, persistReducer } from 'redux-persist'
 import storage from 'redux-persist/lib/storage'
 import { combineReducers } from 'redux'
@@ -12,7 +13,7 @@ const persistConfig = {
   key: 'root',
   storage,
   // Only whitelist settings slice for persistence
-  whitelist: ['settings']
+  whitelist: ['settings', 'models']
 }
 
 /**
@@ -21,6 +22,7 @@ const persistConfig = {
 const rootReducer = combineReducers({
   board: boardReducer,
   settings: settingsReducer,
+  models: modelsReducer,
 })
 
 /**
