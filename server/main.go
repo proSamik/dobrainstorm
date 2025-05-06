@@ -144,6 +144,9 @@ func main() {
 	chatHandler := handlers.NewChatHandler(db, []string{os.Getenv("FRONTEND_URL"), os.Getenv("BETA_CLIENT_URL")})
 	mux.Handle("/ws/chat", authMiddleware.RequireAuth(http.HandlerFunc(chatHandler.HandleChat)))
 
+	// Direct HTTP route for stopping chat streams - bypasses WebSocket queuing issues
+	mux.Handle("/api/chat/stop", authMiddleware.RequireAuth(http.HandlerFunc(chatHandler.HandleStopStream)))
+
 	// Analytics routes (public)
 	mux.HandleFunc("/api/analytics/pageview", analyticsHandler.TrackPageView)
 
