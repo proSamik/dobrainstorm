@@ -49,7 +49,7 @@ const NodeContextMenu = ({ nodeId, x, y, isEdge = false, onClose }: NodeContextM
   return (
     <div
       ref={menuRef}
-      className="absolute z-50 bg-white dark:bg-gray-800 shadow-lg rounded-md overflow-hidden border border-gray-200 dark:border-gray-700"
+      className="absolute z-50 bg-white dark:bg-dark-background shadow-lg rounded-md overflow-hidden border border-gray-200 dark:border-gray-700"
       style={{
         top: y,
         left: x,
