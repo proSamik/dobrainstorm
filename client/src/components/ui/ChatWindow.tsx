@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Button } from './button'
 import { Card } from './card'
 import { X, StopCircle, MessageSquare, Bot, Info, BrainCircuit } from 'lucide-react'
@@ -10,6 +10,7 @@ import rehypeRaw from 'rehype-raw'
 import rehypeSanitize from 'rehype-sanitize'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
 
 // Define different message types
 interface BaseMessage {
@@ -30,7 +31,6 @@ interface AssistantMessage extends BaseMessage {
   isThinking?: boolean;   // Currently in thinking phase
   isStreaming?: boolean;  // Currently streaming content
   processedContent?: string; // Processed markdown content
-  processedReasoning?: string; // Processed reasoning markdown content
 }
 
 interface SystemMessage extends BaseMessage {
@@ -45,18 +45,6 @@ interface ChatWindowProps {
   registerCloseFn?: (closeFn: () => void) => void
 }
 
-// Precompile regex patterns for better performance
-const REGEX_CARRIAGE_RETURN_NEWLINE = /\r\n/g;
-const REGEX_CARRIAGE_RETURN = /\r/g;
-const REGEX_MATH_OPEN = /\\\(/g;
-const REGEX_MATH_CLOSE = /\\\)/g;
-const REGEX_CODE_BLOCK_WITH_LANG = /```(.+?)\n/g;
-const REGEX_CODE_BLOCK_EMPTY = /```\n/g;
-const REGEX_EN_DASH = /–/g; // Unicode en-dash character
-const REGEX_EM_DASH = /—/g; // Unicode em-dash character
-const REGEX_SMART_QUOTES_LEFT = /"/g; // Left smart quotes
-const REGEX_SMART_QUOTES_RIGHT = /"/g; // Right smart quotes
-
 /**
  * Individual chat window component
  * Manages a single websocket connection and chat session
@@ -67,8 +55,6 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
   const [connected, setConnected] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [showReasoning, setShowReasoning] = useState(true) // Start with reasoning visible
-  const [pendingStreamBuffer, setPendingStreamBuffer] = useState<string>('');
-  const bufferTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Refs
   const socketRef = useRef<WebSocket | null>(null)
@@ -78,23 +64,6 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
   const activeMessageRef = useRef<number | null>(null) // Track active message index
   const reasoningStartTimeRef = useRef<number | null>(null) // Track reasoning start time
   const isUserScrollingRef = useRef(false) // Track if the user is scrolling
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Create memoized markdown processing components
-  const markdownComponents = useMemo(() => {
-    // Configure KaTeX with less strict options
-    const rehypeKatexOptions = { strict: false, trust: true };
-    
-    return {
-      remarkPlugins: [remarkGfm, remarkMath],
-      rehypePlugins: [
-        rehypeRaw, 
-        rehypeSanitize,
-        // Apply options properly to satisfy TypeScript
-        [rehypeKatex, rehypeKatexOptions] as any
-      ]
-    };
-  }, []);
 
   // Function to scroll to bottom of chat
   const scrollToBottom = () => {
@@ -124,7 +93,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
     }
   }, [registerCloseFn, handleClose]);
 
-  // Process markdown with a small delay - for main content
+  // Process markdown with a small delay
   const processMarkdown = useCallback((messageIndex: number, content: string) => {
     // Small delay before processing markdown
     setTimeout(() => {
@@ -136,64 +105,19 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
             const assistantMsg = message as AssistantMessage;
             // Normalize line breaks for proper markdown rendering
             const normalizedContent = content
-              .replace(REGEX_CARRIAGE_RETURN_NEWLINE, '\n')
-              .replace(REGEX_CARRIAGE_RETURN, '\n')
+              .replace(/\r\n/g, '\n')
+              .replace(/\r/g, '\n')
               // Fix for math formulas rendering 
-              .replace(REGEX_MATH_OPEN, '$')
-              .replace(REGEX_MATH_CLOSE, '$')
-              // Replace special characters that cause KaTeX warnings
-              .replace(REGEX_EN_DASH, '-')
-              .replace(REGEX_EM_DASH, '--')
-              .replace(REGEX_SMART_QUOTES_LEFT, '"')
-              .replace(REGEX_SMART_QUOTES_RIGHT, '"')
+              .replace(/\\\(/g, '$')
+              .replace(/\\\)/g, '$')
               // Format multiline code blocks properly
-              .replace(REGEX_CODE_BLOCK_WITH_LANG, '```$1\n')
-              .replace(REGEX_CODE_BLOCK_EMPTY, '```\n');
+              .replace(/```(.+?)\n/g, '```$1\n')
+              .replace(/```\n/g, '```\n');
               
             newMessages[messageIndex] = {
               ...assistantMsg,
               processedContent: normalizedContent
             };
-          }
-        }
-        return newMessages;
-      });
-    }, 5); // 5ms delay for markdown processing
-  }, []);
-  
-  // Process reasoning markdown with a small delay
-  const processReasoningMarkdown = useCallback((messageIndex: number, reasoning: string) => {
-    // Small delay before processing markdown
-    setTimeout(() => {
-      setMessages(prev => {
-        const newMessages = [...prev];
-        if (messageIndex >= 0 && messageIndex < newMessages.length) {
-          const message = newMessages[messageIndex];
-          if (message && message.sender === 'assistant') {
-            const assistantMsg = message as AssistantMessage;
-            // Only process if reasoning exists
-            if (reasoning && reasoning.length > 0) {
-              // Normalize line breaks for proper markdown rendering
-              const normalizedReasoning = reasoning
-                .replace(REGEX_CARRIAGE_RETURN_NEWLINE, '\n')
-                .replace(REGEX_CARRIAGE_RETURN, '\n')
-                // Fix for math formulas rendering 
-                .replace(REGEX_MATH_OPEN, '$')
-                .replace(REGEX_MATH_CLOSE, '$')
-                // Replace special characters that cause KaTeX warnings
-                .replace(REGEX_EN_DASH, '-')
-                .replace(REGEX_EM_DASH, '--')
-                .replace(REGEX_SMART_QUOTES_LEFT, '"')
-                .replace(REGEX_SMART_QUOTES_RIGHT, '"')
-                // Format multiline code blocks properly
-                .replace(REGEX_CODE_BLOCK_WITH_LANG, '```$1\n')
-                .replace(REGEX_CODE_BLOCK_EMPTY, '```\n');
-                
-              newMessages[messageIndex] = {
-                ...assistantMsg,
-                processedReasoning: normalizedReasoning
-              };
-            }
           }
         }
         return newMessages;
@@ -430,42 +354,6 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
               activeMessageRef.current = null;
               reasoningStartTimeRef.current = null;
             }
-            else if (statusValue === 'timeout' || statusValue === 'error') {
-              // Handle timeout/error like a stream_end but mark as incomplete
-              console.log('Stream ended with timeout or error');
-              
-              // Clear any pending stream buffer
-              setPendingStreamBuffer('');
-              if (bufferTimeoutRef.current) {
-                clearTimeout(bufferTimeoutRef.current);
-                bufferTimeoutRef.current = null;
-              }
-              
-              // Finalize the active message
-              setMessages(prev => {
-                const newMessages = [...prev];
-                
-                if (activeMessageRef.current !== null && 
-                    activeMessageRef.current < newMessages.length &&
-                    newMessages[activeMessageRef.current] &&
-                    newMessages[activeMessageRef.current].sender === 'assistant') {
-                  
-                  const current = newMessages[activeMessageRef.current] as AssistantMessage;
-                  newMessages[activeMessageRef.current] = {
-                    ...current,
-                    isThinking: false,
-                    isStreaming: false,
-                    isIncomplete: true
-                  };
-                }
-                
-                return newMessages;
-              });
-              
-              // Reset active message
-              activeMessageRef.current = null;
-              reasoningStartTimeRef.current = null;
-            }
             break;
             
           case 'reasoning':
@@ -493,7 +381,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
                   newMessages[activeMessageRef.current].sender !== 'assistant') {
                 // Remove any processing messages
                 const processingIndex = newMessages.findIndex(
-                  m => m && m.sender === 'system' && 
+                  m => m.sender === 'system' && 
                      (m.content === 'AI is typing...' || 
                       m.content.includes('Processing') || 
                       m.content.includes('thinking'))
@@ -515,33 +403,17 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
                 });
                 
                 activeMessageRef.current = newMessages.length - 1;
-                
-                // Process reasoning markdown
-                setTimeout(() => {
-                  if (activeMessageRef.current !== null) {
-                    processReasoningMarkdown(activeMessageRef.current, data.value);
-                  }
-                }, 5);
               } else {
                 // Update existing message
                 const current = newMessages[activeMessageRef.current] as AssistantMessage;
-                const updatedReasoning = (current.reasoning || '') + data.value;
-                
                 newMessages[activeMessageRef.current] = {
                   ...current,
-                  reasoning: updatedReasoning,
+                  reasoning: (current.reasoning || '') + data.value,
                   isThinking: true,
                   reasoningTime: reasoningStartTimeRef.current 
                     ? Math.round((Date.now() - reasoningStartTimeRef.current) / 1000)
                     : 0
                 };
-                
-                // Process reasoning markdown
-                setTimeout(() => {
-                  if (activeMessageRef.current !== null) {
-                    processReasoningMarkdown(activeMessageRef.current, updatedReasoning);
-                  }
-                }, 5);
               }
               
               return newMessages;
@@ -557,136 +429,79 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
             
             console.log(`Received stream chunk: "${data.value}"`);
             
-            // Buffer short segments to prevent separate message creation
-            setPendingStreamBuffer(prev => prev + data.value);
-            
-            // Clear existing timeout and set a new one
-            if (bufferTimeoutRef.current) {
-              clearTimeout(bufferTimeoutRef.current);
-            }
-            
-            bufferTimeoutRef.current = setTimeout(() => {
-              setPendingStreamBuffer(currentBuffer => {
-                if (currentBuffer) {
-                  // Process the buffered content
-                  setMessages(prev => {
-                    const newMessages = [...prev];
-                    
-                    if (activeMessageRef.current === null || 
-                        activeMessageRef.current >= newMessages.length || 
-                        !newMessages[activeMessageRef.current] ||
-                        newMessages[activeMessageRef.current].sender !== 'assistant') {
-                      // No active message or invalid reference - create one
-                      // Remove any processing messages
-                      const processingIndex = newMessages.findIndex(
-                        m => m && m.sender === 'system' && 
-                           (m.content === 'AI is typing...' || 
-                            m.content.includes('Processing') || 
-                            m.content.includes('thinking'))
-                      );
-                      
-                      if (processingIndex !== -1) {
-                        newMessages.splice(processingIndex, 1);
-                      }
-                      
-                      // Create a new assistant message
-                      newMessages.push({
-                        sender: 'assistant',
-                        content: currentBuffer,
-                        isStreaming: true
-                      });
-                      
-                      activeMessageRef.current = newMessages.length - 1;
-                      
-                      // Process markdown for the new message
-                      setTimeout(() => {
-                        processMarkdown(activeMessageRef.current!, currentBuffer);
-                      }, 5);
-                    } else {
-                      // Update existing message (with safe type checking)
-                      const current = newMessages[activeMessageRef.current] as AssistantMessage;
-                      
-                      // If transitioning from thinking to streaming, store thinking time
-                      const finalReasoningTime = current && current.isThinking && reasoningStartTimeRef.current
-                        ? Math.round((Date.now() - reasoningStartTimeRef.current) / 1000)
-                        : current.reasoningTime;
-                      
-                      const updatedContent = (current.content || '') + currentBuffer;
-                      
-                      newMessages[activeMessageRef.current] = {
-                        ...current,
-                        content: updatedContent,
-                        isThinking: false,
-                        isStreaming: true,
-                        reasoningTime: finalReasoningTime
-                      };
-                      
-                      // Process markdown for updated content
-                      setTimeout(() => {
-                        if (activeMessageRef.current !== null) {
-                          processMarkdown(activeMessageRef.current, updatedContent);
-                        }
-                      }, 5);
-                    }
-                    
-                    return newMessages;
-                  });
-                  
-                  // Reset the buffer
-                  return '';
-                }
-                return currentBuffer;
-              });
-            }, 100); // 100ms delay to batch short segments
-            break;
-            
-          case 'error':
-            // Handle errors gracefully
-            console.error(`Error received: ${data.value}`);
-            
-            // Clear any pending stream buffer
-            setPendingStreamBuffer('');
-            if (bufferTimeoutRef.current) {
-              clearTimeout(bufferTimeoutRef.current);
-              bufferTimeoutRef.current = null;
-            }
-            
-            // Finalize the current message instead of showing the error
+            // Update the active message with new content
             setMessages(prev => {
               const newMessages = [...prev];
               
-              // If we have an active message, mark it as complete
-              if (activeMessageRef.current !== null && 
-                  activeMessageRef.current < newMessages.length &&
-                  newMessages[activeMessageRef.current] &&
-                  newMessages[activeMessageRef.current].sender === 'assistant') {
-                
-                const current = newMessages[activeMessageRef.current] as AssistantMessage;
-                newMessages[activeMessageRef.current] = {
-                  ...current,
-                  isThinking: false,
-                  isStreaming: false,
-                  // Add a marker that indicates completion but not showing error
-                  isIncomplete: true
-                };
-              } else {
-                // Instead of showing an error message, just complete any in-progress system messages
+              if (activeMessageRef.current === null || 
+                  activeMessageRef.current >= newMessages.length || 
+                  !newMessages[activeMessageRef.current] ||
+                  newMessages[activeMessageRef.current].sender !== 'assistant') {
+                // No active message or invalid reference - create one
+                // Remove any processing messages
                 const processingIndex = newMessages.findIndex(
-                  m => m && m.sender === 'system' && 
-                    (m.content === 'AI is typing...' || 
-                    m.content.includes('Processing') || 
-                    m.content.includes('thinking'))
+                  m => m.sender === 'system' && 
+                     (m.content === 'AI is typing...' || 
+                      m.content.includes('Processing') || 
+                      m.content.includes('thinking'))
                 );
                 
                 if (processingIndex !== -1) {
                   newMessages.splice(processingIndex, 1);
                 }
+                
+                // Create a new assistant message
+                newMessages.push({
+                  sender: 'assistant',
+                  content: data.value,
+                  isStreaming: true
+                });
+                
+                activeMessageRef.current = newMessages.length - 1;
+                
+                // Process markdown for the new message
+                setTimeout(() => {
+                  processMarkdown(activeMessageRef.current!, data.value);
+                }, 5);
+              } else {
+                // Update existing message (with safe type checking)
+                const current = newMessages[activeMessageRef.current] as AssistantMessage;
+                
+                // If transitioning from thinking to streaming, store thinking time
+                const finalReasoningTime = current && current.isThinking && reasoningStartTimeRef.current
+                  ? Math.round((Date.now() - reasoningStartTimeRef.current) / 1000)
+                  : current.reasoningTime;
+                
+                const updatedContent = (current.content || '') + data.value;
+                
+                newMessages[activeMessageRef.current] = {
+                  ...current,
+                  content: updatedContent,
+                  isThinking: false,
+                  isStreaming: true,
+                  reasoningTime: finalReasoningTime
+                };
+                
+                // Process markdown for updated content
+                setTimeout(() => {
+                  if (activeMessageRef.current !== null) {
+                    processMarkdown(activeMessageRef.current, updatedContent);
+                  }
+                }, 5);
               }
               
               return newMessages;
             });
+            break;
             
-            // Reset active message state
+          case 'error':
+            // Error messages
+            setMessages(prev => [
+              ...prev, 
+              { sender: 'system', content: `Error: ${data.value}` }
+            ]);
+            
+            // Reset active message
             activeMessageRef.current = null;
             reasoningStartTimeRef.current = null;
             break;
@@ -711,44 +526,12 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [windowId, processMarkdown, processReasoningMarkdown]);
+  }, [windowId, processMarkdown]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
     scrollToBottom();
   }, [messages, showReasoning]);
-
-  // Auto-adjust textarea height
-  const adjustTextareaHeight = useCallback((e?: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const textarea = e ? e.target : textareaRef.current;
-    if (!textarea) return;
-    
-    // Reset height to calculate the new height
-    textarea.style.height = 'auto';
-    
-    // Set the new height (with a small buffer to prevent scrollbar flicker)
-    const newHeight = Math.min(textarea.scrollHeight + 2, 150);
-    textarea.style.height = `${newHeight}px`;
-    
-    // Update state if event provided
-    if (e) {
-      setInputValue(textarea.value);
-    }
-  }, []);
-
-  // Ensure textarea resizes after mounting
-  useEffect(() => {
-    if (textareaRef.current) {
-      adjustTextareaHeight();
-    }
-  }, [adjustTextareaHeight]);
-  
-  // Reset textarea height when input is cleared
-  useEffect(() => {
-    if (inputValue === '' && textareaRef.current) {
-      textareaRef.current.style.height = '40px';
-    }
-  }, [inputValue]);
 
   // Handle sending a message
   const handleSendMessage = () => {
@@ -763,12 +546,6 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
       if (sentMessagesRef.current.has(messageContent)) {
         console.log(`Preventing duplicate send of message: ${messageContent}`);
         setInputValue('');
-        
-        // Reset textarea height
-        if (textareaRef.current) {
-          textareaRef.current.style.height = '40px';
-        }
-        
         return;
       }
       
@@ -791,11 +568,6 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
 
       // Clear input field
       setInputValue('');
-      
-      // Reset textarea height
-      if (textareaRef.current) {
-        textareaRef.current.style.height = '40px';
-      }
       
       // Reset references
       activeMessageRef.current = null;
@@ -851,7 +623,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
             <div className="flex justify-start items-start gap-2">
               <div className={`inline-block px-3 py-2 rounded-lg max-w-[80%] ${
                 assistantMsg.isIncomplete 
-                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200'
+                  ? 'bg-yellow-100 dark:bg-yellow-900 text-gray-800 dark:text-gray-200 border border-yellow-300 dark:border-yellow-700'
                   : assistantMsg.isThinking
                     ? 'bg-purple-50 dark:bg-purple-900 text-gray-800 dark:text-gray-200 border border-purple-200 dark:border-purple-800'
                     : assistantMsg.isStreaming
@@ -893,20 +665,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
                             <div className="font-medium mb-1 text-blue-600 dark:text-blue-400">
                               AI Reasoning:
                             </div>
-                            <div className="whitespace-pre-wrap">
-                              {assistantMsg.processedReasoning ? (
-                                <div className="prose dark:prose-invert prose-xs max-w-none markdown-container">
-                                  <ReactMarkdown 
-                                    remarkPlugins={markdownComponents.remarkPlugins}
-                                    rehypePlugins={markdownComponents.rehypePlugins}
-                                  >
-                                    {assistantMsg.processedReasoning}
-                                  </ReactMarkdown>
-                                </div>
-                              ) : (
-                                assistantMsg.reasoning
-                              )}
-                            </div>
+                            <div className="whitespace-pre-wrap">{assistantMsg.reasoning}</div>
                           </div>
                         )}
                       </div>
@@ -917,8 +676,8 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
                       {assistantMsg && assistantMsg.processedContent ? (
                         <div className="prose dark:prose-invert prose-sm max-w-none markdown-container">
                           <ReactMarkdown 
-                            remarkPlugins={markdownComponents.remarkPlugins}
-                            rehypePlugins={markdownComponents.rehypePlugins}
+                            remarkPlugins={[remarkGfm, remarkMath]}
+                            rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeKatex]}
                           >
                             {assistantMsg.processedContent}
                           </ReactMarkdown>
@@ -930,8 +689,8 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
                     
                     {/* Incomplete response indicator */}
                     {assistantMsg.isIncomplete && (
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 italic">
-                        (Message complete)
+                      <div className="text-xs text-yellow-600 dark:text-yellow-400 mt-1 italic">
+                        (Response incomplete due to timeout)
                       </div>
                     )}
                     
@@ -1016,20 +775,14 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
       </div>
       
       <div className="p-3 border-t flex">
-        <textarea
-          ref={textareaRef}
+        <input
+          type="text"
           value={inputValue}
-          onChange={adjustTextareaHeight}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              handleSendMessage();
-            }
-          }}
-          placeholder="Type a message... (Shift+Enter for new line)"
-          className="flex-1 px-3 py-2 border rounded-l-md focus:outline-none min-h-[40px] max-h-[150px] resize-none overflow-y-auto"
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+          placeholder="Type a message..."
+          className="flex-1 px-3 py-2 border rounded-l-md focus:outline-none"
           disabled={!connected || isResponding}
-          rows={1}
         />
         {isResponding ? (
           <Button 
