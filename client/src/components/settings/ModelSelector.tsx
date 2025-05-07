@@ -59,7 +59,7 @@ export default function ModelSelector({
         {isLoading && <Spinner size="sm" />}
       </div>
 
-      <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md">
+      <div className="bg-gray-50 dark:bg-dark-background p-4 rounded-md">
         <Select
           value={selectedModel}
           onValueChange={onModelChange}
@@ -67,18 +67,18 @@ export default function ModelSelector({
           open={isOpen}
           onOpenChange={setIsOpen}
         >
-          <SelectTrigger className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700">
+          <SelectTrigger className="w-full px-3 py-2 bg-white dark:bg-dark-background border border-gray-300 dark:border-gray-700">
             <SelectValue placeholder="-- Select a default model --" />
           </SelectTrigger>
           <SelectContent 
-            className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700"
+            className="bg-white dark:bg-dark-background border border-gray-300 dark:border-gray-700"
             style={{ maxHeight: '300px' }}
             onCloseAutoFocus={(e) => {
               e.preventDefault()
             }}
           >
             {/* Search input */}
-            <div className="p-2 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900 z-10">
+            <div className="p-2 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-dark-background z-10">
               <div className="relative">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500 dark:text-gray-400" />
                 <Input
@@ -87,7 +87,7 @@ export default function ModelSelector({
                   value={searchQuery}
                   onChange={handleSearchChange}
                   onClick={handleSearchClick}
-                  className="pl-8 py-2 w-full text-sm bg-gray-50 dark:bg-gray-800"
+                  className="pl-8 py-2 w-full text-sm bg-gray-50 dark:bg-dark-background"
                 />
               </div>
             </div>
