@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
 	"saas-server/database"
@@ -26,12 +27,13 @@ type ChatHandler struct {
 
 // ChatMessage represents a message in the chat
 type ChatMessage struct {
-	Type        string      `json:"type"`
-	Value       interface{} `json:"value"`
-	SessionID   string      `json:"sessionId"`
-	IsStreaming bool        `json:"isStreaming,omitempty"`
-	Reasoning   string      `json:"reasoning,omitempty"`
-	Model       string      `json:"model,omitempty"`
+	Type         string      `json:"type"`
+	Value        interface{} `json:"value"`
+	SessionID    string      `json:"sessionId"`
+	IsStreaming  bool        `json:"isStreaming,omitempty"`
+	Reasoning    string      `json:"reasoning,omitempty"`
+	Model        string      `json:"model,omitempty"`
+	IsPreference bool        `json:"isPreference,omitempty"`
 }
 
 // StopStreamRequest represents a request to stop a stream
@@ -209,6 +211,27 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 
 		// Process the message based on type
 		if message.Type == "message" {
+			// If this is the first message and preferences are requested, fetch and add user preferences
+			if len(chatHistory) == 0 && message.IsPreference {
+				// Add user preferences to chat history
+				userUUID, err := uuid.Parse(userID)
+				if err == nil {
+					userPrefs, err := h.DB.GetUserPreferences(userUUID)
+					if err == nil && userPrefs != nil {
+						prefMessage := openrouter.Message{
+							Role:    "user",
+							Content: fmt.Sprintf("About User and user preference- %s", userPrefs.UserPreferences),
+						}
+						chatHistory = append(chatHistory, prefMessage)
+						log.Printf("Added user preferences to chat history for user %s", userID)
+					} else {
+						log.Printf("Could not get user preferences: %v", err)
+					}
+				} else {
+					log.Printf("Could not parse user ID as UUID: %v", err)
+				}
+			}
+
 			// If currently streaming, send stop command
 			if isStreaming {
 				isStreaming = false
@@ -268,7 +291,7 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 			// Create request to OpenRouter API
 			req := openrouter.ChatCompletionRequest{
 				Messages: chatHistory,
-				Model:   message.Model,
+				Model:    message.Model,
 				Stream:   true,
 			}
 
