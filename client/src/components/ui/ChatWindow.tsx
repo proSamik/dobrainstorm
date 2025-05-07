@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Button } from './button'
 import { Card } from './card'
-import { X, StopCircle, MessageSquare, Bot, Info, BrainCircuit } from 'lucide-react'
+import { X, StopCircle, MessageSquare, Bot, Info, BrainCircuit, ChevronDown } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
@@ -48,6 +48,18 @@ interface ChatWindowProps {
   registerCloseFn?: (closeFn: () => void) => void
 }
 
+// ChatMessage represents a message in the chat
+type ChatMessage = {
+  type: string;
+  value: any;
+  sessionId: string;
+  isStreaming?: boolean;
+  reasoning?: string;
+  model?: string;
+  isPreference?: boolean;
+  loadHistory?: boolean;
+};
+
 /**
  * Individual chat window component
  * Manages a single websocket connection and chat session
@@ -60,6 +72,9 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
   const [showReasoning, setShowReasoning] = useState(true) // Start with reasoning visible
   const [isStopping, setIsStopping] = useState(false) // Track stop in progress for UI
   const [includePreferences, setIncludePreferences] = useState(true) // Track preference inclusion
+  const [canLoadMore, setCanLoadMore] = useState(false) // Track if there are more messages to load
+  const [loadingHistory, setLoadingHistory] = useState(false) // Track if we're loading history
+  const [historyOffset, setHistoryOffset] = useState(0) // Track offset for loading more history
   
   // Get the selected model from Redux store
   const selectedModel = useAppSelector(state => state.models.selectedModel);
@@ -86,6 +101,26 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
     isUserScrollingRef.current = scrollTop + clientHeight < scrollHeight;
   }
+
+  // Handle loading more history
+  const handleLoadMoreHistory = () => {
+    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN || !sessionId) {
+      return;
+    }
+    
+    setLoadingHistory(true);
+    
+    try {
+      socketRef.current.send(JSON.stringify({
+        type: "load_more_history",
+        value: historyOffset,
+        sessionId: sessionId
+      }));
+    } catch (error) {
+      console.error('Error loading more history:', error);
+      setLoadingHistory(false);
+    }
+  };
 
   // Handle closing the chat window
   const handleClose = useCallback(() => {
@@ -234,6 +269,22 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
             ])
             break
             
+          case 'history_info':
+            // Information about history
+            setMessages(prev => [
+              ...prev,
+              { sender: 'system', content: data.value }
+            ]);
+            setLoadingHistory(false);
+            break;
+            
+          case 'more_available':
+            // More messages are available to load
+            setCanLoadMore(true);
+            setHistoryOffset(data.value);
+            setLoadingHistory(false);
+            break;
+            
           case 'user':
             // User message from server - should rarely happen with our modifications
             if (typeof data.value !== 'string') {
@@ -248,6 +299,23 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
                 { sender: 'user', content: data.value, id: data.messageId || `server-${Date.now()}` }
               ]);
             }
+            break;
+            
+          case 'assistant':
+            // Assistant message from history
+            if (typeof data.value !== 'string') {
+              console.error('Invalid assistant value type:', typeof data.value);
+              break;
+            }
+            
+            setMessages(prev => [
+              ...prev,
+              { 
+                sender: 'assistant', 
+                content: data.value,
+                processedContent: data.value
+              }
+            ]);
             break;
             
           case 'status':
@@ -834,6 +902,31 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
       <style>{markdownStyles}</style>
       
       <div className="flex-1 overflow-y-auto p-3 space-y-2" onScroll={handleUserScroll}>
+        {/* Load more button */}
+        {canLoadMore && (
+          <div className="flex justify-center mb-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleLoadMoreHistory}
+              disabled={loadingHistory}
+              className="text-xs flex items-center gap-1"
+            >
+              {loadingHistory ? (
+                <>
+                  <div className="animate-spin h-3 w-3 border-2 border-gray-500 rounded-full border-t-transparent" />
+                  Loading...
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-3 w-3" />
+                  Load More Messages
+                </>
+              )}
+            </Button>
+          </div>
+        )}
+        
         {/* Render all messages */}
         {messages.map((msg, idx) => renderMessage(msg, idx))}
         
