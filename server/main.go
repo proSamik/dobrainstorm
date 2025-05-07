@@ -152,6 +152,13 @@ func main() {
 	// Direct HTTP route for stopping chat streams - bypasses WebSocket queuing issues
 	mux.Handle("/api/chat/stop", authMiddleware.RequireAuth(http.HandlerFunc(chatHandler.HandleStopStream)))
 
+	// Chat history routes
+	chatHistoryHandler := handlers.NewChatHistoryHandler(db)
+	mux.Handle("/api/chat/history", authMiddleware.RequireAuth(http.HandlerFunc(chatHistoryHandler.GetChatHistory)))
+	mux.Handle("/api/chat/histories", authMiddleware.RequireAuth(http.HandlerFunc(chatHistoryHandler.ListChatHistories)))
+	mux.Handle("/api/chat/history/title", authMiddleware.RequireAuth(http.HandlerFunc(chatHistoryHandler.UpdateChatHistoryTitle)))
+	mux.Handle("/api/chat/history/delete", authMiddleware.RequireAuth(http.HandlerFunc(chatHistoryHandler.DeleteChatHistory)))
+
 	// Analytics routes (public)
 	mux.HandleFunc("/api/analytics/pageview", analyticsHandler.TrackPageView)
 
