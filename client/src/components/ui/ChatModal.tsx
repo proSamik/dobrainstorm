@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, lazy, Suspense, useRef, useCallback } from 'react'
+import React, { useState, useEffect, lazy, Suspense, useRef } from 'react'
 import { Button } from './button'
 import { Plus, ArrowRight, Clock, Search } from 'lucide-react'
 import { authService } from '@/services/auth'
@@ -9,7 +9,6 @@ import {
   addSession, 
   activateSession, 
   deactivateSession, 
-  setSessions 
 } from '@/store/chatSlice'
 
 const LazyChatWindow = lazy(() => import('./ChatWindow'))
@@ -35,7 +34,7 @@ export default function ChatModal({
   const [loading, setLoading] = useState(true)
   
   // State for chat history UI
-  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   
   // Ref to store references to chat windows' closeFn
