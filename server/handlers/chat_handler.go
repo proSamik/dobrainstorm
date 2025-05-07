@@ -23,7 +23,7 @@ type ChatHandler struct {
 	connections     sync.Map
 	streamCancelers sync.Map // Map of sessionID -> cancel function
 	upgrader        websocket.Upgrader
-	openRouter      *openrouter.Client
+	openRouter      *openrouter.Client // Default system-wide OpenRouter client
 }
 
 // ChatMessage represents a message in the chat
@@ -58,10 +58,10 @@ func NewChatHandler(db *database.DB, allowedOrigins []string) *ChatHandler {
 		log.Printf("[WebSocket CORS] Allowing origin: %s", origin) // Log allowed origins
 	}
 
-	// Initialize OpenRouter client
+	// Initialize default OpenRouter client (will be used as fallback)
 	openRouterClient, err := openrouter.NewClient()
 	if err != nil {
-		log.Printf("Failed to initialize OpenRouter client: %v", err)
+		log.Printf("Failed to initialize default OpenRouter client: %v", err)
 	}
 
 	return &ChatHandler{
@@ -170,6 +170,35 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 
 	// Track model being used
 	currentModel := ""
+
+	// Try to get the user's API key
+	var userOpenRouterClient *openrouter.Client
+	userUUID, uuidErr := uuid.Parse(userID)
+	if uuidErr == nil {
+		// Get the user's OpenRouter API key
+		userAPIKey, err := h.DB.GetUserOpenRouterAPIKey(userUUID)
+		if err != nil {
+			log.Printf("Error retrieving user's OpenRouter API key: %v", err)
+		} else if userAPIKey != "" {
+			// Initialize OpenRouter client with user's API key
+			userOpenRouterClient, err = openrouter.NewClientWithAPIKey(userAPIKey)
+			if err != nil {
+				log.Printf("Failed to initialize OpenRouter client with user's API key: %v", err)
+			} else {
+				log.Printf("Using user's OpenRouter API key for session %s", sessionID)
+			}
+		}
+	}
+
+	// If no user client was created, use the default system client
+	if userOpenRouterClient == nil {
+		userOpenRouterClient = h.openRouter
+		if userOpenRouterClient != nil {
+			log.Printf("Using system OpenRouter API key for session %s", sessionID)
+		} else {
+			log.Printf("No OpenRouter client available for session %s", sessionID)
+		}
+	}
 
 	// If this is a reconnection, try to load the chat history
 	if isReconnection {
@@ -410,7 +439,21 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 
 			// Process stream with proper context handling
 			go func() {
-				responseContent, reasoningContent, streamErr := h.processStreamWithContext(conn, sessionID, wsWriteMutex, req, streamCtx)
+				// Log which API key is being used
+				if userOpenRouterClient.IsUsingUserKey() {
+					log.Printf("Session %s: Using user's OpenRouter API key", sessionID)
+				} else {
+					log.Printf("Session %s: Using system OpenRouter API key", sessionID)
+				}
+
+				responseContent, reasoningContent, streamErr := h.processStreamWithContext(
+					conn,
+					sessionID,
+					wsWriteMutex,
+					req,
+					streamCtx,
+					userOpenRouterClient, // Use the user's client or system fallback
+				)
 
 				// Stream is done, clean up
 				h.streamCancelers.Delete(sessionID)
@@ -646,8 +689,14 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 }
 
 // Create a reusable function for processing streams with context
-func (h *ChatHandler) processStreamWithContext(conn *websocket.Conn, sessionID string, wsWriteMutex *sync.Mutex,
-	req openrouter.ChatCompletionRequest, ctx context.Context) (string, string, error) {
+func (h *ChatHandler) processStreamWithContext(
+	conn *websocket.Conn,
+	sessionID string,
+	wsWriteMutex *sync.Mutex,
+	req openrouter.ChatCompletionRequest,
+	ctx context.Context,
+	client *openrouter.Client, // Add client parameter
+) (string, string, error) {
 
 	// Track streaming state and content
 	responseContent := ""
@@ -658,7 +707,7 @@ func (h *ChatHandler) processStreamWithContext(conn *websocket.Conn, sessionID s
 	log.Printf("Starting OpenRouter streaming for session %s with cancellable context", sessionID)
 
 	// Process the stream response
-	streamErr := h.openRouter.ChatCompletionsStreamWithContext(
+	streamErr := client.ChatCompletionsStreamWithContext(
 		ctx,
 		req,
 		func(resp openrouter.StreamResponse, isComment bool, commentText string) error {
