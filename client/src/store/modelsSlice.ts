@@ -45,7 +45,7 @@ export interface OpenRouterModel {
   architecture: ModelArchitecture;
   pricing: ModelPricing;
   top_provider: ModelTopProvider;
-  per_request_limits: any | null;
+  per_request_limits: string | null;
   supported_parameters: string[];
   isFree?: boolean; // Added to easily filter free models
 }
