@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, lazy, Suspense, useRef } from 'react'
+import React, { useState, useEffect, lazy, Suspense, useRef, useCallback } from 'react'
 import { Button } from './button'
 import { Plus, ArrowRight, Clock, Search } from 'lucide-react'
 import { authService } from '@/services/auth'
@@ -43,6 +43,20 @@ export default function ChatModal({
 
   console.log("Rendering ChatModal", { isOpen, chatWindows });
 
+  // Load chat history from the server
+  const loadChatHistory = useCallback(async () => {
+    setHistoryLoading(true)
+    try {
+      const response = await authService.get('/api/chat/histories')
+      // Add sessions to Redux
+      dispatch(setSessions(response.data))
+    } catch (error) {
+      console.error('Failed to load chat history:', error)
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [dispatch])
+  
   // Load user data and chat history when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -56,21 +70,7 @@ export default function ChatModal({
       // Load chat history
       loadChatHistory()
     }
-  }, [isOpen])
-  
-  // Load chat history from the server
-  const loadChatHistory = async () => {
-    setHistoryLoading(true)
-    try {
-      const response = await authService.get('/api/chat/histories')
-      // Add sessions to Redux
-      dispatch(setSessions(response))
-    } catch (error) {
-      console.error('Failed to load chat history:', error)
-    } finally {
-      setHistoryLoading(false)
-    }
-  }
+  }, [isOpen, loadChatHistory])
   
   // Close all websockets and then call the parent onClose function
   const handleCloseAll = () => {
