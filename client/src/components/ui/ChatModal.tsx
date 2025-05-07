@@ -43,19 +43,7 @@ export default function ChatModal({
 
   console.log("Rendering ChatModal", { isOpen, chatWindows });
 
-  // Load chat history from the server
-  const loadChatHistory = useCallback(async () => {
-    setHistoryLoading(true)
-    try {
-      const response = await authService.get('/api/chat/histories')
-      // Add sessions to Redux
-      dispatch(setSessions(response.data))
-    } catch (error) {
-      console.error('Failed to load chat history:', error)
-    } finally {
-      setHistoryLoading(false)
-    }
-  }, [dispatch])
+
   
   // Load user data and chat history when modal opens
   useEffect(() => {
@@ -66,11 +54,8 @@ export default function ChatModal({
       }).finally(() => {
         setLoading(false)
       })
-      
-      // Load chat history
-      loadChatHistory()
     }
-  }, [isOpen, loadChatHistory])
+  }, [isOpen])
   
   // Close all websockets and then call the parent onClose function
   const handleCloseAll = () => {
@@ -208,9 +193,9 @@ export default function ChatModal({
             ) : (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {filteredSessions.map(chat => (
+                  {filteredSessions.map((chat, index) => (
                     <div 
-                      key={chat.sessionId} 
+                      key={`${chat.sessionId}-${index}`}
                       className="border rounded-md p-3 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex flex-col"
                       onClick={() => handleAddChatWindow(chat.sessionId)}
                     >
