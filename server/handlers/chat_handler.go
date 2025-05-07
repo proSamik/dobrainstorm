@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -34,6 +35,7 @@ type ChatMessage struct {
 	Reasoning    string      `json:"reasoning,omitempty"`
 	Model        string      `json:"model,omitempty"`
 	IsPreference bool        `json:"isPreference,omitempty"`
+	LoadHistory  bool        `json:"loadHistory,omitempty"`
 }
 
 // StopStreamRequest represents a request to stop a stream
@@ -119,6 +121,9 @@ func (h *ChatHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check for session ID in query parameters (for reconnecting to existing session)
+	requestedSessionID := r.URL.Query().Get("sessionId")
+
 	// Upgrade the HTTP connection to a WebSocket connection
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -126,9 +131,14 @@ func (h *ChatHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate a unique session ID
-	sessionID := fmt.Sprintf("%s-%d", userID, GetUniqueID())
-	log.Printf("New chat session established: %s", sessionID)
+	// Generate a unique session ID or use the requested one
+	sessionID := requestedSessionID
+	if sessionID == "" {
+		sessionID = fmt.Sprintf("%s-%d", userID, GetUniqueID())
+		log.Printf("New chat session established: %s", sessionID)
+	} else {
+		log.Printf("Reconnecting to existing chat session: %s", sessionID)
+	}
 
 	// Store the connection
 	h.connections.Store(sessionID, conn)
@@ -150,13 +160,79 @@ func (h *ChatHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Handle the connection in a goroutine
-	go h.handleConnectionWithMutex(conn, sessionID, userID, &wsWriteMutex)
+	go h.handleConnectionWithMutex(conn, sessionID, userID, &wsWriteMutex, requestedSessionID != "")
 }
 
 // handleConnectionWithMutex processes messages for a single websocket connection with mutex protection
-func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID string, userID string, wsWriteMutex *sync.Mutex) {
+func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID string, userID string, wsWriteMutex *sync.Mutex, isReconnection bool) {
 	// Track chat history
 	chatHistory := []openrouter.Message{}
+
+	// Track model being used
+	currentModel := ""
+
+	// If this is a reconnection, try to load the chat history
+	if isReconnection {
+		userUUID, err := uuid.Parse(userID)
+		if err == nil {
+			// Get chat history from database
+			history, err := h.DB.GetChatHistory(userUUID, sessionID)
+			if err == nil && history != nil {
+				// Parse messages from JSON
+				var messages []openrouter.Message
+				if err := json.Unmarshal(history.Messages, &messages); err == nil {
+					chatHistory = messages
+
+					// Load model if available
+					if history.Model != "" {
+						currentModel = history.Model
+					}
+
+					log.Printf("Loaded %d messages from history for session %s", len(chatHistory), sessionID)
+
+					// Send initial messages to client (last 5 or fewer)
+					startIdx := 0
+					if len(chatHistory) > 5 {
+						startIdx = len(chatHistory) - 5
+
+						// Send notification that there are more messages
+						moreMsg := ChatMessage{
+							Type:      "history_info",
+							Value:     fmt.Sprintf("Showing last %d messages of %d total. Load more to see earlier messages.", 5, len(chatHistory)),
+							SessionID: sessionID,
+						}
+						if err := h.writeJSON(conn, wsWriteMutex, moreMsg); err != nil {
+							log.Printf("Error sending history info: %v", err)
+						}
+					}
+
+					// Send history messages
+					for i := startIdx; i < len(chatHistory); i++ {
+						msg := chatHistory[i]
+						clientMsg := ChatMessage{
+							Type:      msg.Role,
+							Value:     msg.Content,
+							SessionID: sessionID,
+						}
+
+						if err := h.writeJSON(conn, wsWriteMutex, clientMsg); err != nil {
+							log.Printf("Error sending history message: %v", err)
+							break
+						}
+
+						// Small delay to help client process messages in order
+						time.Sleep(50 * time.Millisecond)
+					}
+				} else {
+					log.Printf("Error parsing chat history messages: %v", err)
+				}
+			} else {
+				log.Printf("No chat history found for session %s or error: %v", sessionID, err)
+			}
+		} else {
+			log.Printf("Could not parse user ID as UUID: %v", err)
+		}
+	}
 
 	// Keep track of streaming state
 	isStreaming := false
@@ -177,6 +253,29 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 
 		// Remove from canceler map
 		h.streamCancelers.Delete(sessionID)
+
+		// Save chat history to the database
+		if len(chatHistory) > 0 {
+			userUUID, err := uuid.Parse(userID)
+			if err == nil {
+				// Convert chat history to JSON
+				messagesJSON, err := json.Marshal(chatHistory)
+				if err == nil {
+					// Save to database
+					err = h.DB.SaveChatHistory(userUUID, sessionID, messagesJSON, currentModel)
+					if err != nil {
+						log.Printf("Error saving chat history: %v", err)
+					} else {
+						log.Printf("Saved chat history for session %s with %d messages",
+							sessionID, len(chatHistory))
+					}
+				} else {
+					log.Printf("Error serializing chat history: %v", err)
+				}
+			} else {
+				log.Printf("Could not parse user ID as UUID for saving history: %v", err)
+			}
+		}
 
 		// Log the chat session when it's closed
 		log.Printf("Logging chat session %s for user %s with %d messages",
@@ -202,6 +301,7 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 		log.Printf("Received message: %+v", message)
 		if message.Model != "" {
 			log.Printf("Received model parameter: %s", message.Model)
+			currentModel = message.Model
 		}
 
 		// Set the session ID if it's not in the message
@@ -411,6 +511,97 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 					len(responseContent), len(reasoningContent))
 			}()
 
+		} else if message.Type == "load_more_history" {
+			// Handle request to load more history
+			offset := 0
+			limit := 5
+
+			// Get offset from message if provided
+			if offsetVal, ok := message.Value.(float64); ok {
+				offset = int(offsetVal)
+			}
+
+			// Convert user ID to UUID
+			userUUID, err := uuid.Parse(userID)
+			if err != nil {
+				log.Printf("Could not parse user ID as UUID: %v", err)
+				continue
+			}
+
+			// Get chat history from database
+			history, err := h.DB.GetChatHistory(userUUID, sessionID)
+			if err != nil || history == nil {
+				log.Printf("Error retrieving chat history: %v", err)
+				continue
+			}
+
+			// Parse messages from JSON
+			var allMessages []openrouter.Message
+			if err := json.Unmarshal(history.Messages, &allMessages); err != nil {
+				log.Printf("Error parsing chat history messages: %v", err)
+				continue
+			}
+
+			// Calculate start and end indexes
+			endIdx := len(allMessages) - offset
+			startIdx := endIdx - limit
+
+			// Adjust if needed
+			if startIdx < 0 {
+				startIdx = 0
+			}
+			if endIdx <= 0 || startIdx >= endIdx {
+				// No more messages to load
+				noMoreMsg := ChatMessage{
+					Type:      "history_info",
+					Value:     "No more messages to load",
+					SessionID: sessionID,
+				}
+				if err := h.writeJSON(conn, wsWriteMutex, noMoreMsg); err != nil {
+					log.Printf("Error sending no more messages info: %v", err)
+				}
+				continue
+			}
+
+			// Send earlier messages
+			for i := startIdx; i < endIdx; i++ {
+				msg := allMessages[i]
+				clientMsg := ChatMessage{
+					Type:      msg.Role,
+					Value:     msg.Content,
+					SessionID: sessionID,
+				}
+
+				if err := h.writeJSON(conn, wsWriteMutex, clientMsg); err != nil {
+					log.Printf("Error sending history message: %v", err)
+					break
+				}
+
+				// Small delay to help client process messages in order
+				time.Sleep(50 * time.Millisecond)
+			}
+
+			// Indicate if there are more messages
+			if startIdx > 0 {
+				moreMsg := ChatMessage{
+					Type:      "more_available",
+					Value:     endIdx, // New offset for next load
+					SessionID: sessionID,
+				}
+				if err := h.writeJSON(conn, wsWriteMutex, moreMsg); err != nil {
+					log.Printf("Error sending more available message: %v", err)
+				}
+			} else {
+				// No more messages to load
+				noMoreMsg := ChatMessage{
+					Type:      "history_info",
+					Value:     "Loaded all messages",
+					SessionID: sessionID,
+				}
+				if err := h.writeJSON(conn, wsWriteMutex, noMoreMsg); err != nil {
+					log.Printf("Error sending all loaded message: %v", err)
+				}
+			}
 		} else if message.Type == "stop" {
 			// Client wants to stop streaming
 			if isStreaming {
