@@ -131,12 +131,6 @@ export default function UserPreferences({ className = '' }: UserPreferencesProps
     loadUserPreferences(true); // Force refresh from API
   };
 
-  // Get model names from IDs for display
-  const getModelNameById = (modelId: string) => {
-    const model = models.find(m => m.id === modelId);
-    return model ? model.name : modelId;
-  };
-
   // Extract model IDs for selector
   const modelIds = models.map(model => model.id);
 
