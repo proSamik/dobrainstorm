@@ -67,7 +67,7 @@ export default function ChatModelSelector({ className, onSelectModel }: ChatMode
   }
 
   // Filter models based on search term
-  const filterModels = (modelList: any[]) => {
+  const filterModels = (modelList: Array<{id: string; name: string; isFree?: boolean}>) => {
     if (!searchTerm) return modelList;
     return modelList.filter(model => 
       model.name.toLowerCase().includes(searchTerm.toLowerCase())
