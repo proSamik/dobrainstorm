@@ -2,11 +2,10 @@
 
 import React, { useState, useEffect, lazy, Suspense, useRef } from 'react'
 import { Button } from './button'
-import { Plus, History, ArrowRight, Clock, Search } from 'lucide-react'
+import { Plus, ArrowRight, Clock, Search } from 'lucide-react'
 import { authService } from '@/services/auth'
 import { useAppDispatch, useAppSelector } from '@/hooks/useRedux'
 import { 
-  ChatSession, 
   addSession, 
   activateSession, 
   deactivateSession, 
@@ -14,16 +13,6 @@ import {
 } from '@/store/chatSlice'
 
 const LazyChatWindow = lazy(() => import('./ChatWindow'))
-
-// Interface for chat history items
-interface ChatHistoryItem {
-  id: string;
-  sessionId: string;
-  title: string;
-  createdAt: string;
-  updatedAt: string;
-  model?: string;
-}
 
 /**
  * Main modal component that displays chat windows
