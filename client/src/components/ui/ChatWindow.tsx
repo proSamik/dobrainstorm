@@ -51,18 +51,6 @@ interface ChatWindowProps {
   onHistoryCreated?: (sessionId: string) => void
 }
 
-// ChatMessage represents a message in the chat
-type ChatMessage = {
-  type: string;
-  value: any;
-  sessionId: string;
-  isStreaming?: boolean;
-  reasoning?: string;
-  model?: string;
-  isPreference?: boolean;
-  loadHistory?: boolean;
-};
-
 /**
  * Individual chat window component
  * Manages a single websocket connection and chat session
