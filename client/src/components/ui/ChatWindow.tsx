@@ -13,7 +13,8 @@ import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { authService } from '@/services/auth'
 import ChatModelSelector from './ChatModelSelector'
-import { useAppSelector } from '@/hooks/useRedux'
+import { useAppDispatch, useAppSelector } from '@/hooks/useRedux'
+import { updateSession } from '@/store/chatSlice'
 
 // Define different message types
 interface BaseMessage {
@@ -46,6 +47,8 @@ interface ChatWindowProps {
   windowId: number
   onClose: () => void
   registerCloseFn?: (closeFn: () => void) => void
+  initialSessionId?: string
+  onHistoryCreated?: (sessionId: string) => void
 }
 
 // ChatMessage represents a message in the chat
@@ -64,11 +67,11 @@ type ChatMessage = {
  * Individual chat window component
  * Manages a single websocket connection and chat session
  */
-export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatWindowProps) {
+export default function ChatWindow({ windowId, onClose, registerCloseFn, initialSessionId, onHistoryCreated }: ChatWindowProps) {
   const [messages, setMessages] = useState<MessageItem[]>([])
   const [inputValue, setInputValue] = useState('')
   const [connected, setConnected] = useState(false)
-  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [sessionId, setSessionId] = useState<string | null>(initialSessionId || null)
   const [showReasoning, setShowReasoning] = useState(true) // Start with reasoning visible
   const [isStopping, setIsStopping] = useState(false) // Track stop in progress for UI
   const [includePreferences, setIncludePreferences] = useState(true) // Track preference inclusion
@@ -76,7 +79,8 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
   const [loadingHistory, setLoadingHistory] = useState(false) // Track if we're loading history
   const [historyOffset, setHistoryOffset] = useState(0) // Track offset for loading more history
   
-  // Get the selected model from Redux store
+  // Redux
+  const dispatch = useAppDispatch()
   const selectedModel = useAppSelector(state => state.models.selectedModel);
   
   // Refs
@@ -226,8 +230,15 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
       ? process.env.NEXT_PUBLIC_API_URL.replace(/^http/, 'ws')
       : 'ws://localhost:8080'
     
+    // If we have an initial session ID, use it to reconnect
+    const wsUrl = initialSessionId 
+      ? `${wsBaseUrl}/ws/chat?sessionId=${initialSessionId}`
+      : `${wsBaseUrl}/ws/chat`;
+      
+    console.log(`Connecting to ${wsUrl}`);
+      
     // Create new WebSocket connection
-    const socket = new WebSocket(`${wsBaseUrl}/ws/chat`)
+    const socket = new WebSocket(wsUrl)
     socketRef.current = socket
 
     // Connection opened
@@ -255,8 +266,14 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
         const data = JSON.parse(event.data)
         console.log(`Chat window ${windowId} received:`, data)
 
+        // Save session ID when received from server and notify parent
         if (data.sessionId && !sessionId) {
-          setSessionId(data.sessionId)
+          setSessionId(data.sessionId);
+          
+          // Notify parent component if provided
+          if (onHistoryCreated) {
+            onHistoryCreated(data.sessionId);
+          }
         }
 
         // Handle different message types
@@ -438,6 +455,22 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
               // Also reset stopping state if it was set
               stoppingRef.current = false;
               setIsStopping(false);
+              
+              // Update session in Redux with first user message as title (if available)
+              if (sessionId) {
+                const firstUserMessage = messages.find(msg => msg.sender === 'user');
+                if (firstUserMessage && firstUserMessage.content) {
+                  const title = firstUserMessage.content.length > 50
+                    ? `${firstUserMessage.content.substring(0, 50)}...`
+                    : firstUserMessage.content;
+                    
+                  dispatch(updateSession({
+                    sessionId,
+                    title,
+                    model: selectedModel || undefined
+                  }));
+                }
+              }
             }
             break;
             
@@ -611,7 +644,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [windowId, processMarkdown]);
+  }, [windowId, initialSessionId, onHistoryCreated, processMarkdown, dispatch, selectedModel]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
