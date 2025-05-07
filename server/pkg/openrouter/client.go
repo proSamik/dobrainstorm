@@ -26,9 +26,10 @@ type Client struct {
 	httpClient    *http.Client
 	frontendURL   string
 	frontendTitle string
+	isUserKey     bool // Indicates if we're using a user-specific key
 }
 
-// NewClient creates a new OpenRouter client
+// NewClient creates a new OpenRouter client with the default API key from environment variables
 func NewClient() (*Client, error) {
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	if apiKey == "" {
@@ -45,7 +46,34 @@ func NewClient() (*Client, error) {
 		httpClient: &http.Client{
 			Timeout: 60 * time.Second,
 		},
+		isUserKey: false,
 	}, nil
+}
+
+// NewClientWithAPIKey creates a new OpenRouter client with a user-provided API key
+func NewClientWithAPIKey(apiKey string) (*Client, error) {
+	if apiKey == "" {
+		// Fall back to system key if user key is empty
+		return NewClient()
+	}
+
+	frontendURL := os.Getenv("FRONTEND_URL")
+	frontendTitle := os.Getenv("FRONTEND_TITLE")
+
+	return &Client{
+		apiKey:        apiKey,
+		frontendURL:   frontendURL,
+		frontendTitle: frontendTitle,
+		httpClient: &http.Client{
+			Timeout: 60 * time.Second,
+		},
+		isUserKey: true,
+	}, nil
+}
+
+// IsUsingUserKey returns whether the client is using a user-specific API key
+func (c *Client) IsUsingUserKey() bool {
+	return c.isUserKey
 }
 
 // Message represents a chat message
