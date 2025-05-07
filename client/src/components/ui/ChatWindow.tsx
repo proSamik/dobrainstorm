@@ -59,6 +59,7 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [showReasoning, setShowReasoning] = useState(true) // Start with reasoning visible
   const [isStopping, setIsStopping] = useState(false) // Track stop in progress for UI
+  const [includePreferences, setIncludePreferences] = useState(true) // Track preference inclusion
   
   // Get the selected model from Redux store
   const selectedModel = useAppSelector(state => state.models.selectedModel);
@@ -580,7 +581,8 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
         value: messageContent,
         sessionId: sessionId,
         messageId: messageId, // Send ID to server to help with deduplication
-        model: selectedModel // Include selected model
+        model: selectedModel, // Include selected model
+        isPreference: includePreferences // Include preference setting
       }));
 
       // Clear input field
@@ -854,6 +856,20 @@ export default function ChatWindow({ windowId, onClose, registerCloseFn }: ChatW
         <div className="flex justify-between items-center">
           {/* Model selector - left side */}
           <ChatModelSelector className="flex-1 max-w-[300px] z-10" />
+          
+          {/* Preferences checkbox */}
+          <div className="flex items-center mx-2">
+            <input
+              type="checkbox"
+              id={`include-preferences-${windowId}`}
+              checked={includePreferences}
+              onChange={(e) => setIncludePreferences(e.target.checked)}
+              className="mr-2"
+            />
+            <label htmlFor={`include-preferences-${windowId}`} className="text-sm text-gray-700 dark:text-gray-300">
+              Include Your Preferences
+            </label>
+          </div>
           
           {/* Send/Stop button - right side */}
           {isResponding ? (
