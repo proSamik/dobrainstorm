@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,6 +23,7 @@ type ChatHandler struct {
 	DB              *database.DB
 	connections     sync.Map
 	streamCancelers sync.Map // Map of sessionID -> cancel function
+	streamActive    sync.Map // Map of sessionID -> atomic bool to track if stream is actually running
 	upgrader        websocket.Upgrader
 	openRouter      *openrouter.Client // Default system-wide OpenRouter client
 }
@@ -97,6 +99,12 @@ func NewChatHandler(db *database.DB, allowedOrigins []string) *ChatHandler {
 func (h *ChatHandler) writeJSON(conn *websocket.Conn, mutex *sync.Mutex, msg interface{}) error {
 	mutex.Lock()
 	defer mutex.Unlock()
+
+	// Check if connection is still valid
+	if conn == nil {
+		return fmt.Errorf("connection is nil")
+	}
+
 	return conn.WriteJSON(msg)
 }
 
@@ -104,7 +112,42 @@ func (h *ChatHandler) writeJSON(conn *websocket.Conn, mutex *sync.Mutex, msg int
 func (h *ChatHandler) writeMessage(conn *websocket.Conn, mutex *sync.Mutex, messageType int, data []byte) error {
 	mutex.Lock()
 	defer mutex.Unlock()
+
+	// Check if connection is still valid
+	if conn == nil {
+		return fmt.Errorf("connection is nil")
+	}
+
 	return conn.WriteMessage(messageType, data)
+}
+
+// Check if streaming is active for a session
+func (h *ChatHandler) isStreamActive(sessionID string) bool {
+	if val, ok := h.streamActive.Load(sessionID); ok {
+		return atomic.LoadInt32(val.(*int32)) == 1
+	}
+	return false
+}
+
+// Set streaming active state for a session
+func (h *ChatHandler) setStreamActive(sessionID string, active bool) {
+	var val int32 = 0
+	if active {
+		val = 1
+	}
+
+	// Store or update the atomic value
+	var atomicVal *int32
+	if existingVal, ok := h.streamActive.Load(sessionID); ok {
+		atomicVal = existingVal.(*int32)
+		atomic.StoreInt32(atomicVal, val)
+	} else {
+		atomicVal = new(int32)
+		atomic.StoreInt32(atomicVal, val)
+		h.streamActive.Store(sessionID, atomicVal)
+	}
+
+	log.Printf("Stream active state for session %s set to: %v", sessionID, active)
 }
 
 // HandleChat manages websocket connections for chat functionality
@@ -170,6 +213,9 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 
 	// Track model being used
 	currentModel := ""
+
+	// Initialize streaming state tracking
+	h.setStreamActive(sessionID, false)
 
 	// Try to get the user's API key
 	var userOpenRouterClient *openrouter.Client
@@ -277,11 +323,19 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 
 		// Cancel any ongoing stream before closing
 		if cancelStreamCtx != nil {
+			log.Printf("Defer cleanup: Cancelling stream for session %s", sessionID)
 			cancelStreamCtx()
+			cancelStreamCtx = nil
 		}
 
+		// Update streaming state
+		h.setStreamActive(sessionID, false)
+
 		// Remove from canceler map
-		h.streamCancelers.Delete(sessionID)
+		if _, ok := h.streamCancelers.Load(sessionID); ok {
+			log.Printf("Defer cleanup: Removing cancel function for session %s", sessionID)
+			h.streamCancelers.Delete(sessionID)
+		}
 
 		// Save chat history to the database
 		if len(chatHistory) > 0 {
@@ -336,6 +390,11 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 		// Set the session ID if it's not in the message
 		if message.SessionID == "" {
 			message.SessionID = sessionID
+		} else if message.SessionID != sessionID {
+			log.Printf("Warning: Message session ID %s does not match connection session ID %s",
+				message.SessionID, sessionID)
+			// Use the connection's session ID to ensure consistency
+			message.SessionID = sessionID
 		}
 
 		// Process the message based on type
@@ -363,16 +422,25 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 
 			// If currently streaming, send stop command
 			if isStreaming {
+				log.Printf("Received new message while streaming, stopping current stream for session %s", sessionID)
 				isStreaming = false
 
 				// Cancel the stream if it's active
 				if cancelStreamCtx != nil {
+					log.Printf("Cancelling active stream for session %s", sessionID)
 					cancelStreamCtx()
 					cancelStreamCtx = nil
+
+					// Remove from canceler map
+					log.Printf("Removing cancel function for session %s from map", sessionID)
 					h.streamCancelers.Delete(sessionID)
+
+					// Update streaming state
+					h.setStreamActive(sessionID, false)
 				}
 
-				continue
+				// Small delay to allow cancelation to take effect
+				time.Sleep(100 * time.Millisecond)
 			}
 
 			// Get the message content as string
@@ -403,6 +471,7 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 
 			// Start streaming
 			isStreaming = true
+			h.setStreamActive(sessionID, true)
 
 			// Send notification that AI is typing
 			typingMsg := ChatMessage{
@@ -414,6 +483,7 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 			if err := h.writeJSON(conn, wsWriteMutex, typingMsg); err != nil {
 				log.Printf("Error sending typing status: %v", err)
 				isStreaming = false
+				h.setStreamActive(sessionID, false)
 				break
 			}
 
@@ -435,10 +505,31 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 			streamCtx, cancelStreamCtx = context.WithCancel(context.Background())
 
 			// Store the cancel function in the map
+			log.Printf("Storing cancel function for session %s in map", sessionID)
 			h.streamCancelers.Store(sessionID, cancelStreamCtx)
+
+			// Create a closure to control access to connection state
+			safeConn := conn
+			activeMutex := wsWriteMutex
 
 			// Process stream with proper context handling
 			go func() {
+				// Create a deferred function to ensure proper cleanup
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("Recovered from panic in stream goroutine: %v", r)
+					}
+
+					// Update state on completion
+					isStreaming = false
+					h.setStreamActive(sessionID, false)
+
+					// Cleanup cancel function
+					log.Printf("Stream goroutine completed, removing cancel function for session %s", sessionID)
+					h.streamCancelers.Delete(sessionID)
+					cancelStreamCtx = nil
+				}()
+
 				// Log which API key is being used
 				if userOpenRouterClient.IsUsingUserKey() {
 					log.Printf("Session %s: Using user's OpenRouter API key", sessionID)
@@ -446,22 +537,24 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 					log.Printf("Session %s: Using system OpenRouter API key", sessionID)
 				}
 
+				// Process the stream
 				responseContent, reasoningContent, streamErr := h.processStreamWithContext(
-					conn,
+					safeConn,
 					sessionID,
-					wsWriteMutex,
+					activeMutex,
 					req,
 					streamCtx,
 					userOpenRouterClient, // Use the user's client or system fallback
 				)
 
-				// Stream is done, clean up
-				h.streamCancelers.Delete(sessionID)
-				cancelStreamCtx = nil
-				isStreaming = false
+				// Check if the context was cancelled before attempting to write to the connection
+				if streamCtx.Err() != nil {
+					log.Printf("Context was cancelled, not sending result for session %s", sessionID)
+					return
+				}
 
+				// Check if this was a client-initiated cancellation
 				if streamErr != nil {
-					// Check if this was a client-initiated cancellation
 					if streamErr.Error() == "streaming canceled by client" ||
 						streamErr.Error() == "context canceled" {
 						log.Printf("Stream was intentionally canceled by client")
@@ -472,7 +565,7 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 							Value:     "stopped",
 							SessionID: sessionID,
 						}
-						if err := h.writeJSON(conn, wsWriteMutex, stopMsg); err != nil {
+						if err := h.writeJSON(safeConn, activeMutex, stopMsg); err != nil {
 							log.Printf("Error sending stop confirmation: %v", err)
 						}
 					} else if streamErr.Error() == "context deadline exceeded" ||
@@ -499,7 +592,7 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 								SessionID:   sessionID,
 								IsStreaming: false,
 							}
-							if err := h.writeJSON(conn, wsWriteMutex, streamEndMsg); err != nil {
+							if err := h.writeJSON(safeConn, activeMutex, streamEndMsg); err != nil {
 								// Just log the error, don't break the connection
 								log.Printf("Error sending stream end after timeout: %v", err)
 							}
@@ -523,7 +616,7 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 							Value:     "Failed to get AI response",
 							SessionID: sessionID,
 						}
-						if err := h.writeJSON(conn, wsWriteMutex, errorMsg); err != nil {
+						if err := h.writeJSON(safeConn, activeMutex, errorMsg); err != nil {
 							log.Printf("Error sending error message: %v", err)
 						}
 					}
@@ -545,7 +638,7 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 					SessionID:   sessionID,
 					IsStreaming: false,
 				}
-				if err := h.writeJSON(conn, wsWriteMutex, streamEndMsg); err != nil {
+				if err := h.writeJSON(safeConn, activeMutex, streamEndMsg); err != nil {
 					log.Printf("Error sending stream end status: %v", err)
 				}
 
@@ -647,8 +740,11 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 			}
 		} else if message.Type == "stop" {
 			// Client wants to stop streaming
-			if isStreaming {
-				log.Printf("Cancelling stream by client request")
+			log.Printf("Received stop request for session %s", sessionID)
+
+			// Check if stream is actually active according to our tracking
+			if h.isStreamActive(sessionID) {
+				log.Printf("Stream is active for session %s, proceeding with cancellation", sessionID)
 				isStreaming = false
 
 				// Get and call the cancel function for this session
@@ -656,20 +752,53 @@ func (h *ChatHandler) handleConnectionWithMutex(conn *websocket.Conn, sessionID 
 					log.Printf("Found cancel function, aborting OpenRouter request for session %s", sessionID)
 					cancelerFunc := cancel.(context.CancelFunc)
 					cancelerFunc()
+
+					// Remove from map immediately
+					log.Printf("Removing cancel function for session %s from map", sessionID)
 					h.streamCancelers.Delete(sessionID)
 					cancelStreamCtx = nil
-				} else {
-					log.Printf("No cancel function found for session %s", sessionID)
-				}
 
-				// Send confirmation to client that streaming was stopped
-				stopMsg := ChatMessage{
+					// Update streaming state
+					h.setStreamActive(sessionID, false)
+
+					// Send confirmation to client that streaming was stopped
+					stopMsg := ChatMessage{
+						Type:      "status",
+						Value:     "stopped",
+						SessionID: sessionID,
+					}
+					if err := h.writeJSON(conn, wsWriteMutex, stopMsg); err != nil {
+						log.Printf("Error sending stop confirmation: %v", err)
+						break
+					}
+				} else {
+					log.Printf("No cancel function found for session %s despite stream being marked as active", sessionID)
+
+					// Still update tracking state to be consistent
+					h.setStreamActive(sessionID, false)
+
+					// Send confirmation to client
+					stopMsg := ChatMessage{
+						Type:      "status",
+						Value:     "stopped",
+						SessionID: sessionID,
+					}
+					if err := h.writeJSON(conn, wsWriteMutex, stopMsg); err != nil {
+						log.Printf("Error sending stop confirmation: %v", err)
+						break
+					}
+				}
+			} else {
+				log.Printf("No active stream found for session %s", sessionID)
+
+				// Send message to client
+				infoMsg := ChatMessage{
 					Type:      "status",
-					Value:     "stopped",
+					Value:     "no_active_stream",
 					SessionID: sessionID,
 				}
-				if err := h.writeJSON(conn, wsWriteMutex, stopMsg); err != nil {
-					log.Printf("Error sending stop confirmation: %v", err)
+				if err := h.writeJSON(conn, wsWriteMutex, infoMsg); err != nil {
+					log.Printf("Error sending no active stream message: %v", err)
 					break
 				}
 			}
@@ -711,9 +840,9 @@ func (h *ChatHandler) processStreamWithContext(
 		ctx,
 		req,
 		func(resp openrouter.StreamResponse, isComment bool, commentText string) error {
-			// Check if context was cancelled
+			// Check if context was cancelled before performing any operations
 			if ctx.Err() != nil {
-				log.Printf("Streaming context was cancelled")
+				log.Printf("Streaming context was cancelled, stopping processing")
 				return ctx.Err()
 			}
 
@@ -727,6 +856,7 @@ func (h *ChatHandler) processStreamWithContext(
 					IsStreaming: true,
 				}
 				if err := h.writeJSON(conn, wsWriteMutex, processingMsg); err != nil {
+					log.Printf("Error sending processing status: %v", err)
 					return err
 				}
 				return nil
@@ -746,6 +876,12 @@ func (h *ChatHandler) processStreamWithContext(
 					return err
 				}
 				return nil
+			}
+
+			// Check context again before processing data
+			if ctx.Err() != nil {
+				log.Printf("Context cancelled during stream processing, stopping")
+				return ctx.Err()
 			}
 
 			// Handle normal streaming chunks
@@ -774,6 +910,11 @@ func (h *ChatHandler) processStreamWithContext(
 				if reasoning := choice.Delta.Reasoning; reasoning != "" {
 					reasoningContent += reasoning
 
+					// Check context again before sending
+					if ctx.Err() != nil {
+						return ctx.Err()
+					}
+
 					// Send reasoning chunk to client
 					reasoningMsg := ChatMessage{
 						Type:        "reasoning",
@@ -798,6 +939,11 @@ func (h *ChatHandler) processStreamWithContext(
 				// Process content delta - immediately send to client
 				if content := choice.Delta.Content; content != "" {
 					responseContent += content
+
+					// Check context again before sending
+					if ctx.Err() != nil {
+						return ctx.Err()
+					}
 
 					// Send the stream chunk to client IMMEDIATELY
 					streamMsg := ChatMessage{
@@ -825,6 +971,11 @@ func (h *ChatHandler) processStreamWithContext(
 
 			// Check if final usage data is being sent (end of stream)
 			if resp.Usage != nil {
+				// Check context again before sending end status
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+
 				streamEndMsg := ChatMessage{
 					Type:        "status",
 					Value:       "stream_end",
@@ -919,12 +1070,25 @@ func (h *ChatHandler) HandleStopStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if stream is active
+	if !h.isStreamActive(req.SessionID) {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(StopStreamResponse{
+			Success: false,
+			Message: "No active stream found for this session",
+		})
+		return
+	}
+
 	// Try to cancel the stream
 	cancelSuccess := h.cancelStreamBySessionID(req.SessionID)
 
 	// Find the connection to send a stop notification
 	if conn, ok := h.connections.Load(req.SessionID); ok {
 		wsConn := conn.(*websocket.Conn)
+
+		// Create a mutex for this write operation
+		var mutex sync.Mutex
 
 		// Create a stop message
 		stopMsg := ChatMessage{
@@ -933,9 +1097,8 @@ func (h *ChatHandler) HandleStopStream(w http.ResponseWriter, r *http.Request) {
 			SessionID: req.SessionID,
 		}
 
-		// Try to send it, but don't fail the overall operation if this fails
-		// The connection might be handling other messages
-		if err := wsConn.WriteJSON(stopMsg); err != nil {
+		// Try to send it with mutex protection
+		if err := h.writeJSON(wsConn, &mutex, stopMsg); err != nil {
 			log.Printf("Warning: Could not send stop notification via WebSocket: %v", err)
 		}
 	}
@@ -967,10 +1130,18 @@ func (h *ChatHandler) cancelStreamBySessionID(sessionID string) bool {
 		cancel()
 
 		// Clean up
+		log.Printf("Removing cancel function for session %s from map", sessionID)
 		h.streamCancelers.Delete(sessionID)
+
+		// Update tracking state
+		h.setStreamActive(sessionID, false)
+
 		return true
 	}
 
 	log.Printf("No cancel function found for session %s", sessionID)
+	// Still update the active state to be consistent
+	h.setStreamActive(sessionID, false)
+
 	return false
 }
