@@ -2,8 +2,10 @@ package database
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"saas-server/models"
+	"saas-server/pkg/encryption"
 	"time"
 
 	"github.com/google/uuid"
@@ -285,4 +287,55 @@ func (db *DB) SaveUserSettings(userID string, aiSettings []byte) error {
 	}
 
 	return err
+}
+
+// GetUserOpenRouterAPIKey retrieves the OpenRouter API key for a specific user
+// If the user has no API key or if there's an error, it returns an empty string and the error
+func (db *DB) GetUserOpenRouterAPIKey(userID uuid.UUID) (string, error) {
+	// Get user settings from database
+	settings, err := db.GetUserSettings(userID.String())
+	if err != nil {
+		return "", fmt.Errorf("error retrieving user settings: %w", err)
+	}
+
+	// If no settings or empty AI settings, return empty string
+	if settings == nil || settings.AISettings == nil || len(settings.AISettings) == 0 {
+		return "", nil
+	}
+
+	// Parse AI settings
+	var aiSettings map[string]json.RawMessage
+	if err := json.Unmarshal(settings.AISettings, &aiSettings); err != nil {
+		return "", fmt.Errorf("failed to parse settings: %w", err)
+	}
+
+	// Check if openrouter key exists
+	openRouterData, exists := aiSettings["openrouter"]
+	if !exists {
+		return "", nil
+	}
+
+	// Parse the openrouter settings
+	var providerSettings struct {
+		Key           string   `json:"key"`
+		Models        []string `json:"models,omitempty"`
+		SelectedModel string   `json:"selectedModel,omitempty"`
+	}
+
+	if err := json.Unmarshal(openRouterData, &providerSettings); err != nil {
+		return "", fmt.Errorf("failed to parse openrouter settings: %w", err)
+	}
+
+	// If key is empty, return empty string
+	if providerSettings.Key == "" {
+		return "", nil
+	}
+
+	// Decrypt the key
+	decryptedKey, err := encryption.Decrypt(providerSettings.Key)
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt openrouter key: %w", err)
+	}
+
+	return decryptedKey, nil
 }
